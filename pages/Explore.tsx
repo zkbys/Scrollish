@@ -4,7 +4,7 @@ import { IMAGES } from '../constants';
 
 const Explore: React.FC = () => {
   const categories = ['Daily Life', 'Science & Tech', 'Business', 'Culture'];
-  
+
   return (
     <div className="h-full flex flex-col bg-white dark:bg-[#1b0d0d] overflow-y-auto no-scrollbar">
       <header className="sticky top-0 z-50 bg-white/80 dark:bg-[#1b0d0d]/80 backdrop-blur-md">
@@ -24,7 +24,7 @@ const Explore: React.FC = () => {
             <div className="text-[#9a4c4c] dark:text-[#cc8e8e] flex items-center justify-center pl-4">
               <span className="material-symbols-outlined">search</span>
             </div>
-            <input className="form-input flex w-full border-none bg-transparent focus:ring-0 text-[#1b0d0d] dark:text-white placeholder:text-[#9a4c4c] px-3 text-sm" placeholder="Search subreddits or topics"/>
+            <input className="form-input flex w-full border-none bg-transparent focus:ring-0 text-[#1b0d0d] dark:text-white placeholder:text-[#9a4c4c] px-3 text-sm" placeholder="Search subreddits or topics" />
           </div>
         </div>
       </header>
@@ -36,7 +36,7 @@ const Explore: React.FC = () => {
         </div>
         <div className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-4 gap-4 pb-4">
           <div className="flex flex-col gap-3 shrink-0 w-64 snap-start">
-            <div 
+            <div
               className="relative w-full aspect-[16/10] rounded-xl overflow-hidden shadow-sm group"
               style={{ backgroundImage: `url("${IMAGES.grammar}")`, backgroundSize: 'cover' }}
             >
@@ -52,7 +52,7 @@ const Explore: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-col gap-3 shrink-0 w-64 snap-start">
-            <div 
+            <div
               className="relative w-full aspect-[16/10] rounded-xl overflow-hidden shadow-sm group"
               style={{ backgroundImage: `url("${IMAGES.casual}")`, backgroundSize: 'cover' }}
             >
@@ -73,11 +73,10 @@ const Explore: React.FC = () => {
       <nav className="sticky top-[108px] z-40 bg-white dark:bg-[#1b0d0d] border-b border-[#f3e7e7] dark:border-[#3d2424]">
         <div className="flex overflow-x-auto no-scrollbar px-4 gap-6">
           {categories.map((cat, i) => (
-            <button 
-              key={cat} 
-              className={`flex flex-col items-center justify-center pb-3 pt-4 shrink-0 transition-colors ${
-                i === 0 ? 'border-b-[2px] border-primary text-primary' : 'border-b-[2px] border-transparent text-[#9a4c4c] dark:text-[#cc8e8e]'
-              }`}
+            <button
+              key={cat}
+              className={`flex flex-col items-center justify-center pb-3 pt-4 shrink-0 transition-colors ${i === 0 ? 'border-b-[2px] border-primary text-primary' : 'border-b-[2px] border-transparent text-[#9a4c4c] dark:text-[#cc8e8e]'
+                }`}
             >
               <span className="text-sm font-bold">{cat}</span>
             </button>

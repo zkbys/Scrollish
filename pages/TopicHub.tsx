@@ -46,12 +46,12 @@ const TopicHub: React.FC<TopicHubProps> = ({ onNavigate, post }) => {
     <div className="h-full flex flex-col bg-background-light dark:bg-[#0B0A09] overflow-hidden select-none">
       {/* Refined Header: Floating Hero Card */}
       <div className="relative z-50 pt-12 px-4 pb-4">
-        <div 
+        <div
           className="h-56 w-full rounded-[2.5rem] bg-cover bg-center flex flex-col justify-end p-7 relative overflow-hidden transition-all duration-500 shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10"
           style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.8) 100%), url("${post.image}")` }}
         >
           {/* Back Button with improved positioning and glass effect */}
-          <button 
+          <button
             onClick={() => onNavigate(Page.Home)}
             className="absolute top-5 left-5 text-white flex items-center justify-center h-11 w-11 bg-black/20 ios-blur rounded-2xl border border-white/20 active:scale-90 transition-transform shadow-lg"
           >
@@ -69,9 +69,9 @@ const TopicHub: React.FC<TopicHubProps> = ({ onNavigate, post }) => {
               {post.titleEn}
             </h1>
             <div className="flex gap-2 mt-1">
-               {post.hashtags.slice(0, 2).map(tag => (
-                 <span key={tag} className="text-primary text-[10px] font-bold px-2 py-0.5 bg-white/10 ios-blur rounded-md border border-white/5">#{tag}</span>
-               ))}
+              {post.hashtags.slice(0, 2).map(tag => (
+                <span key={tag} className="text-primary text-[10px] font-bold px-2 py-0.5 bg-white/10 ios-blur rounded-md border border-white/5">#{tag}</span>
+              ))}
             </div>
           </div>
         </div>
@@ -82,28 +82,28 @@ const TopicHub: React.FC<TopicHubProps> = ({ onNavigate, post }) => {
         <div className="w-full px-8 flex justify-between items-center mb-5 text-gray-400 dark:text-gray-500 text-[11px] font-black uppercase tracking-[0.2em]">
           <span>Previewing Discussions</span>
           <div className="flex items-center gap-2">
-             <div className="h-[2px] w-8 bg-primary/20 rounded-full overflow-hidden">
-                <div className="h-full w-1/2 bg-primary animate-[loading_1.5s_infinite_linear]" />
-             </div>
-             <span className="animate-pulse">Next</span>
+            <div className="h-[2px] w-8 bg-primary/20 rounded-full overflow-hidden">
+              <div className="h-full w-1/2 bg-primary animate-[loading_1.5s_infinite_linear]" />
+            </div>
+            <span className="animate-pulse">Next</span>
           </div>
         </div>
 
         <div className="relative w-full px-4 h-[52vh]" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
           {/* Active Card */}
-          <div 
+          <div
             className={`absolute inset-x-4 top-0 bottom-0 bg-white dark:bg-gray-800 rounded-[3rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border border-primary/5 overflow-hidden flex flex-col transition-all ${animationClass}`}
           >
             {/* Card Header */}
-            <div 
+            <div
               className="h-20 border-b border-gray-50 dark:border-white/5 flex items-center justify-between px-7 bg-white dark:bg-gray-800 shrink-0 cursor-pointer"
               onClick={() => onNavigate(Page.ChatRoom)}
             >
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  <img 
-                    src={activeChat.avatar} 
-                    className="w-12 h-12 rounded-2xl border-2 border-primary/10 object-cover shadow-sm" 
+                  <img
+                    src={activeChat.avatar}
+                    className="w-12 h-12 rounded-2xl border-2 border-primary/10 object-cover shadow-sm"
                     alt={activeChat.user}
                   />
                   {activeChat.isActive && (
@@ -126,15 +126,14 @@ const TopicHub: React.FC<TopicHubProps> = ({ onNavigate, post }) => {
             {/* Preview Chat Bubbles */}
             <div className="flex-1 bg-background-light/30 dark:bg-black/20 p-6 space-y-5 overflow-hidden relative">
               <div className="absolute -right-10 -top-10 w-48 h-48 bg-primary/5 rounded-full blur-[80px]"></div>
-              
+
               {activeChat.previewMessages?.map((msg, i) => (
                 <div key={i} className={`flex gap-4 ${msg.isMe ? 'flex-row-reverse' : ''}`}>
-                  <div 
-                    className={`p-4 rounded-[1.5rem] shadow-sm text-[15px] leading-relaxed border transition-all hover:scale-[1.02] ${
-                      msg.isMe 
-                        ? 'bg-bubble-user dark:bg-primary/20 text-orange-950 dark:text-white border-primary/10 rounded-tr-none' 
-                        : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-100 dark:border-white/5 rounded-tl-none'
-                    }`}
+                  <div
+                    className={`p-4 rounded-[1.5rem] shadow-sm text-[15px] leading-relaxed border transition-all hover:scale-[1.02] ${msg.isMe
+                      ? 'bg-bubble-user dark:bg-primary/20 text-orange-950 dark:text-white border-primary/10 rounded-tr-none'
+                      : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-100 dark:border-white/5 rounded-tl-none'
+                      }`}
                   >
                     {msg.text}
                   </div>

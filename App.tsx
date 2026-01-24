@@ -48,6 +48,9 @@ const App: React.FC = () => {
     }
   };
 
+  // Determine if the bottom navigation bar should be hidden
+  const hideBottomNav = currentPage === Page.TopicHub || currentPage === Page.ChatRoom;
+
   return (
     <div className="flex justify-center bg-black min-h-screen">
       <div className="relative w-full max-w-md h-screen overflow-hidden bg-background-light dark:bg-background-dark shadow-2xl flex flex-col">
@@ -55,7 +58,9 @@ const App: React.FC = () => {
           {renderPage()}
         </main>
         
-        <BottomNav activePage={currentPage} onNavigate={setCurrentPage} />
+        {!hideBottomNav && (
+          <BottomNav activePage={currentPage} onNavigate={setCurrentPage} />
+        )}
       </div>
     </div>
   );

@@ -12,20 +12,20 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   return (
     <div className="h-full overflow-y-auto snap-y snap-mandatory no-scrollbar bg-black">
       {POSTS.map((post) => (
-        <div 
-          key={post.id} 
+        <div
+          key={post.id}
           className="relative h-full w-full snap-start overflow-hidden flex flex-col group"
         >
           {/* Background Image / Video Mock */}
-          <div 
+          <div
             className="absolute inset-0 bg-cover bg-center transition-all duration-700 group-active:scale-105 group-active:brightness-50"
-            style={{ 
-              backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.7) 100%), url("${post.image}")` 
+            style={{
+              backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.7) 100%), url("${post.image}")`
             }}
           />
 
           {/* Central Interactive Zone for "Fold" Transition */}
-          <div 
+          <div
             className="absolute inset-40 z-30 cursor-pointer flex items-center justify-center"
             onClick={() => onPostSelect(post.id)}
           >
@@ -35,7 +35,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
           </div>
 
           {/* Top Header */}
-          <header 
+          <header
             className="relative z-20 flex items-center justify-between px-6 pt-14"
           >
             <button className="text-white h-10 w-10 flex items-center justify-center bg-black/10 rounded-full backdrop-blur-sm">
@@ -51,7 +51,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
           </header>
 
           {/* Bottom Overlay Content */}
-          <div 
+          <div
             className="mt-auto relative z-20 p-6 pb-10 flex flex-col gap-3 pointer-events-none"
           >
             <div className="flex items-center gap-2 mb-1 pointer-events-auto">
@@ -64,20 +64,20 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
               </div>
               <button className="bg-primary text-white text-[11px] font-black px-4 py-1.5 rounded-full ml-2 shadow-lg hover:scale-105 active:scale-95 transition-all">Follow</button>
             </div>
-            
+
             <h1 className="text-white text-[34px] font-black leading-[1.1] text-shadow-md pointer-events-auto">
               {post.titleEn}
             </h1>
             <p className="text-white/90 text-[16px] font-bold leading-snug text-shadow-md pointer-events-auto max-w-[85%]">
               {post.titleZh}
             </p>
-            
+
             <div className="flex gap-2 mt-1 pointer-events-auto">
               {post.hashtags.map(tag => (
                 <span key={tag} className="bg-black/20 backdrop-blur-md text-primary text-[11px] font-bold px-3 py-1 rounded-full border border-white/10">#{tag}</span>
               ))}
             </div>
-            
+
             <div className="flex items-center gap-2 mt-3 pointer-events-auto">
               <div className="w-6 h-6 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
                 <span className="material-symbols-outlined text-white text-[14px] animate-spin-slow">music_note</span>
@@ -89,7 +89,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
           </div>
 
           {/* Side Actions */}
-          <div 
+          <div
             className="absolute bottom-32 right-4 flex flex-col items-center gap-7 z-20 pointer-events-auto"
           >
             <div className="flex flex-col items-center gap-1.5">

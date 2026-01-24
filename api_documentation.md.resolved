@@ -1,0 +1,112 @@
+# Scrollish 后端接口文档 (Frontend Integration Guide)
+
+本系统采用 **Supabase (PostgreSQL)** 作为后端。前端（Flutter/Web）通过专用的 SDK 或 REST API 直接与以下表格交互。
+
+---
+
+## 1. 核心表结构
+
+### 1.1 `categories` (内容大类)
+用户首页顶部的标签栏数据源。
+
+| 字段名 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| [id](file:///c:/scrollish/scrollish/lib/main.dart#332-388) | UUID | 主键 |
+| `name_en` | TEXT | 英文名称 (如: Science) |
+| `name_cn` | TEXT | 中文名称 (如: 科学) |
+
+**推荐查询：** `supabase.from('categories').select('*')`
+
+---
+
+### 1.2 [communities](file:///c:/scrollish/scrollish/backend/reddit_crawler.py#14-26) (子社区)
+每个分类下的垂直 Subreddits 列表。
+
+| 字段名 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| [id](file:///c:/scrollish/scrollish/lib/main.dart#332-388) | UUID | 主键 |
+| `category_id` | UUID | 关联的大类 ID |
+| `name` | TEXT | Reddit 的 Subreddit 名称 (如: AskReddit) |
+| `sub_category` | TEXT | 细分领域标签 (如: 天文学) |
+| `subscriber_count`| INT | 关注人数 (可作为热度排序参考) |
+
+---
+
+### 1.3 `production_posts` (精选池 - 核心展示数据)
+App 信息流的核心来源。**所有内容均已完成双语处理与媒体识别。**
+
+| 字段名 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| [id](file:///c:/scrollish/scrollish/lib/main.dart#332-388) | UUID | 主键 |
+| `community_id`| UUID | 关联社区 ID |
+| `title_en` | TEXT | 标题 (英文) |
+| `title_cn` | TEXT | 标题 (中文) |
+| `content_en` | TEXT | 正文文本 (英文原文) |
+| `content_cn` | TEXT | 正文文本 (深感翻译后的中文) |
+| `image_url` | TEXT | 图片下载链接 (或插画 URL) |
+| `video_url` | TEXT | **视频源文件直链 (.mp4)**。若无视频则为 null |
+| `image_type` | TEXT | `original` (原图) 或 `generated` (AI生图) |
+| `upvotes` | INT | 点赞数 (用于 App 端展示) |
+| `subreddit` | TEXT | 所属社区名 (即 r/...) |
+
+**前端渲染建议：**
+- 优先检查 `video_url` 是否存在。若有值，请使用 `VideoPlayer` 组件播放。
+- 若 `video_url` 为空，展示 `image_url`。
+- 如果 `image_type` 是 `generated`，可以增加一个“AI插画”的小标签提升逼格。
+
+---
+
+### 1.4 [comments](file:///c:/scrollish/scrollish/backend/reddit_comment_crawler.py#15-33) (层级评论)
+详情页展开的讨论内容。
+
+| 字段名 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| [id](file:///c:/scrollish/scrollish/lib/main.dart#332-388) | UUID | 主键 |
+| `post_id` | UUID | 所属帖子的 ID |
+| `parent_id` | UUID | 父级评论 ID (如果是顶层评论则为 null) |
+| `author` | TEXT | 作者名 |
+| `content` | TEXT | 评论内容 (英文) |
+| `upvotes` | INT | 点赞数 |
+| `depth` | INT | 层级深度 (0 表示主贴回复，1 表示子回复，以此类推) |
+
+**前端展示建议：**
+- 利用 `parent_id` 构建递归树。
+- 根据 `depth` 增加左侧 Padding 实现阶梯效果。
+
+---
+
+## 2. 常用接口示例 (Query Patterns)
+
+### 获取最新的 20 条精选帖子
+```javascript
+const { data } = await supabase
+  .from('production_posts')
+  .select('*')
+  .order('created_at', { ascending: false })
+  .limit(20);
+```
+
+### 获取特定分类下的所有帖子
+```javascript
+const { data } = await supabase
+  .from('production_posts')
+  .select('*, communities!inner(*)') // 内联社区信息
+  .eq('communities.category_id', '某个UUID')
+  .order('upvotes', { ascending: false });
+```
+
+### 获取帖子的树状评论
+```javascript
+const { data } = await supabase
+  .from('comments')
+  .select('*')
+  .eq('post_id', '某个UUID')
+  .order('depth', { ascending: true })
+  .order('upvotes', { ascending: false });
+```
+
+---
+
+## 3. 注意事项 (Important)
+- **多媒体显示**：部分 `image_url` 可能会有外链保护，建议前端增加图片加载失败的 Placeholder（骨架屏样式）。
+- **实时更新**：Supabase 支持 Realtime 功能，App 端可以监听 `production_posts` 的 `INSERT` 事件实现“推送到首页”的效果。
