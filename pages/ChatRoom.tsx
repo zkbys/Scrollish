@@ -1,23 +1,66 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../supabase';
 import { MESSAGES, IMAGES } from '../constants';
 import { ChatMessage } from '../types';
 
 interface ChatRoomProps {
+  postId: string;
   onBack: () => void;
 }
 
-const ChatRoom: React.FC<ChatRoomProps> = ({ onBack }) => {
+const ChatRoom: React.FC<ChatRoomProps> = ({ postId, onBack }) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(true);
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
   const [activeAnalysis, setActiveAnalysis] = useState<ChatMessage['analysis'] | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const fetchComments = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('comments')
+          .select('*')
+          .eq('post_id', postId)
+          .order('depth', { ascending: true })
+          .order('upvotes', { ascending: false });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const mappedMessages: ChatMessage[] = data.map((item: any) => ({
+            id: item.id,
+            user: item.author,
+            avatar: item.author_avatar || IMAGES.avatar1,
+            contentEn: item.content,
+            contentZh: item.content_zh,
+            level: item.depth + 1,
+            isAi: item.is_ai,
+            analysis: item.analysis,
+          }));
+          setMessages(mappedMessages);
+        } else {
+          // Fallback to constants if no data in DB for this post
+          setMessages(MESSAGES);
+        }
+      } catch (err) {
+        console.error('Error fetching comments:', err);
+        setMessages(MESSAGES);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchComments();
+  }, [postId]);
+
   // Auto-scroll to bottom on load
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && !loading) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, []);
+  }, [loading, messages]);
 
   // Helper to handle highlights in text
   const renderContentWithGlow = (msg: ChatMessage) => {
@@ -99,74 +142,83 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ onBack }) => {
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-6 space-y-8 no-scrollbar pb-48"
       >
-        <div className="flex justify-center pb-2">
-          <div className="px-5 py-2 rounded-full bg-orange-50 dark:bg-white/5 border border-orange-100 dark:border-white/5 text-orange-900/40 dark:text-white/30 text-[10px] font-black uppercase tracking-[0.25em]">
-            Beginning of Thread
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+            <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+            <p className="text-primary/50 text-[10px] font-black tracking-widest uppercase">Linearizing Thread...</p>
           </div>
-        </div>
-
-        {MESSAGES.map((msg) => (
-          <div
-            key={msg.id}
-            className="flex items-start gap-4 group animate-in slide-in-from-bottom-2 duration-500"
-          >
-            <div className="shrink-0 pt-1 relative">
-              <div
-                className={`bg-center bg-no-repeat aspect-square bg-cover rounded-2xl w-11 h-11 shadow-sm border border-gray-100 dark:border-white/10`}
-                style={{ backgroundImage: `url("${msg.avatar}")` }}
-              />
-              {msg.isAi && (
-                <div className="absolute -bottom-1 -right-1 bg-primary text-white p-0.5 rounded-lg flex items-center justify-center border-2 border-white dark:border-[#0B0A09] shadow-lg">
-                  <span className="material-symbols-outlined text-[10px] font-black">auto_awesome</span>
-                </div>
-              )}
+        ) : (
+          <>
+            <div className="flex justify-center pb-2">
+              <div className="px-5 py-2 rounded-full bg-orange-50 dark:bg-white/5 border border-orange-100 dark:border-white/5 text-orange-900/40 dark:text-white/30 text-[10px] font-black uppercase tracking-[0.25em]">
+                Beginning of Thread
+              </div>
             </div>
 
-            <div className="flex flex-1 flex-col gap-2 items-start">
-              <div className="flex items-baseline gap-2 px-1">
-                <p className="text-orange-950/40 dark:text-white/30 text-[11px] font-black uppercase tracking-widest">
-                  {msg.user}
-                </p>
-              </div>
-
+            {messages.map((msg) => (
               <div
-                className={`relative rounded-[1.5rem] px-5 py-4 shadow-sm max-w-[92%] border transition-all bg-white dark:bg-white/5 text-[#1b0e0e] dark:text-white border-orange-50 dark:border-white/5 rounded-tl-none cursor-pointer hover:border-primary/40 active:scale-[0.98]`}
-                onClick={() => setQuotedMessage(msg)}
+                key={msg.id}
+                className="flex items-start gap-4 group animate-in slide-in-from-bottom-2 duration-500"
               >
-                {/* Level 3+ Reference Bar */}
-                {msg.level >= 3 && msg.replyContent && (
-                  <div className="rounded-xl p-3 mb-3 border-l-4 bg-orange-50/50 dark:bg-white/5 border-primary/30">
-                    <p className="text-[10px] font-black uppercase mb-1 text-primary/60 tracking-tighter">
-                      Replying to {msg.replyTo}
-                    </p>
-                    <p className="text-[13px] italic line-clamp-2 leading-snug text-gray-500 dark:text-gray-400 font-medium">
-                      "{msg.replyContent}"
+                <div className="shrink-0 pt-1 relative">
+                  <div
+                    className={`bg-center bg-no-repeat aspect-square bg-cover rounded-2xl w-11 h-11 shadow-sm border border-gray-100 dark:border-white/10`}
+                    style={{ backgroundImage: `url("${msg.avatar}")` }}
+                  />
+                  {msg.isAi && (
+                    <div className="absolute -bottom-1 -right-1 bg-primary text-white p-0.5 rounded-lg flex items-center justify-center border-2 border-white dark:border-[#0B0A09] shadow-lg">
+                      <span className="material-symbols-outlined text-[10px] font-black">auto_awesome</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-1 flex-col gap-2 items-start">
+                  <div className="flex items-baseline gap-2 px-1">
+                    <p className="text-orange-950/40 dark:text-white/30 text-[11px] font-black uppercase tracking-widest">
+                      {msg.user}
                     </p>
                   </div>
-                )}
 
-                {/* Main Content with Glow */}
-                <p className="text-[16px] leading-relaxed font-bold tracking-tight">
-                  {renderContentWithGlow(msg)}
-                </p>
+                  <div
+                    className={`relative rounded-[1.5rem] px-5 py-4 shadow-sm max-w-[92%] border transition-all bg-white dark:bg-white/5 text-[#1b0e0e] dark:text-white border-orange-50 dark:border-white/5 rounded-tl-none cursor-pointer hover:border-primary/40 active:scale-[0.98]`}
+                    onClick={() => setQuotedMessage(msg)}
+                  >
+                    {/* Level 3+ Reference Bar */}
+                    {msg.level >= 3 && msg.replyContent && (
+                      <div className="rounded-xl p-3 mb-3 border-l-4 bg-orange-50/50 dark:bg-white/5 border-primary/30">
+                        <p className="text-[10px] font-black uppercase mb-1 text-primary/60 tracking-tighter">
+                          Replying to {msg.replyTo}
+                        </p>
+                        <p className="text-[13px] italic line-clamp-2 leading-snug text-gray-500 dark:text-gray-400 font-medium">
+                          "{msg.replyContent}"
+                        </p>
+                      </div>
+                    )}
 
-                {msg.contentZh && (
-                  <>
-                    <div className="h-[1px] my-4 w-full opacity-5 bg-current" />
-                    <p className="text-[14px] font-medium leading-relaxed text-orange-900/60 dark:text-white/40 italic">
-                      {msg.contentZh}
+                    {/* Main Content with Glow */}
+                    <p className="text-[16px] leading-relaxed font-bold tracking-tight">
+                      {renderContentWithGlow(msg)}
                     </p>
-                  </>
-                )}
 
-                {/* Interaction Overlay (on hover/click indicator) */}
-                <div className="absolute -right-2 -bottom-2 opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-white text-[10px] font-black px-2 py-1 rounded-lg shadow-xl">
-                  TAP TO ASK
+                    {msg.contentZh && (
+                      <>
+                        <div className="h-[1px] my-4 w-full opacity-5 bg-current" />
+                        <p className="text-[14px] font-medium leading-relaxed text-orange-900/60 dark:text-white/40 italic">
+                          {msg.contentZh}
+                        </p>
+                      </>
+                    )}
+
+                    {/* Interaction Overlay (on hover/click indicator) */}
+                    <div className="absolute -right-2 -bottom-2 opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-white text-[10px] font-black px-2 py-1 rounded-lg shadow-xl">
+                      TAP TO ASK
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        ))}
+            ))}
+          </>
+        )}
       </main>
 
       {/* Modern Fixed Bottom Dock */}

@@ -1,17 +1,27 @@
 
 import React from 'react';
-import { POSTS } from '../constants';
-import { Page } from '../types';
+import { Post, Page } from '../types';
 
 interface HomeProps {
+  posts: Post[];
+  loading: boolean;
   onNavigate: (page: Page) => void;
   onPostSelect: (postId: string) => void;
 }
 
-const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
+const Home: React.FC<HomeProps> = ({ posts, loading, onNavigate, onPostSelect }) => {
+  if (loading) {
+    return (
+      <div className="h-full w-full bg-black flex flex-col items-center justify-center gap-4">
+        <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+        <p className="text-primary/50 text-[10px] font-black tracking-widest uppercase">Loading Posts...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto snap-y snap-mandatory no-scrollbar bg-black">
-      {POSTS.map((post) => (
+      {posts.map((post) => (
         <div
           key={post.id}
           className="relative h-full w-full snap-start overflow-hidden flex flex-col group"
