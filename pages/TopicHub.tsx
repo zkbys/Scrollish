@@ -6,7 +6,7 @@ interface TopicHubProps {
   onNavigate: (page: Page) => void
   onSelectComment: (commentId: string) => void
   post: any
-  initialCommentId?: string | null // [新增] 用于恢复上次阅读位置
+  initialCommentId?: string | null
 }
 
 const TopicHub: React.FC<TopicHubProps> = ({
@@ -21,11 +21,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const startPos = useRef({ x: 0, y: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
-
-  // [关键修复] 用于记录是否已经执行过恢复操作
   const hasRestoredPosition = useRef(false)
 
-  // Store
   const { fetchComments, getComments, isLoading } = useCommentStore()
 
   useEffect(() => {
@@ -53,12 +50,40 @@ const TopicHub: React.FC<TopicHubProps> = ({
     return topLevel.sort((a, b) => b.upvotes - a.upvotes)
   }, [allComments, isLoading, post.id])
 
-  // --- [关键修复] 位置恢复逻辑 ---
+  // --- [新增] 计算每条顶级评论的回复数 (Descendant Count) ---
+  const replyCounts = useMemo(() => {
+    if (allComments.length === 0) return {}
+
+    // 1. 构建父子关系映射
+    const childrenMap: Record<string, string[]> = {}
+    allComments.forEach((c) => {
+      if (c.parent_id) {
+        if (!childrenMap[c.parent_id]) childrenMap[c.parent_id] = []
+        childrenMap[c.parent_id].push(c.id)
+      }
+    })
+
+    // 2. 递归计算子孙数量
+    const countDescendants = (id: string): number => {
+      const children = childrenMap[id] || []
+      // 当前层级子节点数 + 每个子节点的后代数
+      return children.reduce(
+        (acc, childId) => acc + 1 + countDescendants(childId),
+        0,
+      )
+    }
+
+    // 3. 为每个顶级评论生成计数
+    const counts: Record<string, number> = {}
+    comments.forEach((c) => {
+      counts[c.id] = countDescendants(c.id)
+    })
+
+    return counts
+  }, [allComments, comments])
+  // ----------------------------------------------------
+
   useEffect(() => {
-    // 只有当：
-    // 1. 还没恢复过 (避免用户滑动后数据刷新导致跳回)
-    // 2. 传入了 initialCommentId
-    // 3. 数据已经加载好了
     if (
       !hasRestoredPosition.current &&
       initialCommentId &&
@@ -67,13 +92,10 @@ const TopicHub: React.FC<TopicHubProps> = ({
       const targetIndex = comments.findIndex((c) => c.id === initialCommentId)
       if (targetIndex !== -1) {
         setCurrentIndex(targetIndex)
-        hasRestoredPosition.current = true // 标记已恢复
-        // console.log('Restored position to index:', targetIndex);
+        hasRestoredPosition.current = true
       }
     }
   }, [comments, initialCommentId])
-
-  // -------------------------------------
 
   const isPageLoading =
     isLoading[post.id] && comments.length === 0 && allComments.length === 0
@@ -88,6 +110,10 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const activeComment = comments[currentIndex] || comments[0]
   const bubbles = activeComment ? getMessageBubbles(activeComment.content) : []
+  // 获取当前卡片的回复数
+  const currentReplyCount = activeComment
+    ? replyCounts[activeComment.id] || 0
+    : 0
 
   const goToChatRoom = () => {
     if (activeComment) {
@@ -243,13 +269,28 @@ const TopicHub: React.FC<TopicHubProps> = ({
                   <div className="font-black text-[14px] text-white tracking-wide drop-shadow-sm">
                     {activeComment?.author}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[12px] text-orange-500">
-                      favorite
-                    </span>
-                    <span className="text-[10px] text-white/60 font-bold">
-                      {activeComment?.upvotes || 0}
-                    </span>
+
+                  {/* [修改点] 增加回复数统计展示 */}
+                  <div className="flex items-center gap-3 mt-0.5">
+                    {/* 点赞数 */}
+                    <div className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[12px] text-orange-500">
+                        favorite
+                      </span>
+                      <span className="text-[10px] text-white/60 font-bold">
+                        {activeComment?.upvotes || 0}
+                      </span>
+                    </div>
+
+                    {/* 回复数 (新功能) */}
+                    <div className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[12px] text-blue-400">
+                        chat_bubble
+                      </span>
+                      <span className="text-[10px] text-white/60 font-bold">
+                        {currentReplyCount}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

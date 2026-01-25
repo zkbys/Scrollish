@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useCallback,
+} from 'react'
 import { useAppStore, ProductionPost } from '../store/useAppStore'
 import { supabase } from '../supabase'
 import { Page } from '../types'
@@ -22,27 +28,42 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
 
   const [activeTab, setActiveTab] = useState<'following' | 'foryou'>('foryou')
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // [修复核心]
+  // 如果有数据且索引 > 0，说明需要恢复位置，初始状态设为不可见 (false)，防止闪烁
+  // 否则直接可见 (true)
+  const [isReady, setIsReady] = useState(() => {
+    return !(posts.length > 0 && currentPostIndex > 0)
+  })
+
   const [transitionPostId, setTransitionPostId] = useState<string | null>(null)
   const [pullY, setPullY] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const touchStartRef = useRef(0)
 
-  useEffect(() => {
-    setTimeout(() => {
-      if (
-        scrollContainerRef.current &&
-        posts.length > 0 &&
-        currentPostIndex > 0
-      ) {
-        const container = scrollContainerRef.current
-        const rowHeight = container.clientHeight || window.innerHeight
-        container.scrollTo({
-          top: currentPostIndex * rowHeight,
-          behavior: 'auto',
-        })
-      }
-    }, 0)
-  }, [])
+  // --- [关键修复] 使用 useLayoutEffect 同步恢复滚动 ---
+  // useLayoutEffect 会在浏览器 paint 之前执行，确保用户看到第一帧时已经是正确的位置
+  useLayoutEffect(() => {
+    if (
+      posts.length > 0 &&
+      currentPostIndex > 0 &&
+      scrollContainerRef.current
+    ) {
+      const container = scrollContainerRef.current
+      const rowHeight = container.clientHeight || window.innerHeight
+
+      // 直接设置 scrollTop，比 scrollTo 更快更同步
+      container.scrollTop = currentPostIndex * rowHeight
+
+      // 这里的 requestAnimationFrame 是为了保险，确保在下一帧渲染时显示内容
+      requestAnimationFrame(() => {
+        setIsReady(true)
+      })
+    } else {
+      // 不需要恢复位置，直接显示
+      setIsReady(true)
+    }
+  }, []) // 仅挂载时执行
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget
@@ -57,7 +78,6 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   const handleOpenDiscussion = (postId: string) => {
     setTransitionPostId(postId)
     if (navigator.vibrate) navigator.vibrate(20)
-    // 保持 600ms，与 TopicHub 返回时间对齐
     setTimeout(() => {
       onPostSelect(postId)
       setTimeout(() => setTransitionPostId(null), 100)
@@ -69,6 +89,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
     (node: HTMLDivElement) => {
       if (isLoading || isLoadingMore) return
       if (observer.current) observer.current.disconnect()
+
       observer.current = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting && activeTab === 'foryou') {
           loadMore()
@@ -132,6 +153,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
         <button className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
           <span className="material-symbols-outlined text-[20px]">menu</span>
         </button>
+
         <div className="flex gap-6 pointer-events-auto items-center">
           <button
             onClick={() => setActiveTab('following')}
@@ -151,6 +173,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
             )}
           </button>
         </div>
+
         <button className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
           <span className="material-symbols-outlined text-[20px]">search</span>
         </button>
@@ -169,7 +192,9 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
 
       <div
         ref={scrollContainerRef}
-        className="h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 transition-transform duration-300"
+        // [关键] 控制透明度：未准备好时完全透明，避免看到“跳变”过程
+        // 准备好后瞬间显示，这就是“无缝衔接”的秘诀
+        className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 transition-transform duration-300 ${isReady ? 'opacity-100' : 'opacity-0'}`}
         onScroll={handleScroll}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -177,6 +202,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
         style={{ transform: `translateY(${pullY > 0 ? pullY / 3 : 0}px)` }}>
         {posts.map((post, index) => {
           const isTriggerPoint = index === posts.length - 3
+
           return (
             <div
               key={`${post.id}-${index}`}
@@ -191,6 +217,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
             </div>
           )
         })}
+
         {posts.length > 0 && (
           <div
             className="h-20 w-full flex items-center justify-center snap-start bg-black/50"
@@ -210,6 +237,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   )
 }
 
+// FeedItem 组件保持原样，无需修改
 const FeedItem: React.FC<{
   post: any
   onOpenDiscussion: () => void
@@ -218,6 +246,7 @@ const FeedItem: React.FC<{
   const [likes, setLikes] = useState(post.upvotes || post.likes || 0)
   const [isLiked, setIsLiked] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+
   const titleEn = post.title_en || post.titleEn || ''
   const titleCn = post.title_cn || post.titleZh || ''
   const imageUrl = post.image_url || post.image || ''
@@ -240,30 +269,38 @@ const FeedItem: React.FC<{
         .eq('id', post.id)
     } catch (error) {
       console.error('Like update failed', error)
+      setLikes(likes)
+      setIsLiked(isCurrentlyLiked)
     }
   }
 
   const handleShare = async () => {
     if (isExiting) return
-    if (navigator.share)
+    if (navigator.share) {
       navigator.share({
         title: titleEn,
         text: titleCn,
         url: window.location.href,
       })
+    }
   }
 
   return (
     <div className="h-full w-full bg-[#0B0A09] perspective-container">
       <div
-        className={`relative overflow-hidden bg-[#121212] origin-top transition-all duration-[600ms] ease-apple will-change-transform ${isExiting ? 'fixed z-[100] top-12 left-4 right-4 h-56 rounded-[2.5rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] translate-y-0 [transform:rotateX(2deg)] brightness-90' : 'h-full w-full rounded-none translate-y-0 [transform:rotateX(0deg)] brightness-100'}`}>
+        className={`relative overflow-hidden bg-[#121212] origin-top transition-all duration-[600ms] ease-apple will-change-transform ${
+          isExiting
+            ? 'fixed z-[100] top-12 left-4 right-4 h-56 rounded-[2.5rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] translate-y-0 [transform:rotateX(2deg)] brightness-90'
+            : 'h-full w-full rounded-none translate-y-0 [transform:rotateX(0deg)] brightness-100'
+        }`}>
         <div
           className="absolute inset-0 h-full w-full overflow-hidden"
           onClick={() => {
-            if (!isExiting && hasVideo && videoRef.current)
+            if (!isExiting && hasVideo && videoRef.current) {
               videoRef.current.paused
                 ? videoRef.current.play()
                 : videoRef.current.pause()
+            }
           }}>
           {hasVideo ? (
             <video
@@ -282,7 +319,6 @@ const FeedItem: React.FC<{
                 style={{ backgroundImage: `url("${imageUrl}")` }}
               />
               <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
-              {/* [修改点] 增加 object-[center_35%] 将图片视觉重心上移 */}
               <img
                 src={imageUrl}
                 alt="Content"
