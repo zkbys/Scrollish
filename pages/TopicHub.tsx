@@ -22,6 +22,10 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const startPos = useRef({ x: 0, y: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
   const hasRestoredPosition = useRef(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  // 视频错误状态
+  const [videoError, setVideoError] = useState(false)
 
   const { fetchComments, getComments, isLoading } = useCommentStore()
 
@@ -50,11 +54,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
     return topLevel.sort((a, b) => b.upvotes - a.upvotes)
   }, [allComments, isLoading, post.id])
 
-  // --- [新增] 计算每条顶级评论的回复数 (Descendant Count) ---
+  // 计算子孙回复数量
   const replyCounts = useMemo(() => {
     if (allComments.length === 0) return {}
-
-    // 1. 构建父子关系映射
     const childrenMap: Record<string, string[]> = {}
     allComments.forEach((c) => {
       if (c.parent_id) {
@@ -62,27 +64,21 @@ const TopicHub: React.FC<TopicHubProps> = ({
         childrenMap[c.parent_id].push(c.id)
       }
     })
-
-    // 2. 递归计算子孙数量
     const countDescendants = (id: string): number => {
       const children = childrenMap[id] || []
-      // 当前层级子节点数 + 每个子节点的后代数
       return children.reduce(
         (acc, childId) => acc + 1 + countDescendants(childId),
         0,
       )
     }
-
-    // 3. 为每个顶级评论生成计数
     const counts: Record<string, number> = {}
     comments.forEach((c) => {
       counts[c.id] = countDescendants(c.id)
     })
-
     return counts
   }, [allComments, comments])
-  // ----------------------------------------------------
 
+  // 恢复上次阅读位置
   useEffect(() => {
     if (
       !hasRestoredPosition.current &&
@@ -97,6 +93,26 @@ const TopicHub: React.FC<TopicHubProps> = ({
     }
   }, [comments, initialCommentId])
 
+  // 强制播放视频
+  const videoUrl = post.videoUrl || post.video_url || ''
+  const hasVideo = !!videoUrl && !videoError
+
+  useEffect(() => {
+    if (hasVideo && videoRef.current) {
+      const playVideo = async () => {
+        try {
+          videoRef.current!.muted = true
+          videoRef.current!.setAttribute('playsinline', 'true')
+          videoRef.current!.setAttribute('webkit-playsinline', 'true')
+          await videoRef.current!.play()
+        } catch (err) {
+          console.log('Autoplay prevented by browser', err)
+        }
+      }
+      playVideo()
+    }
+  }, [hasVideo])
+
   const isPageLoading =
     isLoading[post.id] && comments.length === 0 && allComments.length === 0
 
@@ -110,7 +126,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const activeComment = comments[currentIndex] || comments[0]
   const bubbles = activeComment ? getMessageBubbles(activeComment.content) : []
-  // 获取当前卡片的回复数
   const currentReplyCount = activeComment
     ? replyCounts[activeComment.id] || 0
     : 0
@@ -184,6 +199,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-[#050505] overflow-hidden select-none perspective-container relative">
+      {/* 动态环境光背景 (统一使用图片模糊，避免视频背景太耗电且可能加载失败) */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div
           className="absolute inset-[-50%] bg-cover bg-center blur-[100px] opacity-40 animate-pulse-slow saturate-150"
@@ -192,25 +208,51 @@ const TopicHub: React.FC<TopicHubProps> = ({
         <div className="absolute inset-0 bg-black/60 mix-blend-multiply" />
       </div>
 
+      {/* 1. Hero Card 头部 */}
       <div
         className={`bg-cover bg-center flex flex-col justify-end p-7 relative overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] border border-white/10 z-50 transition-all duration-[600ms] ease-apple will-change-transform ${
           isExiting
             ? 'fixed inset-0 z-[100] h-full w-full rounded-none scale-100 rotate-0 translate-y-0 brightness-100'
             : 'mx-4 mt-12 h-56 rounded-[2.5rem] animate-in fade-in zoom-in-95 duration-[600ms] brightness-110'
         }`}
-        style={{
-          backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 100%), url("${imageUrl}")`,
-        }}>
+        style={
+          !hasVideo
+            ? {
+                backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 100%), url("${imageUrl}")`,
+              }
+            : { backgroundColor: '#000' }
+        }>
         <button
           onClick={handleBack}
-          className={`absolute top-5 left-5 text-white flex items-center justify-center h-11 w-11 bg-black/20 backdrop-blur-md rounded-2xl border border-white/20 active:scale-90 transition-all shadow-lg ${isExiting ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`}>
+          className={`absolute top-5 left-5 text-white flex items-center justify-center h-11 w-11 bg-black/20 backdrop-blur-md rounded-2xl border border-white/20 active:scale-90 transition-all shadow-lg z-20 ${isExiting ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`}>
           <span className="material-symbols-outlined text-[26px]">
             arrow_back
           </span>
         </button>
 
+        {/* 视频层 */}
+        {hasVideo && (
+          <>
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              className="absolute inset-0 w-full h-full object-cover"
+              loop
+              muted
+              playsInline
+              {...{ 'webkit-playsinline': 'true' }}
+              autoPlay
+              onError={() => {
+                console.log('TopicHub video load failed, fallback to image')
+                setVideoError(true)
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 pointer-events-none" />
+          </>
+        )}
+
         <div
-          className={`flex flex-col gap-2 transition-opacity duration-200 ${isExiting ? 'opacity-0' : 'opacity-100'}`}>
+          className={`flex flex-col gap-2 transition-opacity duration-200 z-10 ${isExiting ? 'opacity-0' : 'opacity-100'}`}>
           <div className="flex items-center gap-2">
             <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-[0.1em] shadow-[0_0_15px_rgba(249,115,22,0.4)]">
               Trending
@@ -270,9 +312,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
                     {activeComment?.author}
                   </div>
 
-                  {/* [修改点] 增加回复数统计展示 */}
                   <div className="flex items-center gap-3 mt-0.5">
-                    {/* 点赞数 */}
                     <div className="flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px] text-orange-500">
                         favorite
@@ -282,7 +322,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
                       </span>
                     </div>
 
-                    {/* 回复数 (新功能) */}
                     <div className="flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px] text-blue-400">
                         chat_bubble

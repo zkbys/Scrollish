@@ -13,7 +13,6 @@ import BottomNav from './components/BottomNav'
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
-  // 记录第二幕选中的评论ID
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(
     null,
   )
@@ -40,6 +39,8 @@ const App: React.FC = () => {
             titleZh: item.title_cn || '',
             hashtags: item.hashtags || [],
             image: item.image_url || IMAGES.london,
+            // [关键修复] 必须映射 video_url，否则 TopicHub 拿不到视频数据
+            videoUrl: item.video_url || null,
             likes: item.upvotes?.toString() || '0',
             stars: item.stars?.toString() || '0',
             comments: 0,
@@ -78,16 +79,14 @@ const App: React.FC = () => {
         return (
           <TopicHub
             post={selectedPost}
-            // [新增] 传入上次选中的评论 ID，用于恢复位置
             initialCommentId={selectedCommentId}
             onNavigate={(p) => {
               if (p === Page.Home) {
                 setSelectedPostId(null)
-                setSelectedCommentId(null) // 回首页时清理
+                setSelectedCommentId(null)
               }
               setCurrentPage(p)
             }}
-            // 捕获用户选择
             onSelectComment={(commentId) => setSelectedCommentId(commentId)}
           />
         )
@@ -99,7 +98,6 @@ const App: React.FC = () => {
             postImage={selectedPost?.image}
             focusCommentId={selectedCommentId}
             onBack={() => {
-              // 返回时保留 selectedCommentId，这样 TopicHub 知道要显示哪个
               setCurrentPage(Page.TopicHub)
             }}
           />

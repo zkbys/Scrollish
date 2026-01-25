@@ -5,7 +5,7 @@ import React, {
   useState,
   useCallback,
 } from 'react'
-import { useAppStore, ProductionPost } from '../store/useAppStore'
+import { useAppStore } from '../store/useAppStore'
 import { supabase } from '../supabase'
 import { Page } from '../types'
 
@@ -29,9 +29,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   const [activeTab, setActiveTab] = useState<'following' | 'foryou'>('foryou')
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  // [修复核心]
-  // 如果有数据且索引 > 0，说明需要恢复位置，初始状态设为不可见 (false)，防止闪烁
-  // 否则直接可见 (true)
+  // 恢复滚动位置的防闪烁逻辑：初始时如果需要恢复位置，先隐藏内容
   const [isReady, setIsReady] = useState(() => {
     return !(posts.length > 0 && currentPostIndex > 0)
   })
@@ -41,8 +39,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const touchStartRef = useRef(0)
 
-  // --- [关键修复] 使用 useLayoutEffect 同步恢复滚动 ---
-  // useLayoutEffect 会在浏览器 paint 之前执行，确保用户看到第一帧时已经是正确的位置
+  // 使用 useLayoutEffect 在浏览器绘制前同步恢复滚动位置
   useLayoutEffect(() => {
     if (
       posts.length > 0 &&
@@ -51,19 +48,16 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
     ) {
       const container = scrollContainerRef.current
       const rowHeight = container.clientHeight || window.innerHeight
-
-      // 直接设置 scrollTop，比 scrollTo 更快更同步
       container.scrollTop = currentPostIndex * rowHeight
 
-      // 这里的 requestAnimationFrame 是为了保险，确保在下一帧渲染时显示内容
+      // 强制在下一帧显示，确保位置已校准
       requestAnimationFrame(() => {
         setIsReady(true)
       })
     } else {
-      // 不需要恢复位置，直接显示
       setIsReady(true)
     }
-  }, []) // 仅挂载时执行
+  }, [])
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget
@@ -192,8 +186,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
 
       <div
         ref={scrollContainerRef}
-        // [关键] 控制透明度：未准备好时完全透明，避免看到“跳变”过程
-        // 准备好后瞬间显示，这就是“无缝衔接”的秘诀
+        // isReady 控制透明度，实现无缝衔接
         className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 transition-transform duration-300 ${isReady ? 'opacity-100' : 'opacity-0'}`}
         onScroll={handleScroll}
         onTouchStart={handleTouchStart}
@@ -237,7 +230,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   )
 }
 
-// FeedItem 组件保持原样，无需修改
+// 单个帖子组件
 const FeedItem: React.FC<{
   post: any
   onOpenDiscussion: () => void
@@ -247,13 +240,33 @@ const FeedItem: React.FC<{
   const [isLiked, setIsLiked] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
+  // 视频错误状态
+  const [videoError, setVideoError] = useState(false)
+
   const titleEn = post.title_en || post.titleEn || ''
   const titleCn = post.title_cn || post.titleZh || ''
   const imageUrl = post.image_url || post.image || ''
   const videoUrl = post.video_url || ''
   const subreddit = post.subreddit || 'Community'
   const commentCount = post.comments || 'Discuss'
-  const hasVideo = !!videoUrl
+
+  // 必须有 URL 且没有报错才渲染视频
+  const hasVideo = !!videoUrl && !videoError
+
+  // 强制播放逻辑
+  useEffect(() => {
+    if (hasVideo && videoRef.current && !isExiting) {
+      const attemptPlay = async () => {
+        try {
+          videoRef.current!.muted = true
+          await videoRef.current!.play()
+        } catch (e) {
+          console.log('Playback prevented:', e)
+        }
+      }
+      attemptPlay()
+    }
+  }, [hasVideo, isExiting])
 
   const handleLike = async () => {
     if (isExiting) return
@@ -310,7 +323,14 @@ const FeedItem: React.FC<{
               loop
               muted
               playsInline
+              // 兼容 iOS/国产浏览器
+              {...{ 'webkit-playsinline': 'true' }}
               autoPlay
+              // 加载失败时切换回图片
+              onError={() => {
+                console.log('Video load failed, fallback to image')
+                setVideoError(true)
+              }}
             />
           ) : (
             <>

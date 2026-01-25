@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { ChatMessage } from '../types'
-import { useCommentStore } from '../store/useCommentStore' // [新增] 引入 Store
+import { useCommentStore } from '../store/useCommentStore'
 
 interface ChatRoomProps {
   postId: string
@@ -28,14 +28,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     ChatMessage['analysis'] | null
   >(null)
 
-  // --- [核心修改] 使用 Store 获取数据 ---
+  // --- [新增] 下拉返回相关状态 ---
+  const [pullY, setPullY] = useState(0) // 下拉距离
+  const [isDragging, setIsDragging] = useState(false) // 是否正在拖拽
+  const touchStartRef = useRef(0) // 记录手指起始位置
+  const scrollContainerRef = useRef<HTMLDivElement>(null) // 内容容器引用，用于判断 scrollTop
+
   const { getComments, fetchComments } = useCommentStore()
 
-  // 1. 尝试获取/刷新评论 (Cache-First)
   useEffect(() => {
     fetchComments(postId)
-
-    // 如果没有传图片，自己查一下 (用于背景)
     if (!postImage) {
       const fetchImage = async () => {
         const { data } = await supabase
@@ -49,18 +51,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }, [postId, postImage, fetchComments])
 
-  // 2. 从 Store 同步读取原始数据
   const rawComments = getComments(postId)
 
-  // 3. 将原始数据转换为线性对话列表 (DFS)
-  // 这个计算现在非常快，因为它只处理内存中的数据
   const messages = useMemo(() => {
     if (!rawComments || rawComments.length === 0) return []
 
     const commentMap = new Map<string, any>()
     const childrenMap = new Map<string, any[]>()
 
-    // 构建映射
     rawComments.forEach((c) => {
       commentMap.set(c.id, c)
       const pid = c.parent_id
@@ -90,25 +88,21 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       }
       result.push(node)
       const children = childrenMap.get(comment.id) || []
-      // 子评论按热度排序
       children.sort((a: any, b: any) => (b.upvotes || 0) - (a.upvotes || 0))
       children.forEach((child) => traverse(child))
     }
 
-    // [聚焦逻辑]
     if (focusCommentId) {
       const targetRoot = rawComments.find((c) => c.id === focusCommentId)
       if (targetRoot) {
         traverse(targetRoot)
       } else {
-        // Fallback: 找不到ID显示全部顶级
         rawComments
           .filter((c) => c.depth === 0)
           .sort((a, b) => b.upvotes - a.upvotes)
           .forEach((root) => traverse(root))
       }
     } else {
-      // 没指定聚焦，显示全部
       rawComments
         .filter((c) => c.depth === 0)
         .sort((a, b) => b.upvotes - a.upvotes)
@@ -117,8 +111,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
     return result
   }, [rawComments, focusCommentId])
-
-  // ------------------------------------
 
   const getInitials = (name: string) =>
     name ? name.substring(0, 2).toUpperCase() : '??'
@@ -149,11 +141,77 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     )
   }
 
+  // --- [新增] 手势处理逻辑 ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // 只有当内容滚动条在顶部时，才允许检测下拉
+    if (scrollContainerRef.current?.scrollTop === 0) {
+      touchStartRef.current = e.touches[0].clientY
+      setIsDragging(true)
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return
+
+    const currentY = e.touches[0].clientY
+    const diff = currentY - touchStartRef.current
+
+    // 只有向下拉 (diff > 0) 且滚动条在顶部时生效
+    if (diff > 0 && scrollContainerRef.current?.scrollTop === 0) {
+      // 增加阻尼感 (除以 2.5)，并限制最大拉动距离
+      const dampedPull = Math.pow(diff, 0.8) // 非线性阻尼
+      setPullY(dampedPull)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    setIsDragging(false)
+    if (pullY > 100) {
+      // 拉动超过 100px，触发返回
+      // 稍微震动一下
+      if (navigator.vibrate) navigator.vibrate(10)
+      onBack()
+    }
+    // 无论是否触发返回，都要重置 pullY (如果是返回，页面会卸载；如果不返回，需要回弹)
+    setPullY(0)
+    touchStartRef.current = 0
+  }
+
   const bgImage = postImage || fetchedImage
-  const isListEmpty = messages.length === 0
+  const isLoading = messages.length === 0
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0A09] overflow-hidden overscroll-none animate-in slide-in-from-bottom duration-[600ms] ease-apple">
+    // [关键修改]
+    // 1. 绑定 touch 事件到最外层容器
+    // 2. style transform: 根据 pullY 移动整个页面
+    // 3. transition: 非拖拽状态下添加过渡，实现松手回弹效果
+    <div
+      className={`fixed inset-0 z-[60] flex flex-col bg-[#0B0A09] overflow-hidden overscroll-none shadow-2xl ${!isDragging ? 'transition-transform duration-300 ease-out' : ''}`}
+      style={{
+        transform: `translateY(${pullY}px)`,
+        // 当下拉时，稍微把圆角加大，看起来像是一张卡片被拉走
+        borderRadius: pullY > 0 ? `${Math.min(pullY / 10, 40)}px` : '0px',
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}>
+      {/* 顶部指示器 (下拉时显示 "Release to close") */}
+      <div
+        className="absolute top-0 left-0 right-0 h-16 flex items-center justify-center pointer-events-none transition-opacity duration-200 z-[70]"
+        style={{
+          opacity: Math.min(pullY / 80, 1),
+          transform: `translateY(-${30 - Math.min(pullY / 3, 30)}px)`,
+        }}>
+        <div className="flex flex-col items-center gap-1">
+          <span className="material-symbols-outlined text-white/50 text-[20px] animate-bounce">
+            keyboard_arrow_down
+          </span>
+          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
+            Release to Close
+          </span>
+        </div>
+      </div>
+
       <div className="absolute inset-0 pointer-events-none">
         {bgImage ? (
           <div
@@ -216,7 +274,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         <div className="flex flex-col items-center">
           <span className="text-white font-bold text-[15px]">Discussion</span>
           <span className="text-white/40 text-[10px] font-medium tracking-wider">
-            {isListEmpty ? 'Syncing...' : `${messages.length} replies`}
+            {isLoading ? 'Syncing...' : `${messages.length} replies`}
           </span>
         </div>
         <button className="text-white flex items-center justify-center w-10 h-10 rounded-full bg-white/5 active:scale-90 transition-transform">
@@ -226,8 +284,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         </button>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar relative z-10 overflow-x-hidden">
-        {isListEmpty ? (
+      {/* [关键修改] 将 ref={scrollContainerRef} 绑定到这里
+         确保我们能正确检测 scrollTop 是否为 0
+      */}
+      <main
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar relative z-10 overflow-x-hidden">
+        {isLoading ? (
           <div className="flex flex-col items-center justify-center h-64 gap-4">
             <div className="w-8 h-8 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
             <p className="text-orange-500/50 text-[10px] font-black tracking-widest uppercase animate-pulse">
