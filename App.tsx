@@ -1,20 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from './supabase';
-import { Page, Post } from './types';
-import { POSTS, IMAGES } from './constants';
-import Home from './pages/Home';
-import TopicHub from './pages/TopicHub';
-import ChatRoom from './pages/ChatRoom';
-import Explore from './pages/Explore';
-import Study from './pages/Study';
-import Profile from './pages/Profile';
-import BottomNav from './components/BottomNav';
+import React, { useState, useEffect } from 'react'
+import { supabase } from './supabase'
+import { Page, Post } from './types'
+import { POSTS, IMAGES } from './constants'
+import Home from './pages/Home'
+import TopicHub from './pages/TopicHub'
+import ChatRoom from './pages/ChatRoom'
+import Explore from './pages/Explore'
+import Study from './pages/Study'
+import Profile from './pages/Profile'
+import BottomNav from './components/BottomNav'
 
 const App: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState<Page>(Page.Home);
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [allPosts, setAllPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
+  // 记录第二幕选中的评论ID
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(
+    null,
+  )
+
+  const [allPosts, setAllPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchAllPosts = async () => {
@@ -22,9 +27,9 @@ const App: React.FC = () => {
         const { data, error } = await supabase
           .from('production_posts')
           .select('*')
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
 
-        if (error) throw error;
+        if (error) throw error
 
         if (data && data.length > 0) {
           const mappedPosts: Post[] = data.map((item: any) => ({
@@ -38,72 +43,95 @@ const App: React.FC = () => {
             likes: item.upvotes?.toString() || '0',
             stars: item.stars?.toString() || '0',
             comments: 0,
-          }));
-          setAllPosts(mappedPosts);
+          }))
+          setAllPosts(mappedPosts)
         } else {
-          setAllPosts(POSTS);
+          setAllPosts(POSTS)
         }
       } catch (err) {
-        console.error('Error fetching posts:', err);
-        setAllPosts(POSTS);
+        console.error('Error fetching posts:', err)
+        setAllPosts(POSTS)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    fetchAllPosts();
-  }, []);
+    fetchAllPosts()
+  }, [])
 
   const handlePostClick = (postId: string) => {
-    setSelectedPostId(postId);
-    setCurrentPage(Page.TopicHub);
-  };
+    setSelectedPostId(postId)
+    setCurrentPage(Page.TopicHub)
+  }
 
   const renderPage = () => {
-    const selectedPost = allPosts.find(p => p.id === selectedPostId) || allPosts[0] || POSTS[0];
+    const selectedPost =
+      allPosts.find((p) => p.id === selectedPostId) || allPosts[0] || POSTS[0]
 
     switch (currentPage) {
       case Page.Home:
-        return <Home posts={allPosts} loading={loading} onNavigate={setCurrentPage} onPostSelect={handlePostClick} />;
+        return (
+          <Home onNavigate={setCurrentPage} onPostSelect={handlePostClick} />
+        )
+
       case Page.TopicHub:
         return (
           <TopicHub
             post={selectedPost}
+            // [新增] 传入上次选中的评论 ID，用于恢复位置
+            initialCommentId={selectedCommentId}
             onNavigate={(p) => {
-              if (p === Page.Home) setSelectedPostId(null);
-              setCurrentPage(p);
+              if (p === Page.Home) {
+                setSelectedPostId(null)
+                setSelectedCommentId(null) // 回首页时清理
+              }
+              setCurrentPage(p)
+            }}
+            // 捕获用户选择
+            onSelectComment={(commentId) => setSelectedCommentId(commentId)}
+          />
+        )
+
+      case Page.ChatRoom:
+        return (
+          <ChatRoom
+            postId={selectedPostId || ''}
+            postImage={selectedPost?.image}
+            focusCommentId={selectedCommentId}
+            onBack={() => {
+              // 返回时保留 selectedCommentId，这样 TopicHub 知道要显示哪个
+              setCurrentPage(Page.TopicHub)
             }}
           />
-        );
-      case Page.ChatRoom:
-        return <ChatRoom postId={selectedPostId || ''} onBack={() => setCurrentPage(Page.TopicHub)} />;
-      case Page.Explore:
-        return <Explore />;
-      case Page.Study:
-        return <Study />;
-      case Page.Profile:
-        return <Profile />;
-      default:
-        return <Home onNavigate={setCurrentPage} onPostSelect={handlePostClick} />;
-    }
-  };
+        )
 
-  // Determine if the bottom navigation bar should be hidden
-  const hideBottomNav = currentPage === Page.TopicHub || currentPage === Page.ChatRoom;
+      case Page.Explore:
+        return <Explore />
+      case Page.Study:
+        return <Study />
+      case Page.Profile:
+        return <Profile />
+      default:
+        return (
+          <Home onNavigate={setCurrentPage} onPostSelect={handlePostClick} />
+        )
+    }
+  }
+
+  const hideBottomNav =
+    currentPage === Page.TopicHub || currentPage === Page.ChatRoom
 
   return (
     <div className="flex justify-center bg-black min-h-screen">
-      <div className="relative w-full max-w-md h-screen overflow-hidden bg-background-light dark:bg-background-dark shadow-2xl flex flex-col">
-        <main className="flex-1 overflow-hidden relative">
-          {renderPage()}
-        </main>
+      <div className="relative w-full max-w-md h-screen overflow-hidden bg-[#0B0A09] shadow-2xl flex flex-col">
+        <main className="flex-1 overflow-hidden relative">{renderPage()}</main>
 
         {!hideBottomNav && (
           <BottomNav activePage={currentPage} onNavigate={setCurrentPage} />
         )}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default App;
+export default App
