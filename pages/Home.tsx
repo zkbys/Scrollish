@@ -1,21 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { useAppStore, ProductionPost } from '../store/useAppStore'
 import { supabase } from '../supabase'
 import { Page } from '../types'
-
-// 严格对应 Supabase 表结构
-interface ProductionPost {
-  id: string
-  community_id: string
-  title_en: string // 修正字段名
-  title_cn: string // 修正字段名
-  content_en: string
-  content_cn: string
-  image_url: string
-  video_url: string | null
-  image_type: 'original' | 'generated'
-  upvotes: number
-  subreddit: string
-}
 
 interface HomeProps {
   onNavigate: (page: Page) => void
@@ -23,32 +9,116 @@ interface HomeProps {
 }
 
 const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
-  const [posts, setPosts] = useState<ProductionPost[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    posts,
+    initFeed,
+    refreshFeed,
+    loadMore,
+    isLoading,
+    isLoadingMore,
+    currentPostIndex,
+    setCurrentPostIndex,
+  } = useAppStore()
+
   const [activeTab, setActiveTab] = useState<'following' | 'foryou'>('foryou')
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
+  // 下拉刷新相关
+  const [pullY, setPullY] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const touchStartRef = useRef(0)
+
+  // --- 1. 自动恢复滚动位置 ---
   useEffect(() => {
-    const fetchPosts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('production_posts')
-          .select('*')
-          .order('upvotes', { ascending: false })
-          .limit(10)
+    setTimeout(() => {
+      if (
+        scrollContainerRef.current &&
+        posts.length > 0 &&
+        currentPostIndex > 0
+      ) {
+        const container = scrollContainerRef.current
+        const rowHeight = container.clientHeight || window.innerHeight
 
-        if (error) throw error
-        if (data) setPosts(data)
-      } catch (err) {
-        console.error('Error fetching posts:', err)
-      } finally {
-        setLoading(false)
+        container.scrollTo({
+          top: currentPostIndex * rowHeight,
+          behavior: 'auto',
+        })
       }
-    }
-
-    fetchPosts()
+    }, 0)
   }, [])
 
-  if (loading) {
+  // --- 2. 监听滚动 ---
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget
+    const rowHeight = container.clientHeight
+    if (rowHeight === 0) return
+
+    const newIndex = Math.round(container.scrollTop / rowHeight)
+    if (newIndex !== currentPostIndex) {
+      setCurrentPostIndex(newIndex)
+    }
+  }
+
+  // --- 无限加载观察者 ---
+  const observer = useRef<IntersectionObserver>()
+  const lastPostElementRef = useCallback(
+    (node: HTMLDivElement) => {
+      if (isLoading || isLoadingMore) return
+      if (observer.current) observer.current.disconnect()
+
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && activeTab === 'foryou') {
+          console.log('Trigger point reached, calling loadMore()...')
+          loadMore()
+        }
+      })
+
+      if (node) observer.current.observe(node)
+    },
+    [isLoading, isLoadingMore, loadMore, activeTab],
+  )
+
+  useEffect(() => {
+    initFeed()
+  }, [])
+
+  // --- 点击 Tab 逻辑 ---
+  const handleForYouClick = () => {
+    if (activeTab === 'foryou') {
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+      setCurrentPostIndex(0)
+      refreshFeed()
+    } else {
+      setActiveTab('foryou')
+    }
+  }
+
+  // --- 下拉刷新手势逻辑 ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (scrollContainerRef.current?.scrollTop === 0) {
+      touchStartRef.current = e.touches[0].clientY
+    }
+  }
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touchY = e.touches[0].clientY
+    const diff = touchY - touchStartRef.current
+    if (scrollContainerRef.current?.scrollTop === 0 && diff > 0) {
+      setPullY(Math.min(diff / 2.5, 120))
+    }
+  }
+  const handleTouchEnd = async () => {
+    if (pullY > 80) {
+      setIsRefreshing(true)
+      setPullY(80)
+      await refreshFeed()
+      setIsRefreshing(false)
+    }
+    setPullY(0)
+    touchStartRef.current = 0
+  }
+
+  // 全屏 Loading (仅首次)
+  if (posts.length === 0 && isLoading && !isRefreshing) {
     return (
       <div className="h-full w-full bg-[#0B0A09] flex flex-col items-center justify-center">
         <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
@@ -58,7 +128,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
 
   return (
     <div className="relative h-full w-full bg-[#0B0A09] overflow-hidden">
-      {/* 顶部 Header - 渐变优化 */}
+      {/* Header */}
       <header className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-5 pt-12 pb-8 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none">
         <button className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
           <span className="material-symbols-outlined text-[20px]">menu</span>
@@ -72,10 +142,13 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
           </button>
           <div className="h-4 w-[1px] bg-white/20"></div>
           <button
-            onClick={() => setActiveTab('foryou')}
-            className={`text-[16px] font-bold transition-colors relative drop-shadow-md ${activeTab === 'foryou' ? 'text-white' : 'text-white/60'}`}>
+            onClick={handleForYouClick}
+            className={`text-[16px] font-bold transition-colors relative drop-shadow-md flex items-center gap-1 ${activeTab === 'foryou' ? 'text-white' : 'text-white/60'}`}>
             For You
-            {activeTab === 'foryou' && (
+            {isLoading && activeTab === 'foryou' && (
+              <span className="w-2.5 h-2.5 border-[1.5px] border-white/30 border-t-white rounded-full animate-spin absolute -right-4 top-1.5"></span>
+            )}
+            {activeTab === 'foryou' && !isLoading && (
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-[3px] bg-primary rounded-full shadow-[0_0_10px_rgba(var(--primary-rgb),0.8)]" />
             )}
           </button>
@@ -86,20 +159,68 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
         </button>
       </header>
 
-      {/* 这里的 pb-20 是为了防止底部内容被新的 NavigationBar 遮挡 */}
-      <div className="h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0">
-        {posts.map((post) => (
-          <FeedItem
-            key={post.id}
-            post={post}
-            onOpenDiscussion={() => onPostSelect(post.id)}
-          />
-        ))}
+      {/* 下拉刷新指示器 (修改：移除了 arrow_downward，只在刷新时显示 Spinner) */}
+      <div
+        className="absolute top-12 left-0 right-0 z-40 flex justify-center transition-transform duration-300 pointer-events-none"
+        style={{ transform: `translateY(${pullY - 40}px)` }}>
+        {/* 只有 isRefreshing 为 true 时，才显示白底圆圈和Loading，平时下拉是空的（或者你可以只保留圆圈不显示图标） */}
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${isRefreshing ? 'bg-white opacity-100 scale-100' : 'opacity-0 scale-50'}`}>
+          {isRefreshing && (
+            <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+          )}
+        </div>
+      </div>
+
+      {/* 核心滚动容器 */}
+      <div
+        ref={scrollContainerRef}
+        className="h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 transition-transform duration-300"
+        onScroll={handleScroll}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ transform: `translateY(${pullY > 0 ? pullY / 3 : 0}px)` }}>
+        {posts.map((post, index) => {
+          const isTriggerPoint = index === posts.length - 3
+
+          return (
+            <div
+              key={`${post.id}-${index}`}
+              ref={isTriggerPoint ? lastPostElementRef : null}
+              className="h-full w-full snap-start relative"
+              // [关键修改] 强制每次只滑一页 (Scroll Snap Stop)
+              // 注意：snap-stop 是 CSS 属性，Tailwind 可能需要 arbitrary value 或 style
+              style={{ scrollSnapStop: 'always' }}>
+              <FeedItem
+                post={post}
+                onOpenDiscussion={() => onPostSelect(post.id)}
+              />
+            </div>
+          )
+        })}
+
+        {/* 底部加载更多指示器 */}
+        {posts.length > 0 && (
+          <div
+            className="h-20 w-full flex items-center justify-center snap-start bg-black/50"
+            style={{ scrollSnapStop: 'always' }}>
+            {isLoadingMore ? (
+              <div className="flex items-center gap-2 text-white/50 text-xs font-bold uppercase tracking-widest">
+                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                Loading More...
+              </div>
+            ) : (
+              <div className="text-white/20 text-[10px]">- End of Feed -</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
+// --- FeedItem 组件 (保持不变) ---
 const FeedItem: React.FC<{
   post: ProductionPost
   onOpenDiscussion: () => void
@@ -109,18 +230,12 @@ const FeedItem: React.FC<{
   const videoRef = useRef<HTMLVideoElement>(null)
   const hasVideo = !!post.video_url
 
-  // 4. 修复点赞逻辑：支持取消点赞
   const handleLike = async () => {
     const isCurrentlyLiked = isLiked
-    // 乐观更新
     const newCount = isCurrentlyLiked ? likes - 1 : likes + 1
-
     setLikes(newCount)
     setIsLiked(!isCurrentlyLiked)
-
     if (navigator.vibrate) navigator.vibrate(50)
-
-    // 异步更新后端
     try {
       await supabase
         .from('production_posts')
@@ -128,7 +243,6 @@ const FeedItem: React.FC<{
         .eq('id', post.id)
     } catch (error) {
       console.error('Like update failed', error)
-      // 如果失败，回滚状态
       setLikes(likes)
       setIsLiked(isCurrentlyLiked)
     }
@@ -145,11 +259,10 @@ const FeedItem: React.FC<{
   }
 
   return (
-    <div className="relative h-full w-full snap-start overflow-hidden bg-[#121212]">
-      {/* 1. 媒体层：氛围感增强版 (Ambient Glow) */}
+    <div className="relative h-full w-full overflow-hidden bg-[#121212]">
       <div
-        className="absolute inset-0 h-full w-full overflow-hidden" // 增加 overflow-hidden 防止模糊溢出
-        onClick={(e) => {
+        className="absolute inset-0 h-full w-full overflow-hidden"
+        onClick={() => {
           if (hasVideo && videoRef.current) {
             videoRef.current.paused
               ? videoRef.current.play()
@@ -168,17 +281,11 @@ const FeedItem: React.FC<{
           />
         ) : (
           <>
-            {/* 背景层：大幅增强氛围感 */}
-            {/* 这里的改动：opacity-60 -> opacity-100, blur-2xl -> blur-3xl, 移除 brightness-75 */}
             <div
               className="absolute inset-0 bg-cover bg-center blur-3xl scale-125 opacity-80"
               style={{ backgroundImage: `url("${post.image_url}")` }}
             />
-
-            {/* 增加一层轻微的暗色渐变，保证背景不会太亮抢了前景的风头 */}
             <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
-
-            {/* 前景层：保持内容完整 */}
             <img
               src={post.image_url}
               alt="Content"
@@ -186,20 +293,14 @@ const FeedItem: React.FC<{
             />
           </>
         )}
-
-        {/* 底部渐变遮罩：只在底部存在，保证文字可读，不再遮挡全屏 */}
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none z-20" />
       </div>
 
-      {/* 双击点赞层 */}
       <div className="absolute inset-0 z-30" onDoubleClick={handleLike} />
 
-      {/* 2. 底部信息层 (修正字段名显示) */}
       <div className="absolute bottom-0 left-0 w-[82%] z-40 p-5 pb-24 pointer-events-none">
-        {/* 用户/社区 */}
         <div className="flex items-center gap-2 mb-3 pointer-events-auto">
           <div className="w-10 h-10 rounded-full border border-white/20 bg-black/40 backdrop-blur-md flex items-center justify-center overflow-hidden">
-            {/* 既然没有头像，用 subreddit 的首字母，稍微美化一下 */}
             <span className="text-white font-black text-sm">
               {post.subreddit
                 ? post.subreddit.substring(0, 2).toUpperCase()
@@ -225,8 +326,6 @@ const FeedItem: React.FC<{
             Subscribe
           </button>
         </div>
-
-        {/* 标题 & 翻译 (注意这里使用的是 title_en 和 title_cn) */}
         <div className="pointer-events-auto mb-2 space-y-1">
           <h1 className="text-white text-[18px] font-black leading-snug drop-shadow-lg pr-4">
             {post.title_en}
@@ -237,9 +336,7 @@ const FeedItem: React.FC<{
         </div>
       </div>
 
-      {/* 右侧交互栏 */}
       <div className="absolute bottom-24 right-2 flex flex-col items-center gap-6 z-50 pointer-events-auto w-14">
-        {/* Like */}
         <div className="flex flex-col items-center gap-1">
           <button
             onClick={handleLike}
@@ -253,8 +350,6 @@ const FeedItem: React.FC<{
             {likes}
           </span>
         </div>
-
-        {/* Discuss */}
         <div className="flex flex-col items-center gap-1">
           <button
             onClick={onOpenDiscussion}
@@ -267,8 +362,6 @@ const FeedItem: React.FC<{
             Discuss
           </span>
         </div>
-
-        {/* Share */}
         <div className="flex flex-col items-center gap-1">
           <button
             onClick={handleShare}
