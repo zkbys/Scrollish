@@ -1,21 +1,37 @@
-import React from 'react'
-import { Page, Post } from '../types' // 引入 Post 类型以便类型转换
+import React, { useRef, useLayoutEffect } from 'react'
+import { Page, Post } from '../types'
 import { useUserStore } from '../store/useUserStore'
-import { IMAGES } from '../constants' // 引入默认头像
+import { useProfileStore } from '../store/useProfileStore'
+import { IMAGES } from '../constants'
 
 interface ProfileProps {
   onNavigate?: (page: Page) => void
-  onPostSelect?: (post: Post) => void // [修改] 这里接收 Post 对象
+  onPostSelect?: (post: Post) => void
 }
 
 const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
   const { likedPosts } = useUserStore()
+  const { scrollPos, setScrollPos } = useProfileStore()
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // 恢复滚动位置
+  useLayoutEffect(() => {
+    const timer = setTimeout(() => {
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current && scrollPos > 0) {
+          scrollContainerRef.current.scrollTo({ top: scrollPos, behavior: 'instant' })
+        }
+      })
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [])
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setScrollPos(e.currentTarget.scrollTop)
+  }
 
   const handlePostClick = (rawPost: any) => {
     if (onPostSelect) {
-      // [关键修复] 数据格式转换
-      // Store里存的是 ProductionPost (数据库格式)，App.tsx 需要 Post (前端UI格式)
-      // 我们在这里做一次映射，确保传给预览页的数据是完整的
       const mappedPost: Post = {
         id: rawPost.id,
         user: rawPost.author_name || rawPost.subreddit || 'Anonymous',
@@ -23,8 +39,8 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         titleEn: rawPost.title_en,
         titleZh: rawPost.title_cn || '',
         hashtags: rawPost.hashtags || [],
-        image: rawPost.image_url || IMAGES.london, // 使用 image_url
-        videoUrl: rawPost.video_url || null, // 使用 video_url
+        image: rawPost.image_url || IMAGES.london,
+        videoUrl: rawPost.video_url || null,
         likes: rawPost.upvotes?.toString() || '0',
         stars: '0',
         comments: 0,
@@ -97,7 +113,11 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
       </div>
 
       {/* Grid Content */}
-      <main className="flex-1 overflow-y-auto px-4 pb-32 no-scrollbar">
+      <main
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 pb-32 no-scrollbar"
+      >
         {likedPosts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-white/20">
             <span className="material-symbols-outlined text-6xl mb-4">
@@ -122,7 +142,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                       className="w-full h-full object-cover opacity-80"
                       muted
                       preload="metadata"
-                      // 不自动播放，只展示首帧，节省性能
+                    // 不自动播放，只展示首帧，节省性能
                     />
                   ) : (
                     <div

@@ -39,14 +39,19 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
   const containerRef = useRef<HTMLDivElement>(null);
   const trendingContainerRef = useRef<HTMLDivElement>(null);
 
-  // Restore Scroll Positions
+  // Restore Scroll Positions (with micro-delay to ensure DOM is ready)
   useLayoutEffect(() => {
-    if (containerRef.current && scrollPos > 0) {
-      containerRef.current.scrollTop = scrollPos;
-    }
-    if (trendingContainerRef.current && trendingScrollPos > 0) {
-      trendingContainerRef.current.scrollLeft = trendingScrollPos;
-    }
+    const timer = setTimeout(() => {
+      requestAnimationFrame(() => {
+        if (containerRef.current && scrollPos > 0) {
+          containerRef.current.scrollTo({ top: scrollPos, behavior: 'instant' });
+        }
+        if (trendingContainerRef.current && trendingScrollPos > 0) {
+          trendingContainerRef.current.scrollTo({ left: trendingScrollPos, behavior: 'instant' });
+        }
+      });
+    }, 50);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleMainScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -66,15 +71,21 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
   }, []);
 
   const fetchTrending = async (silent = false) => {
-    if (!silent) setIsRefreshingTrending(true);
-    try {
-      let query = supabase
-        .from('production_posts')
-        .select('*');
+    if (!silent) {
+      setIsRefreshingTrending(true);
+      // [彻底刷新] 手动触发时，归零滚动位置记忆
+      setTrendingScrollPos(0);
+      // [保留内容] 不清空列表，保持占位，避免页面突然缩短
+    }
 
-      // Apply fresh refresh logic
+    try {
+      // 1. 构建查询，排除已看过的 ID
+      let query = supabase.from('production_posts').select('*');
+
+      // 2. 如果有排除列表，应用过滤（只保留最近 30 个 ID 以避免 URL 过长）
       if (excludedTrendingIds.length > 0) {
-        query = query.not('id', 'in', `(${excludedTrendingIds.join(',')})`);
+        const idsToExclude = excludedTrendingIds.slice(-30);
+        query = query.not('id', 'in', `(${idsToExclude.join(',')})`);
       }
 
       const { data } = await query
@@ -82,17 +93,38 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
         .limit(8);
 
       if (data && data.length > 0) {
-        setTrendingPosts(data);
-        // Exclude these IDs from next refresh
-        addExcludedTrendingIds(data.map(p => p.id));
+        // 3. 随机打乱（增加新鲜感）
+        const shuffled = [...data].sort(() => Math.random() - 0.5);
+        setTrendingPosts(shuffled);
+
+        // 4. [修正时序] 在下一帧将新 ID 加入排除池，防止状态竞争
+        requestAnimationFrame(() => {
+          addExcludedTrendingIds(shuffled.map(p => p.id));
+        });
+
+        // 5. [滚动锚定] 手动强制复位横向滚动条
+        if (!silent && trendingContainerRef.current) {
+          setTimeout(() => {
+            trendingContainerRef.current?.scrollTo({ left: 0, behavior: 'smooth' });
+          }, 100);
+        }
       } else if (excludedTrendingIds.length > 0) {
-        // If no fresh items, clear exclusions and try once more
+        // 6. 如果没有新内容，重置排除列表并重试
         const { data: retryData } = await supabase
           .from('production_posts')
           .select('*')
           .order('upvotes', { ascending: false })
           .limit(8);
-        if (retryData) setTrendingPosts(retryData);
+        if (retryData) {
+          const shuffled = [...retryData].sort(() => Math.random() - 0.5);
+          setTrendingPosts(shuffled);
+
+          if (!silent && trendingContainerRef.current) {
+            setTimeout(() => {
+              trendingContainerRef.current?.scrollTo({ left: 0, behavior: 'smooth' });
+            }, 100);
+          }
+        }
       }
     } catch (err) {
       console.error('Error fetching trending posts:', err);
@@ -449,7 +481,7 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
       </header>
 
       <div className={`transition-all duration-300 ${showResults ? 'blur-md grayscale opacity-40' : 'blur-0 grayscale-0 opacity-100'}`}>
-        <section className="mt-2 text-wrap">
+        <section className="mt-2">
           <div className="flex items-center justify-between px-5 pb-3 pt-4">
             <h2 className="text-white text-xl font-black tracking-tight underline decoration-primary/30 underline-offset-8">Trending Today</h2>
             <div className="flex items-center gap-2">
@@ -484,6 +516,16 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-black/10" />
                   </div>
+
+                  {/* 刷新时的加载遮罩 */}
+                  {isRefreshingTrending && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-8 h-8 border-3 border-white/20 border-t-primary rounded-full animate-spin"></div>
+                        <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Updating</span>
+                      </div>
+                    </div>
+                  )}
 
                   {post.image_type === 'generated' && (
                     <div className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-2.5 py-1 bg-black/30 backdrop-blur-md rounded-full border border-white/10">

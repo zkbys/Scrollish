@@ -130,6 +130,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
     ? replyCounts[activeComment.id] || 0
     : 0
 
+  const [isExiting, setIsExiting] = useState(false)
+
   const goToChatRoom = () => {
     if (activeComment) {
       onSelectComment(activeComment.id)
@@ -139,7 +141,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const handleBack = () => {
     if (navigator.vibrate) navigator.vibrate(20)
-    onNavigate(Page.Home)
+    setIsExiting(true)
+    // 给一点时间让退出动画开始
+    setTimeout(() => {
+      onNavigate(Page.Home)
+    }, 50)
   }
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -197,7 +203,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const subreddit = post.subreddit || post.user || 'Community'
 
   return (
-    <div className="h-full flex flex-col bg-[#0B0A09] overflow-hidden select-none perspective-container relative">
+    <div className={`h-full flex flex-col bg-[#0B0A09] overflow-hidden select-none perspective-container relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
       {/* 动态环境光背景 (统一使用图片模糊，避免视频背景太耗电且可能加载失败) */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div
@@ -212,7 +218,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
         {/* Lens shell (drops from sky) - image is INSIDE so it's clipped */}
         <motion.div
           initial={{ y: -200, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
+          animate={isExiting ? { y: -20, opacity: 0, scale: 0.95 } : { y: 0, opacity: 1, scale: 1 }}
           transition={{
             type: "spring",
             stiffness: 50,

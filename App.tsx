@@ -12,9 +12,10 @@ import Profile from './pages/Profile'
 import BottomNav from './components/BottomNav'
 
 const App: React.FC = () => {
-  // ... rest of the component state and logic remains the same ...
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
   const [lastPage, setLastPage] = useState<Page>(Page.Home)
+  // [新增] 记录用户进入详情流的起始 Tab 页（Explore/Home/Profile）
+  const [originPage, setOriginPage] = useState<Page>(Page.Home)
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
   const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null)
@@ -62,9 +63,16 @@ const App: React.FC = () => {
     fetchAllPosts()
   }, [])
 
-  // [新增] 统一导航处理，确保记录上一步页面
+  // [重构] 统一导航处理，记录上一步页面 + 识别起始 Tab 页
   const navigateTo = (nextPage: Page) => {
     setLastPage(currentPage)
+
+    // 如果目标是主要的 Tab 页（可以从底部导航访问），更新起始页
+    const mainTabPages = [Page.Home, Page.Explore, Page.Study, Page.Profile]
+    if (mainTabPages.includes(nextPage)) {
+      setOriginPage(nextPage)
+    }
+
     setCurrentPage(nextPage)
   }
 
@@ -100,7 +108,10 @@ const App: React.FC = () => {
               post={activePost}
               isExiting={false}
               onOpenDiscussion={() => navigateTo(Page.TopicHub)}
-              onBack={() => navigateTo(lastPage)}
+              onBack={() => {
+                // [修复] 使用 originPage 确保返回到正确的起始页（通常是 Profile）
+                navigateTo(originPage)
+              }}
             />
           </div>
         )
@@ -112,14 +123,24 @@ const App: React.FC = () => {
             initialCommentId={selectedCommentId}
             onNavigate={(p) => {
               if (p === Page.Home) {
-                if (lastPage === Page.Profile) {
+                // [智能返回] 基于 originPage (起始页) 决定回退目标
+                if (originPage === Page.Explore) {
+                  // 从 Explore 进来的，返回 Explore
+                  navigateTo(Page.Explore)
+                } else if (originPage === Page.Profile) {
+                  // 从 Profile 进来的，返回 Preview 中间层
                   navigateTo(Page.Preview)
                 } else {
-                  setViewingPost(null)
-                  setSelectedCommentId(null)
-                  navigateTo(Page.Home)
+                  // 从 Home 进来的，或其他情况，返回 Home
+                  // 只有在没有社区过滤且是真正回到 Home 时，才清理状态
+                  if (!filteredCommunityId && originPage === Page.Home) {
+                    setViewingPost(null)
+                    setSelectedCommentId(null)
+                  }
+                  navigateTo(originPage)
                 }
               } else {
+                // 其他导航（如进入 ChatRoom）正常处理，保持 originPage 不变
                 navigateTo(p)
               }
             }}
@@ -134,6 +155,8 @@ const App: React.FC = () => {
             postImage={activePost.image}
             focusCommentId={selectedCommentId}
             onBack={() => {
+              // ChatRoom 只返回到 TopicHub，不修改 originPage
+              // 确保整个详情流的起始点被锁定
               navigateTo(Page.TopicHub)
             }}
           />

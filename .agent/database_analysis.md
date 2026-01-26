@@ -10,12 +10,12 @@
 
 ### 数据量统计
 
-| 表名 | 记录数 | 说明 |
-|------|--------|------|
-| **categories** | 13 条 | 内容分类（如 Science, Daily Life 等） |
-| **communities** | 71 条 | 子社区/Subreddit（如 r/AskReddit, r/Jokes 等） |
-| **production_posts** | 113 条 | 精选帖子（已完成双语处理） |
-| **comments** | 6,445 条 | 评论数据（支持多层级树形结构） |
+| 表名                 | 记录数   | 说明                                           |
+| -------------------- | -------- | ---------------------------------------------- |
+| **categories**       | 13 条    | 内容分类（如 Science, Daily Life 等）          |
+| **communities**      | 71 条    | 子社区/Subreddit（如 r/AskReddit, r/Jokes 等） |
+| **production_posts** | 113 条   | 精选帖子（已完成双语处理）                     |
+| **comments**         | 6,445 条 | 评论数据（支持多层级树形结构）                 |
 
 **总数据量**: 6,642 条记录
 
@@ -40,11 +40,11 @@
 
 #### 数据示例
 
-| ID | name_en | name_cn |
-|----|---------|---------|
-| xxx | Science | 科学 |
+| ID  | name_en    | name_cn  |
+| --- | ---------- | -------- |
+| xxx | Science    | 科学     |
 | xxx | Daily Life | 日常生活 |
-| xxx | Culture | 文化 |
+| xxx | Culture    | 文化     |
 
 **记录数**: 13 个分类
 
@@ -72,11 +72,11 @@
 
 #### 数据示例
 
-| name | display_name | sub_category | subscriber_count |
-|------|-------------|--------------|------------------|
-| Jokes | r/Jokes | Humor | 1,234,567 |
-| whatisit | r/whatisit | Mystery Objects | 456,789 |
-| horror | r/horror | Horror Stories | 789,012 |
+| name     | display_name | sub_category    | subscriber_count |
+| -------- | ------------ | --------------- | ---------------- |
+| Jokes    | r/Jokes      | Humor           | 1,234,567        |
+| whatisit | r/whatisit   | Mystery Objects | 456,789          |
+| horror   | r/horror     | Horror Stories  | 789,012          |
 
 **记录数**: 71 个社区
 
@@ -112,13 +112,13 @@
 
 #### 数据示例（最新5条）
 
-| title_en | title_cn | subreddit | upvotes | image_type |
-|----------|----------|-----------|---------|------------|
-| UK Rainforest Bones: Animal ID | 英国雨林中的骨骼：属于何种动物？ | whatisit | 114 | generated |
-| Long Fleece Bag with Baby Hat | 与婴儿帽配套的长绒布袋 | whatisit | 21 | generated |
-| Purple Streetlights on Highway | 高速公路上的紫色路灯 | whatisit | 16 | original |
-| Mystery object from shorts drawstring | 短裤抽绳上的神秘物件 | whatisit | 9 | generated |
-| Mysterious object found under car seat | 汽车座椅下发现的神秘物体 | whatisit | 84 | generated |
+| title_en                               | title_cn                         | subreddit | upvotes | image_type |
+| -------------------------------------- | -------------------------------- | --------- | ------- | ---------- |
+| UK Rainforest Bones: Animal ID         | 英国雨林中的骨骼：属于何种动物？ | whatisit  | 114     | generated  |
+| Long Fleece Bag with Baby Hat          | 与婴儿帽配套的长绒布袋           | whatisit  | 21      | generated  |
+| Purple Streetlights on Highway         | 高速公路上的紫色路灯             | whatisit  | 16      | original   |
+| Mystery object from shorts drawstring  | 短裤抽绳上的神秘物件             | whatisit  | 9       | generated  |
+| Mysterious object found under car seat | 汽车座椅下发现的神秘物体         | whatisit  | 84      | generated  |
 
 #### 图片类型统计
 
@@ -159,28 +159,28 @@
 
 #### 数据示例（最新5条）
 
-| author | depth | upvotes | created_at |
-|--------|-------|---------|------------|
-| palm- | 0 | 1 | 2026-01-25 17:43:50 |
-| Nitrofox2 | 0 | 1 | 2026-01-25 17:38:41 |
-| Secure-Tradition793 | 0 | 1 | 2026-01-25 17:38:36 |
-| RationalReformer | 0 | 1 | 2026-01-25 17:34:13 |
-| Rich-Shallot6762 | 1 | 1 | 2026-01-25 17:31:36 |
+| author              | depth | upvotes | created_at          |
+| ------------------- | ----- | ------- | ------------------- |
+| palm-               | 0     | 1       | 2026-01-25 17:43:50 |
+| Nitrofox2           | 0     | 1       | 2026-01-25 17:38:41 |
+| Secure-Tradition793 | 0     | 1       | 2026-01-25 17:38:36 |
+| RationalReformer    | 0     | 1       | 2026-01-25 17:34:13 |
+| Rich-Shallot6762    | 1     | 1       | 2026-01-25 17:31:36 |
 
 #### 评论深度分布
 
-| 深度 | 数量 | 百分比 |
-|------|------|--------|
-| 深度0（主评论） | 232 | 3.6% |
-| 深度1（一级回复） | 305 | 4.7% |
-| 深度2（二级回复） | 210 | 3.3% |
-| 深度3 | 112 | 1.7% |
-| 深度4 | 78 | 1.2% |
-| 深度5 | 32 | 0.5% |
-| 深度6 | 16 | 0.2% |
-| 深度7 | 6 | 0.1% |
-| 深度8 | 8 | 0.1% |
-| 深度9 | 1 | 0.01% |
+| 深度              | 数量 | 百分比 |
+| ----------------- | ---- | ------ |
+| 深度0（主评论）   | 232  | 3.6%   |
+| 深度1（一级回复） | 305  | 4.7%   |
+| 深度2（二级回复） | 210  | 3.3%   |
+| 深度3             | 112  | 1.7%   |
+| 深度4             | 78   | 1.2%   |
+| 深度5             | 32   | 0.5%   |
+| 深度6             | 16   | 0.2%   |
+| 深度7             | 6    | 0.1%   |
+| 深度8             | 8    | 0.1%   |
+| 深度9             | 1    | 0.01%  |
 
 **最深评论层级**: 9 层
 
