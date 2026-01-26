@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { motion } from 'framer-motion'
 import { Page } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
 
@@ -17,7 +18,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [animationClass, setAnimationClass] = useState('')
-  const [isExiting, setIsExiting] = useState(false)
 
   const startPos = useRef({ x: 0, y: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
@@ -138,9 +138,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
   }
 
   const handleBack = () => {
-    setIsExiting(true)
     if (navigator.vibrate) navigator.vibrate(20)
-    setTimeout(() => onNavigate(Page.Home), 600)
+    onNavigate(Page.Home)
   }
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -198,7 +197,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const subreddit = post.subreddit || post.user || 'Community'
 
   return (
-    <div className="h-full flex flex-col bg-[#050505] overflow-hidden select-none perspective-container relative">
+    <div className="h-full flex flex-col bg-[#0B0A09] overflow-hidden select-none perspective-container relative">
       {/* 动态环境光背景 (统一使用图片模糊，避免视频背景太耗电且可能加载失败) */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div
@@ -208,55 +207,74 @@ const TopicHub: React.FC<TopicHubProps> = ({
         <div className="absolute inset-0 bg-black/60 mix-blend-multiply" />
       </div>
 
-      {/* 1. Hero Card 头部 */}
-      <div
-        className={`bg-cover bg-center flex flex-col justify-end p-7 relative overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] border border-white/10 z-50 transition-all duration-[600ms] ease-apple will-change-transform ${
-          isExiting
-            ? 'fixed inset-0 z-[100] h-full w-full rounded-none scale-100 rotate-0 translate-y-0 brightness-100'
-            : 'mx-4 mt-12 h-56 rounded-[2.5rem] animate-in fade-in zoom-in-95 duration-[600ms] brightness-110'
-        }`}
-        style={
-          !hasVideo
-            ? {
-                backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 100%), url("${imageUrl}")`,
-              }
-            : { backgroundColor: '#000' }
-        }>
-        <button
-          onClick={handleBack}
-          className={`absolute top-5 left-5 text-white flex items-center justify-center h-11 w-11 bg-black/20 backdrop-blur-md rounded-2xl border border-white/20 active:scale-90 transition-all shadow-lg z-20 ${isExiting ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`}>
-          <span className="material-symbols-outlined text-[26px]">
-            arrow_back
-          </span>
-        </button>
+      {/* 1. Hero Card - Lens Landing Effect */}
+      <div className="mx-4 mt-12 h-56 relative z-50">
+        {/* Lens shell (drops from sky) - image is INSIDE so it's clipped */}
+        <motion.div
+          initial={{ y: -200, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{
+            type: "spring",
+            stiffness: 50,
+            damping: 15,
+          }}
+          className="absolute inset-0 rounded-[2.5rem] bg-white/[0.05] backdrop-blur-3xl shadow-[0_50px_100px_rgba(0,0,0,0.7)] border-2 border-white/20 overflow-hidden"
+        >
+          {/* Top glass highlight */}
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent z-20" />
 
-        {/* 视频层 */}
-        {hasVideo && (
-          <>
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              className="absolute inset-0 w-full h-full object-cover"
-              loop
-              muted
-              playsInline
-              {...{ 'webkit-playsinline': 'true' }}
-              autoPlay
-              onError={() => {
-                console.log('TopicHub video load failed, fallback to image')
-                setVideoError(true)
-              }}
+          {/* Background blur glow */}
+          {!hasVideo && (
+            <div
+              className="absolute inset-0 bg-cover bg-center blur-2xl opacity-30 scale-110"
+              style={{ backgroundImage: `url("${imageUrl}")` }}
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 pointer-events-none" />
-          </>
-        )}
+          )}
 
-        <div
-          className={`flex flex-col gap-2 transition-opacity duration-200 z-10 ${isExiting ? 'opacity-0' : 'opacity-100'}`}>
+          {/* THE KEY: Image has COUNTER-MOTION - moves UP as lens moves DOWN */}
+          {/* This creates the illusion that the image is fixed while the lens reveals it */}
+          {!hasVideo && (
+            <motion.img
+              initial={{ y: 200 }}
+              animate={{ y: 0 }}
+              transition={{
+                type: "spring",
+                stiffness: 50,
+                damping: 15,
+              }}
+              src={imageUrl}
+              alt=""
+              className="absolute inset-0 w-full h-full object-contain object-center z-[15]"
+            />
+          )}
+
+          {/* Video layer */}
+          {hasVideo && (
+            <>
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                className="absolute inset-0 w-full h-full object-cover"
+                loop
+                muted
+                playsInline
+                {...{ 'webkit-playsinline': 'true' }}
+                autoPlay
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 z-10" />
+            </>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 z-10" />
+        </motion.div>
+
+        {/* 文字信息层 (跟随镜头) */}
+        <motion.div
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="absolute inset-x-0 bottom-0 p-7 z-[70] flex flex-col gap-2 pointer-events-none"
+        >
           <div className="flex items-center gap-2">
-            {/* <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-[0.1em] shadow-[0_0_15px_rgba(249,115,22,0.4)]">
-              Trending
-            </span> */}
             <div className="h-1 w-1 rounded-full bg-white/60" />
             <span className="text-white/80 text-[10px] font-bold uppercase tracking-widest">
               {subreddit}
@@ -265,15 +283,20 @@ const TopicHub: React.FC<TopicHubProps> = ({
           <h1 className="text-white text-2xl font-black leading-tight drop-shadow-lg line-clamp-2">
             {titleEn}
           </h1>
-        </div>
+        </motion.div>
+
+        {/* 返回按钮 (始终在最上层) */}
+        <button
+          onClick={handleBack}
+          className="absolute top-5 left-5 text-white flex items-center justify-center h-11 w-11 bg-black/20 backdrop-blur-md rounded-2xl border border-white/20 active:scale-90 transition-all shadow-lg z-[80]">
+          <span className="material-symbols-outlined text-[26px]">
+            arrow_back
+          </span>
+        </button>
       </div>
 
       <main
-        className={`flex-1 flex flex-col items-center justify-start pt-6 bg-transparent transition-all duration-[600ms] ease-apple z-40 ${
-          isExiting
-            ? 'opacity-0 translate-y-40'
-            : 'animate-in slide-in-from-bottom-24 fade-in duration-700 delay-200'
-        }`}>
+        className="flex-1 flex flex-col items-center justify-start pt-6 bg-transparent z-40 animate-in slide-in-from-bottom-24 fade-in duration-700 delay-200">
         <div className="w-full px-8 flex justify-between items-center mb-5">
           <span className="text-white/40 text-[11px] font-black uppercase tracking-[0.2em] drop-shadow-md">
             {isPageLoading

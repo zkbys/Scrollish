@@ -45,7 +45,6 @@ const Home: React.FC<HomeProps> = ({
     return !(posts.length > 0 && currentPostIndex > 0)
   })
 
-  const [transitionPostId, setTransitionPostId] = useState<string | null>(null)
   const [pullY, setPullY] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const touchStartRef = useRef(0)
@@ -76,7 +75,7 @@ const Home: React.FC<HomeProps> = ({
       const container = scrollContainerRef.current
       const rowHeight = container.clientHeight || window.innerHeight
       container.scrollTop = currentPostIndex * rowHeight
-      requestAnimationFrame(() => setIsReady(true))
+      setIsReady(true)
     } else {
       setIsReady(true)
     }
@@ -142,7 +141,6 @@ const Home: React.FC<HomeProps> = ({
 
   // 处理从 Home 点击进入详情
   const handleOpenDiscussion = (prodPost: any) => {
-    setTransitionPostId(prodPost.id)
     if (navigator.vibrate) navigator.vibrate(20)
 
     const mappedPost: Post = {
@@ -161,10 +159,8 @@ const Home: React.FC<HomeProps> = ({
       subreddit: prodPost.subreddit,
     }
 
-    setTimeout(() => {
-      onPostSelect(mappedPost)
-      setTimeout(() => setTransitionPostId(null), 100)
-    }, 600)
+    // [关键改动] 不再需要 600ms 的手动延时，直接利用 framer-motion 的 layoutId 进行转场
+    onPostSelect(mappedPost)
   }
 
   // 渲染空状态 (针对 Following 标签)
@@ -217,8 +213,7 @@ const Home: React.FC<HomeProps> = ({
   }
 
   return (
-    <div
-      className={`relative h-full w-full bg-[#0B0A09] overflow-hidden transition-colors duration-500 ${transitionPostId ? 'bg-black' : ''}`}>
+    <div className="relative h-full w-full bg-[#0B0A09] overflow-hidden">
 
       {/* 社区过滤状态显示 */}
       {filteredCommunityId && activeTab === 'foryou' && (
@@ -233,7 +228,7 @@ const Home: React.FC<HomeProps> = ({
       )}
 
       <header
-        className={`absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-5 pt-12 pb-8 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none transition-all duration-300 ease-apple ${transitionPostId ? 'opacity-0 -translate-y-10' : 'opacity-100 translate-y-0'}`}>
+        className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-5 pt-12 pb-8 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none transition-all duration-300 ease-apple">
         <button className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
           <span className="material-symbols-outlined text-[20px]">menu</span>
         </button>
@@ -279,7 +274,7 @@ const Home: React.FC<HomeProps> = ({
       {renderEmptyState() || (
         <div
           ref={scrollContainerRef}
-          className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 transition-transform duration-300 ${isReady ? 'opacity-100' : 'opacity-0'}`}
+          className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 ${isReady ? 'opacity-100' : 'opacity-0'}`}
           onScroll={handleScroll}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -297,7 +292,7 @@ const Home: React.FC<HomeProps> = ({
                 <FeedItem
                   post={post}
                   onOpenDiscussion={() => handleOpenDiscussion(post)}
-                  isExiting={transitionPostId === post.id}
+                  isExiting={false}
                 />
               </div>
             )
@@ -323,7 +318,9 @@ const Home: React.FC<HomeProps> = ({
   )
 }
 
-// --- FeedItem 组件 (已修复点赞数显示 Bug) ---
+import { motion } from 'framer-motion'
+
+// --- FeedItem 组件 (已集成 Shared Element Transition) ---
 export const FeedItem: React.FC<{
   post: any
   onOpenDiscussion: () => void
@@ -411,12 +408,16 @@ export const FeedItem: React.FC<{
   }
 
   return (
-    <div className="h-full w-full bg-[#0B0A09] perspective-container">
-      <div
-        className={`relative overflow-hidden bg-[#121212] origin-top transition-all duration-[600ms] ease-apple will-change-transform ${isExiting
-          ? 'fixed z-[100] top-12 left-4 right-4 h-56 rounded-[2.5rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] translate-y-0 [transform:rotateX(2deg)] brightness-90'
-          : 'h-full w-full rounded-none translate-y-0 [transform:rotateX(0deg)] brightness-100'
-          }`}>
+    <div className="h-full w-full bg-[#0B0A09] relative">
+      <motion.div
+        layoutId={`post-card-${post.id}`}
+        transition={{
+          type: "spring",
+          stiffness: 70, // 配合镜头降落的优雅慢速
+          damping: 20,
+        }}
+        className="relative h-full w-full overflow-hidden bg-[#121212] rounded-none shadow-none z-[100] brightness-100"
+      >
         {/* 返回按钮 (Preview模式) */}
         {onBack && !isExiting && (
           <button
@@ -461,10 +462,16 @@ export const FeedItem: React.FC<{
                 style={{ backgroundImage: `url("${imageUrl}")` }}
               />
               <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
-              <img
+              <motion.img
+                layoutId={`post-image-${post.id}`}
                 src={imageUrl}
                 alt="Content"
-                className="absolute inset-0 w-full h-full object-contain object-[center_35%] z-10 drop-shadow-2xl"
+                className="absolute inset-0 w-full h-full object-contain object-center z-10 drop-shadow-2xl will-change-transform"
+                transition={{
+                  type: "spring",
+                  stiffness: 70,
+                  damping: 20,
+                }}
               />
             </>
           )}
@@ -505,8 +512,8 @@ export const FeedItem: React.FC<{
               <button
                 onClick={handleToggleSub}
                 className={`backdrop-blur-md border text-[10px] font-bold px-3 py-1.5 rounded-full ml-2 transition-all active:scale-95 pointer-events-auto ${isSubscribed
-                    ? 'bg-primary/20 border-primary/30 text-primary'
-                    : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
+                  ? 'bg-primary/20 border-primary/30 text-primary'
+                  : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
                   }`}
               >
                 {isSubscribed ? 'Following' : 'Subscribe'}
@@ -562,7 +569,7 @@ export const FeedItem: React.FC<{
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }

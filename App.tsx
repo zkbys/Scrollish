@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from './supabase'
 import { Page, Post } from './types'
 import { POSTS, IMAGES } from './constants'
@@ -11,17 +12,12 @@ import Profile from './pages/Profile'
 import BottomNav from './components/BottomNav'
 
 const App: React.FC = () => {
+  // ... rest of the component state and logic remains the same ...
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
   const [lastPage, setLastPage] = useState<Page>(Page.Home)
-
-  // [关键修复] 不再只存 ID，而是存整个 Post 对象
-  // 这样避免了从 Profile 跳转时，因为 allPosts 里找不到该 ID 而变成“公交车”的问题
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
   const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
-
-  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(
-    null,
-  )
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null)
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -66,29 +62,30 @@ const App: React.FC = () => {
     fetchAllPosts()
   }, [])
 
-  // [修改] 接收完整的 Post 对象，以及可选的来源
-  const handlePostClick = (post: Post) => {
-    setViewingPost(post)
-    setLastPage(currentPage) // 记录当前页为来源
-    setCurrentPage(Page.TopicHub)
+  // [新增] 统一导航处理，确保记录上一步页面
+  const navigateTo = (nextPage: Page) => {
+    setLastPage(currentPage)
+    setCurrentPage(nextPage)
   }
 
-  // [修改] Profile 点击处理
+  const handlePostClick = (post: Post) => {
+    setViewingPost(post)
+    navigateTo(Page.TopicHub)
+  }
+
   const handleProfilePostClick = (post: Post) => {
     setViewingPost(post)
-    setLastPage(Page.Profile)
-    setCurrentPage(Page.Preview)
+    navigateTo(Page.Preview)
   }
 
   const renderPage = () => {
-    // 如果没有选中的帖子，兜底显示 POSTS[0]
     const activePost = viewingPost || POSTS[0]
 
     switch (currentPage) {
       case Page.Home:
         return (
           <Home
-            onNavigate={setCurrentPage}
+            onNavigate={navigateTo}
             onPostSelect={handlePostClick}
             filteredCommunityId={filteredCommunityId}
             onClearFilter={() => setFilteredCommunityId(null)}
@@ -98,12 +95,12 @@ const App: React.FC = () => {
 
       case Page.Preview:
         return (
-          <div className="h-full w-full bg-black animate-in fade-in zoom-in-95 duration-300">
+          <div className="h-full w-full bg-black">
             <FeedItem
               post={activePost}
               isExiting={false}
-              onOpenDiscussion={() => setCurrentPage(Page.TopicHub)}
-              onBack={() => setCurrentPage(lastPage)}
+              onOpenDiscussion={() => navigateTo(Page.TopicHub)}
+              onBack={() => navigateTo(lastPage)}
             />
           </div>
         )
@@ -115,17 +112,15 @@ const App: React.FC = () => {
             initialCommentId={selectedCommentId}
             onNavigate={(p) => {
               if (p === Page.Home) {
-                // 如果是从 Preview 过来的，回 Preview
                 if (lastPage === Page.Profile) {
-                  setCurrentPage(Page.Preview)
+                  navigateTo(Page.Preview)
                 } else {
-                  // 否则回到记录的来源页 (Explore 或 Home)
                   setViewingPost(null)
                   setSelectedCommentId(null)
-                  setCurrentPage(lastPage)
+                  navigateTo(Page.Home)
                 }
               } else {
-                setCurrentPage(p)
+                navigateTo(p)
               }
             }}
             onSelectComment={(commentId) => setSelectedCommentId(commentId)}
@@ -139,7 +134,7 @@ const App: React.FC = () => {
             postImage={activePost.image}
             focusCommentId={selectedCommentId}
             onBack={() => {
-              setCurrentPage(Page.TopicHub)
+              navigateTo(Page.TopicHub)
             }}
           />
         )
@@ -147,11 +142,11 @@ const App: React.FC = () => {
       case Page.Explore:
         return (
           <Explore
-            onNavigate={setCurrentPage}
+            onNavigate={navigateTo}
             onPostSelect={handlePostClick}
             onCommunitySelect={(communityId) => {
               setFilteredCommunityId(communityId)
-              setCurrentPage(Page.Home)
+              navigateTo(Page.Home)
             }}
           />
         )
@@ -160,13 +155,13 @@ const App: React.FC = () => {
       case Page.Profile:
         return (
           <Profile
-            onNavigate={setCurrentPage}
+            onNavigate={navigateTo}
             onPostSelect={handleProfilePostClick}
           />
         )
       default:
         return (
-          <Home onNavigate={setCurrentPage} onPostSelect={handlePostClick} />
+          <Home onNavigate={navigateTo} onPostSelect={handlePostClick} />
         )
     }
   }
@@ -176,17 +171,56 @@ const App: React.FC = () => {
     currentPage === Page.ChatRoom ||
     currentPage === Page.Preview
 
+  // [新增] 定义页面顺序，用于决定滑动方向
+  const getPageRank = (page: Page) => {
+    switch (page) {
+      case Page.Home: return 0
+      case Page.Explore: return 1
+      case Page.Study: return 2
+      case Page.Profile: return 3
+      default: return 0
+    }
+  }
+
+  const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
+
   return (
     <div className="flex justify-center bg-black min-h-screen">
       <div className="relative w-full max-w-md h-screen overflow-hidden bg-[#0B0A09] shadow-2xl flex flex-col">
-        <main className="flex-1 overflow-hidden relative">{renderPage()}</main>
+        <main className="flex-1 overflow-hidden relative">
+          <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+            <motion.div
+              key={currentPage}
+              custom={direction}
+              // 当涉及到 TopicHub 时，强制仅使用淡入淡出（opacity），完全禁止位移和缩放，防止干扰 Shared Element
+              initial={
+                currentPage === Page.TopicHub || lastPage === Page.TopicHub
+                  ? { opacity: 0 }
+                  : { opacity: 0, x: direction * 50, scale: 0.98 }
+              }
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={
+                (currentPage === Page.Home && lastPage === Page.TopicHub) || currentPage === Page.TopicHub
+                  ? { opacity: 0 }
+                  : { opacity: 0, x: direction * -50, scale: 0.98 }
+              }
+              transition={{
+                duration: (currentPage === Page.Home && lastPage === Page.TopicHub) || currentPage === Page.TopicHub ? 0.2 : 0.4,
+                ease: [0.22, 1, 0.36, 1]
+              }}
+              className="absolute inset-0 h-full w-full will-change-transform"
+            >
+              {renderPage()}
+            </motion.div>
+          </AnimatePresence>
+        </main>
 
         {!hideBottomNav && (
           <BottomNav
             activePage={
               currentPage === Page.Preview ? Page.Profile : currentPage
             }
-            onNavigate={setCurrentPage}
+            onNavigate={navigateTo}
           />
         )}
       </div>
