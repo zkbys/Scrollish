@@ -66,21 +66,22 @@ const App: React.FC = () => {
     fetchAllPosts()
   }, [])
 
-  // [修改] 接收完整的 Post 对象，而不是 ID
+  // [修改] 接收完整的 Post 对象，以及可选的来源
   const handlePostClick = (post: Post) => {
     setViewingPost(post)
+    setLastPage(currentPage) // 记录当前页为来源
     setCurrentPage(Page.TopicHub)
   }
 
   // [修改] Profile 点击处理
   const handleProfilePostClick = (post: Post) => {
-    setViewingPost(post) // 直接设置要看的帖子对象
+    setViewingPost(post)
     setLastPage(Page.Profile)
     setCurrentPage(Page.Preview)
   }
 
   const renderPage = () => {
-    // 如果没有选中的帖子，兜底显示 POSTS[0]，但现在逻辑健壮了，很少会走到这里
+    // 如果没有选中的帖子，兜底显示 POSTS[0]
     const activePost = viewingPost || POSTS[0]
 
     switch (currentPage) {
@@ -114,12 +115,14 @@ const App: React.FC = () => {
             initialCommentId={selectedCommentId}
             onNavigate={(p) => {
               if (p === Page.Home) {
+                // 如果是从 Preview 过来的，回 Preview
                 if (lastPage === Page.Profile) {
                   setCurrentPage(Page.Preview)
                 } else {
+                  // 否则回到记录的来源页 (Explore 或 Home)
                   setViewingPost(null)
                   setSelectedCommentId(null)
-                  setCurrentPage(Page.Home)
+                  setCurrentPage(lastPage)
                 }
               } else {
                 setCurrentPage(p)

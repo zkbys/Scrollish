@@ -22,6 +22,7 @@ export interface Post {
   likes: string
   stars: string
   comments: number
+  community_id?: string
 }
 
 export interface ChatMessage {
