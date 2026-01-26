@@ -1,99 +1,167 @@
+import React from 'react'
+import { Page, Post } from '../types' // 引入 Post 类型以便类型转换
+import { useUserStore } from '../store/useUserStore'
+import { IMAGES } from '../constants' // 引入默认头像
 
-import React from 'react';
-import { IMAGES, POSTS } from '../constants';
+interface ProfileProps {
+  onNavigate?: (page: Page) => void
+  onPostSelect?: (post: Post) => void // [修改] 这里接收 Post 对象
+}
 
-const Profile: React.FC = () => {
+const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
+  const { likedPosts } = useUserStore()
+
+  const handlePostClick = (rawPost: any) => {
+    if (onPostSelect) {
+      // [关键修复] 数据格式转换
+      // Store里存的是 ProductionPost (数据库格式)，App.tsx 需要 Post (前端UI格式)
+      // 我们在这里做一次映射，确保传给预览页的数据是完整的
+      const mappedPost: Post = {
+        id: rawPost.id,
+        user: rawPost.author_name || rawPost.subreddit || 'Anonymous',
+        avatar: rawPost.author_avatar || IMAGES.avatar1,
+        titleEn: rawPost.title_en,
+        titleZh: rawPost.title_cn || '',
+        hashtags: rawPost.hashtags || [],
+        image: rawPost.image_url || IMAGES.london, // 使用 image_url
+        videoUrl: rawPost.video_url || null, // 使用 video_url
+        likes: rawPost.upvotes?.toString() || '0',
+        stars: '0',
+        comments: 0,
+        image_type: rawPost.image_type,
+        subreddit: rawPost.subreddit,
+      }
+
+      onPostSelect(mappedPost)
+    }
+  }
+
   return (
-    <div className="h-full flex flex-col bg-background-light dark:bg-background-dark overflow-y-auto no-scrollbar">
-      <header className="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md px-4 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary font-bold">explore</span>
-          <h2 className="text-lg font-bold tracking-tight">Global Explorer</h2>
-        </div>
-        <div className="flex items-center gap-4">
-          <button className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full">
-            <span className="material-symbols-outlined">share</span>
-          </button>
-          <button className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full">
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-        </div>
-      </header>
-
-      <main className="px-4 pt-6 pb-20">
-        <div className="flex items-center gap-5 mb-6">
-          <div className="relative">
-            <div className="w-24 h-24 rounded-full border-2 border-primary p-1">
-              <div 
-                className="w-full h-full rounded-full bg-cover bg-center" 
-                style={{ backgroundImage: `url("${IMAGES.profile}")` }}
-              />
-            </div>
-            <div className="absolute bottom-0 right-0 bg-primary text-white rounded-full p-1 border-2 border-background-dark">
-              <span className="material-symbols-outlined text-xs">verified</span>
-            </div>
+    <div className="h-full w-full bg-[#0B0A09] text-white flex flex-col overflow-hidden select-none">
+      {/* Header Area */}
+      <div className="pt-14 pb-6 px-6 relative z-10 flex items-end justify-between border-b border-white/5 bg-[#0B0A09]">
+        <div>
+          <div className="text-[10px] font-black tracking-[0.2em] text-orange-500 mb-1 uppercase">
+            Scrollish
           </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold leading-none mb-1">LanguageBuff</h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-3">Exploring the world through English</p>
-            <button className="bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white px-5 py-1.5 rounded-full text-sm font-semibold hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">
-              Edit Profile
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {[
-            { val: '1,240', label: 'Words' },
-            { val: '45', label: 'Days' },
-            { val: '328', label: 'Saves' }
-          ].map((stat) => (
-            <div key={stat.label} className="bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 text-center">
-              <p className="text-xl font-bold text-primary">{stat.val}</p>
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mt-1">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="sticky top-0 z-40 bg-background-light dark:bg-background-dark -mx-4 px-4 mb-4">
-          <div className="flex border-b border-slate-200 dark:border-slate-800">
-            <button className="flex-1 py-4 text-sm font-bold border-b-2 border-primary text-slate-900 dark:text-white">My Saves</button>
-            <button className="flex-1 py-4 text-sm font-bold text-slate-400 dark:text-slate-500">My Notes</button>
-            <button className="flex-1 py-4 text-sm font-bold text-slate-400 dark:text-slate-500">History</button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          {POSTS.map((post) => (
-            <div key={post.id} className="flex flex-col gap-2 group cursor-pointer">
-              <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-slate-200 dark:bg-slate-800">
-                <div 
-                  className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" 
-                  style={{ backgroundImage: `url("${post.image}")` }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                <div className="absolute top-2 left-2 bg-black/40 backdrop-blur-md rounded-full px-2 py-0.5 flex items-center gap-1">
-                  <span className="text-[10px] text-white font-bold">r/{post.hashtags[0]}</span>
-                </div>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-red-600 p-[2px]">
+              <div className="w-full h-full rounded-full bg-black flex items-center justify-center">
+                <span className="text-xl font-black">M</span>
               </div>
-              <div className="px-1">
-                <p className="text-sm font-semibold leading-snug line-clamp-2">{post.titleEn}</p>
-                <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-[10px] text-primary">menu_book</span>
-                    </div>
-                    <span className="text-[10px] text-slate-500">12 new words</span>
+            </div>
+            <div className="flex flex-col justify-center">
+              <span className="text-2xl font-black leading-none tracking-tight">
+                My Space
+              </span>
+              <span className="text-xs text-white/40 font-bold mt-1">
+                Free Member
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <button className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center active:scale-90 transition-transform">
+          <span className="material-symbols-outlined text-white/60">
+            settings
+          </span>
+        </button>
+      </div>
+
+      {/* Stats Bar */}
+      <div className="px-6 py-6 flex gap-8">
+        <div className="flex flex-col">
+          <span className="text-xl font-black text-white">
+            {likedPosts.length}
+          </span>
+          <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+            Saved
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-xl font-black text-white">0</span>
+          <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+            Following
+          </span>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="px-6 flex items-center gap-6 border-b border-white/5 mb-6">
+        <div className="pb-3 border-b-2 border-orange-500 text-orange-500 font-bold text-sm">
+          Saved Posts
+        </div>
+        <div className="pb-3 border-b-2 border-transparent text-white/40 font-bold text-sm">
+          History
+        </div>
+      </div>
+
+      {/* Grid Content */}
+      <main className="flex-1 overflow-y-auto px-4 pb-32 no-scrollbar">
+        {likedPosts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-white/20">
+            <span className="material-symbols-outlined text-6xl mb-4">
+              bookmark_border
+            </span>
+            <p className="text-xs font-bold uppercase tracking-widest">
+              No saved posts yet
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {likedPosts.map((post) => (
+              <div
+                key={post.id}
+                onClick={() => handlePostClick(post)}
+                className="aspect-[3/4] rounded-2xl bg-[#1A1A1A] relative overflow-hidden active:scale-95 transition-transform border border-white/5">
+                {/* Media Thumbnail */}
+                <div className="absolute inset-0 bg-black">
+                  {post.video_url ? (
+                    <video
+                      src={post.video_url}
+                      className="w-full h-full object-cover opacity-80"
+                      muted
+                      preload="metadata"
+                      // 不自动播放，只展示首帧，节省性能
+                    />
+                  ) : (
+                    <div
+                      className="w-full h-full bg-cover bg-center"
+                      // [修复] 使用 image_url (数据库字段名) 解决黑屏
+                      style={{ backgroundImage: `url("${post.image_url}")` }}
+                    />
+                  )}
+                </div>
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80" />
+
+                {/* Type Indicator */}
+                {post.video_url && (
+                  <div className="absolute top-2 right-2 w-6 h-6 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/10">
+                    <span className="material-symbols-outlined text-[14px]">
+                      play_arrow
+                    </span>
                   </div>
-                  <span className="material-symbols-outlined text-slate-400 text-lg hover:text-red-500 transition-colors">favorite</span>
+                )}
+
+                {/* Info Overlay */}
+                <div className="absolute bottom-3 left-3 right-3">
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-[9px] font-black bg-white/20 px-1.5 py-0.5 rounded text-white/90 border border-white/5">
+                      r/{post.subreddit || 'RD'}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold leading-tight line-clamp-2 text-white/90">
+                    {post.title_en}
+                  </p>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
     </div>
-  );
-};
+  )
+}
 
-export default Profile;
+export default Profile

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import { Page, Post } from './types'
 import { POSTS, IMAGES } from './constants'
-import Home from './pages/Home'
+import Home, { FeedItem } from './pages/Home'
 import TopicHub from './pages/TopicHub'
 import ChatRoom from './pages/ChatRoom'
 import Explore from './pages/Explore'
@@ -12,11 +12,15 @@ import BottomNav from './components/BottomNav'
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
+  const [lastPage, setLastPage] = useState<Page>(Page.Home)
+
+  // [关键修复] 不再只存 ID，而是存整个 Post 对象
+  // 这样避免了从 Profile 跳转时，因为 allPosts 里找不到该 ID 而变成“公交车”的问题
+  const [viewingPost, setViewingPost] = useState<Post | null>(null)
+
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(
     null,
   )
-
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -39,11 +43,12 @@ const App: React.FC = () => {
             titleZh: item.title_cn || '',
             hashtags: item.hashtags || [],
             image: item.image_url || IMAGES.london,
-            // [关键修复] 必须映射 video_url，否则 TopicHub 拿不到视频数据
             videoUrl: item.video_url || null,
             likes: item.upvotes?.toString() || '0',
             stars: item.stars?.toString() || '0',
             comments: 0,
+            image_type: item.image_type,
+            subreddit: item.subreddit,
           }))
           setAllPosts(mappedPosts)
         } else {
@@ -60,14 +65,22 @@ const App: React.FC = () => {
     fetchAllPosts()
   }, [])
 
-  const handlePostClick = (postId: string) => {
-    setSelectedPostId(postId)
+  // [修改] 接收完整的 Post 对象，而不是 ID
+  const handlePostClick = (post: Post) => {
+    setViewingPost(post)
     setCurrentPage(Page.TopicHub)
   }
 
+  // [修改] Profile 点击处理
+  const handleProfilePostClick = (post: Post) => {
+    setViewingPost(post) // 直接设置要看的帖子对象
+    setLastPage(Page.Profile)
+    setCurrentPage(Page.Preview)
+  }
+
   const renderPage = () => {
-    const selectedPost =
-      allPosts.find((p) => p.id === selectedPostId) || allPosts[0] || POSTS[0]
+    // 如果没有选中的帖子，兜底显示 POSTS[0]，但现在逻辑健壮了，很少会走到这里
+    const activePost = viewingPost || POSTS[0]
 
     switch (currentPage) {
       case Page.Home:
@@ -75,17 +88,35 @@ const App: React.FC = () => {
           <Home onNavigate={setCurrentPage} onPostSelect={handlePostClick} />
         )
 
+      case Page.Preview:
+        return (
+          <div className="h-full w-full bg-black animate-in fade-in zoom-in-95 duration-300">
+            <FeedItem
+              post={activePost}
+              isExiting={false}
+              onOpenDiscussion={() => setCurrentPage(Page.TopicHub)}
+              onBack={() => setCurrentPage(lastPage)}
+            />
+          </div>
+        )
+
       case Page.TopicHub:
         return (
           <TopicHub
-            post={selectedPost}
+            post={activePost}
             initialCommentId={selectedCommentId}
             onNavigate={(p) => {
               if (p === Page.Home) {
-                setSelectedPostId(null)
-                setSelectedCommentId(null)
+                if (lastPage === Page.Profile) {
+                  setCurrentPage(Page.Preview)
+                } else {
+                  setViewingPost(null)
+                  setSelectedCommentId(null)
+                  setCurrentPage(Page.Home)
+                }
+              } else {
+                setCurrentPage(p)
               }
-              setCurrentPage(p)
             }}
             onSelectComment={(commentId) => setSelectedCommentId(commentId)}
           />
@@ -94,8 +125,8 @@ const App: React.FC = () => {
       case Page.ChatRoom:
         return (
           <ChatRoom
-            postId={selectedPostId || ''}
-            postImage={selectedPost?.image}
+            postId={activePost.id}
+            postImage={activePost.image}
             focusCommentId={selectedCommentId}
             onBack={() => {
               setCurrentPage(Page.TopicHub)
@@ -108,7 +139,12 @@ const App: React.FC = () => {
       case Page.Study:
         return <Study />
       case Page.Profile:
-        return <Profile />
+        return (
+          <Profile
+            onNavigate={setCurrentPage}
+            onPostSelect={handleProfilePostClick}
+          />
+        )
       default:
         return (
           <Home onNavigate={setCurrentPage} onPostSelect={handlePostClick} />
@@ -117,7 +153,9 @@ const App: React.FC = () => {
   }
 
   const hideBottomNav =
-    currentPage === Page.TopicHub || currentPage === Page.ChatRoom
+    currentPage === Page.TopicHub ||
+    currentPage === Page.ChatRoom ||
+    currentPage === Page.Preview
 
   return (
     <div className="flex justify-center bg-black min-h-screen">
@@ -125,7 +163,12 @@ const App: React.FC = () => {
         <main className="flex-1 overflow-hidden relative">{renderPage()}</main>
 
         {!hideBottomNav && (
-          <BottomNav activePage={currentPage} onNavigate={setCurrentPage} />
+          <BottomNav
+            activePage={
+              currentPage === Page.Preview ? Page.Profile : currentPage
+            }
+            onNavigate={setCurrentPage}
+          />
         )}
       </div>
     </div>

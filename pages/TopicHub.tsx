@@ -254,9 +254,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
         <div
           className={`flex flex-col gap-2 transition-opacity duration-200 z-10 ${isExiting ? 'opacity-0' : 'opacity-100'}`}>
           <div className="flex items-center gap-2">
-            <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-[0.1em] shadow-[0_0_15px_rgba(249,115,22,0.4)]">
+            {/* <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-[0.1em] shadow-[0_0_15px_rgba(249,115,22,0.4)]">
               Trending
-            </span>
+            </span> */}
             <div className="h-1 w-1 rounded-full bg-white/60" />
             <span className="text-white/80 text-[10px] font-bold uppercase tracking-widest">
               {subreddit}

@@ -5,13 +5,15 @@ import React, {
   useState,
   useCallback,
 } from 'react'
-import { useAppStore } from '../store/useAppStore'
+import { useAppStore, ProductionPost } from '../store/useAppStore'
+import { useUserStore } from '../store/useUserStore'
 import { supabase } from '../supabase'
-import { Page } from '../types'
+import { Page, Post } from '../types' // 引入 Post 类型
+import { IMAGES } from '../constants'
 
 interface HomeProps {
   onNavigate: (page: Page) => void
-  onPostSelect: (postId: string) => void
+  onPostSelect: (post: Post) => void
 }
 
 const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
@@ -29,7 +31,6 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   const [activeTab, setActiveTab] = useState<'following' | 'foryou'>('foryou')
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  // 恢复滚动位置的防闪烁逻辑：初始时如果需要恢复位置，先隐藏内容
   const [isReady, setIsReady] = useState(() => {
     return !(posts.length > 0 && currentPostIndex > 0)
   })
@@ -39,7 +40,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const touchStartRef = useRef(0)
 
-  // 使用 useLayoutEffect 在浏览器绘制前同步恢复滚动位置
+  // 同步恢复滚动位置
   useLayoutEffect(() => {
     if (
       posts.length > 0 &&
@@ -49,11 +50,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
       const container = scrollContainerRef.current
       const rowHeight = container.clientHeight || window.innerHeight
       container.scrollTop = currentPostIndex * rowHeight
-
-      // 强制在下一帧显示，确保位置已校准
-      requestAnimationFrame(() => {
-        setIsReady(true)
-      })
+      requestAnimationFrame(() => setIsReady(true))
     } else {
       setIsReady(true)
     }
@@ -67,15 +64,6 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
     if (newIndex !== currentPostIndex) {
       setCurrentPostIndex(newIndex)
     }
-  }
-
-  const handleOpenDiscussion = (postId: string) => {
-    setTransitionPostId(postId)
-    if (navigator.vibrate) navigator.vibrate(20)
-    setTimeout(() => {
-      onPostSelect(postId)
-      setTimeout(() => setTransitionPostId(null), 100)
-    }, 600)
   }
 
   const observer = useRef<IntersectionObserver>()
@@ -102,7 +90,6 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
     if (activeTab === 'foryou') {
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
       setCurrentPostIndex(0)
-      refreshFeed()
     } else {
       setActiveTab('foryou')
     }
@@ -129,6 +116,34 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
     }
     setPullY(0)
     touchStartRef.current = 0
+  }
+
+  // 处理从 Home 点击进入详情
+  const handleOpenDiscussion = (prodPost: any) => {
+    setTransitionPostId(prodPost.id)
+    if (navigator.vibrate) navigator.vibrate(20)
+
+    // 构造完整的 Post 对象传递给 App
+    const mappedPost: Post = {
+      id: prodPost.id,
+      user: prodPost.subreddit || 'Anonymous',
+      avatar: IMAGES.avatar1,
+      titleEn: prodPost.title_en,
+      titleZh: prodPost.title_cn || '',
+      hashtags: [],
+      image: prodPost.image_url,
+      videoUrl: prodPost.video_url || null,
+      likes: prodPost.upvotes?.toString() || '0',
+      stars: '0',
+      comments: 0,
+      image_type: prodPost.image_type,
+      subreddit: prodPost.subreddit,
+    }
+
+    setTimeout(() => {
+      onPostSelect(mappedPost)
+      setTimeout(() => setTransitionPostId(null), 100)
+    }, 600)
   }
 
   if (posts.length === 0 && isLoading && !isRefreshing) {
@@ -186,7 +201,6 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
 
       <div
         ref={scrollContainerRef}
-        // isReady 控制透明度，实现无缝衔接
         className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 transition-transform duration-300 ${isReady ? 'opacity-100' : 'opacity-0'}`}
         onScroll={handleScroll}
         onTouchStart={handleTouchStart}
@@ -204,7 +218,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
               style={{ scrollSnapStop: 'always' }}>
               <FeedItem
                 post={post}
-                onOpenDiscussion={() => handleOpenDiscussion(post.id)}
+                onOpenDiscussion={() => handleOpenDiscussion(post)}
                 isExiting={transitionPostId === post.id}
               />
             </div>
@@ -230,30 +244,36 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   )
 }
 
-// 单个帖子组件
-const FeedItem: React.FC<{
+// --- FeedItem 组件 (已修复点赞数显示 Bug) ---
+export const FeedItem: React.FC<{
   post: any
   onOpenDiscussion: () => void
   isExiting: boolean
-}> = ({ post, onOpenDiscussion, isExiting }) => {
-  const [likes, setLikes] = useState(post.upvotes || post.likes || 0)
-  const [isLiked, setIsLiked] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  onBack?: () => void
+}> = ({ post, onOpenDiscussion, isExiting, onBack }) => {
+  const { toggleLike, isLiked: checkIsLiked } = useUserStore()
+  const isLiked = checkIsLiked(post.id)
 
-  // 视频错误状态
+  // [修复Bug] 兼容两种数据格式：
+  // 1. upvotes (Home页的 ProductionPost)
+  // 2. likes (Profile页传递过来的 Post，是 string)
+  const initialLikes =
+    typeof post.upvotes === 'number' ? post.upvotes : parseInt(post.likes) || 0
+
+  const [likes, setLikes] = useState(initialLikes)
+
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [videoError, setVideoError] = useState(false)
 
   const titleEn = post.title_en || post.titleEn || ''
   const titleCn = post.title_cn || post.titleZh || ''
   const imageUrl = post.image_url || post.image || ''
-  const videoUrl = post.video_url || ''
+  const videoUrl = post.videoUrl || post.video_url || ''
   const subreddit = post.subreddit || 'Community'
   const commentCount = post.comments || 'Discuss'
 
-  // 必须有 URL 且没有报错才渲染视频
   const hasVideo = !!videoUrl && !videoError
 
-  // 强制播放逻辑
   useEffect(() => {
     if (hasVideo && videoRef.current && !isExiting) {
       const attemptPlay = async () => {
@@ -270,20 +290,24 @@ const FeedItem: React.FC<{
 
   const handleLike = async () => {
     if (isExiting) return
-    const isCurrentlyLiked = isLiked
-    const newCount = isCurrentlyLiked ? likes - 1 : likes + 1
-    setLikes(newCount)
-    setIsLiked(!isCurrentlyLiked)
+    toggleLike(post)
     if (navigator.vibrate) navigator.vibrate(50)
+
+    // 更新本地显示
+    if (isLiked) {
+      setLikes((prev) => Math.max(0, prev - 1))
+    } else {
+      setLikes((prev) => prev + 1)
+    }
+
     try {
+      const newCount = isLiked ? likes - 1 : likes + 1
       await supabase
         .from('production_posts')
         .update({ upvotes: newCount })
         .eq('id', post.id)
     } catch (error) {
       console.error('Like update failed', error)
-      setLikes(likes)
-      setIsLiked(isCurrentlyLiked)
     }
   }
 
@@ -306,6 +330,20 @@ const FeedItem: React.FC<{
             ? 'fixed z-[100] top-12 left-4 right-4 h-56 rounded-[2.5rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] translate-y-0 [transform:rotateX(2deg)] brightness-90'
             : 'h-full w-full rounded-none translate-y-0 [transform:rotateX(0deg)] brightness-100'
         }`}>
+        {/* 返回按钮 (Preview模式) */}
+        {onBack && !isExiting && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onBack()
+            }}
+            className="absolute top-12 left-5 z-[60] w-10 h-10 flex items-center justify-center bg-black/20 backdrop-blur-md rounded-full border border-white/10 text-white">
+            <span className="material-symbols-outlined text-[24px]">
+              arrow_back
+            </span>
+          </button>
+        )}
+
         <div
           className="absolute inset-0 h-full w-full overflow-hidden"
           onClick={() => {
@@ -323,12 +361,9 @@ const FeedItem: React.FC<{
               loop
               muted
               playsInline
-              // 兼容 iOS/国产浏览器
               {...{ 'webkit-playsinline': 'true' }}
               autoPlay
-              // 加载失败时切换回图片
               onError={() => {
-                console.log('Video load failed, fallback to image')
                 setVideoError(true)
               }}
             />
