@@ -17,6 +17,7 @@ const App: React.FC = () => {
   // [关键修复] 不再只存 ID，而是存整个 Post 对象
   // 这样避免了从 Profile 跳转时，因为 allPosts 里找不到该 ID 而变成“公交车”的问题
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
+  const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
 
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(
     null,
@@ -85,7 +86,13 @@ const App: React.FC = () => {
     switch (currentPage) {
       case Page.Home:
         return (
-          <Home onNavigate={setCurrentPage} onPostSelect={handlePostClick} />
+          <Home
+            onNavigate={setCurrentPage}
+            onPostSelect={handlePostClick}
+            filteredCommunityId={filteredCommunityId}
+            onClearFilter={() => setFilteredCommunityId(null)}
+            initialTab={filteredCommunityId ? 'foryou' : undefined}
+          />
         )
 
       case Page.Preview:
@@ -135,7 +142,16 @@ const App: React.FC = () => {
         )
 
       case Page.Explore:
-        return <Explore />
+        return (
+          <Explore
+            onNavigate={setCurrentPage}
+            onPostSelect={handlePostClick}
+            onCommunitySelect={(communityId) => {
+              setFilteredCommunityId(communityId)
+              setCurrentPage(Page.Home)
+            }}
+          />
+        )
       case Page.Study:
         return <Study />
       case Page.Profile:

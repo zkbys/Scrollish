@@ -13,6 +13,7 @@ export interface ProductionPost {
   image_type: 'original' | 'generated'
   upvotes: number
   subreddit: string
+  created_at: string
 }
 
 interface AppState {
@@ -23,9 +24,9 @@ interface AppState {
   currentPostIndex: number
 
   // Actions
-  initFeed: () => Promise<void>
-  refreshFeed: () => Promise<void>
-  loadMore: () => Promise<void>
+  initFeed: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
+  refreshFeed: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
+  loadMore: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
   setCurrentPostIndex: (index: number) => void
 }
 
@@ -36,34 +37,76 @@ export const useAppStore = create<AppState>((set, get) => ({
   isLoadingMore: false,
   currentPostIndex: 0,
 
-  initFeed: async () => {
-    // 缓存策略：如果已经有数据，直接返回，不再请求
-    if (get().hasLoaded && get().posts.length > 0) return
+  initFeed: async (filters) => {
+    // 缓存策略：如果有过滤器或者是首次加载
+    const isFiltered = !!(filters?.communityId || filters?.followedIds?.length)
+    if (!isFiltered && get().hasLoaded && get().posts.length > 0) return
 
     set({ isLoading: true })
     try {
-      const { data, error } = await supabase.rpc('get_random_posts', {
-        limit_count: 15,
-      })
+      let data, error
+
+      if (filters?.communityId) {
+        // 单个社区过滤
+        ; ({ data, error } = await supabase
+          .from('production_posts')
+          .select('*')
+          .eq('community_id', filters.communityId)
+          .order('created_at', { ascending: false })
+          .limit(15))
+      } else if (filters?.followedIds && filters.followedIds.length > 0) {
+        // 关注列表过滤
+        ; ({ data, error } = await supabase
+          .from('production_posts')
+          .select('*')
+          .in('community_id', filters.followedIds)
+          .order('created_at', { ascending: false })
+          .limit(15))
+      } else {
+        // 默认随机推荐
+        ; ({ data, error } = await supabase.rpc('get_random_posts', {
+          limit_count: 15,
+        }))
+      }
+
       if (error) throw error
       if (data) {
-        set({ posts: data, hasLoaded: true, currentPostIndex: 0 })
+        set({ posts: data, hasLoaded: !isFiltered, currentPostIndex: 0 })
       }
     } catch (err) {
-      console.error('Feed init failed (Did you run the RPC SQL?):', err)
+      console.error('Feed init failed:', err)
     } finally {
       set({ isLoading: false })
     }
   },
 
-  refreshFeed: async () => {
+  refreshFeed: async (filters) => {
     if (get().isLoading) return
     set({ isLoading: true })
     try {
       await new Promise((resolve) => setTimeout(resolve, 500))
-      const { data, error } = await supabase.rpc('get_random_posts', {
-        limit_count: 15,
-      })
+      let data, error
+
+      if (filters?.communityId) {
+        ; ({ data, error } = await supabase
+          .from('production_posts')
+          .select('*')
+          .eq('community_id', filters.communityId)
+          .order('created_at', { ascending: false })
+          .limit(15))
+      } else if (filters?.followedIds && filters.followedIds.length > 0) {
+        ; ({ data, error } = await supabase
+          .from('production_posts')
+          .select('*')
+          .in('community_id', filters.followedIds)
+          .order('created_at', { ascending: false })
+          .limit(15))
+      } else {
+        ; ({ data, error } = await supabase.rpc('get_random_posts', {
+          limit_count: 15,
+        }))
+      }
+
       if (error) throw error
       if (data) {
         set({ posts: data, currentPostIndex: 0 })
@@ -75,36 +118,48 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  loadMore: async () => {
+  loadMore: async (filters) => {
     if (get().isLoadingMore || get().isLoading) return
 
     set({ isLoadingMore: true })
     try {
-      // 这里的 limit_count 决定每次追加多少条
-      const { data, error } = await supabase.rpc('get_random_posts', {
-        limit_count: 10,
-      })
+      let data, error
 
-      if (error) {
-        console.error('RPC Error:', error.message)
-        throw error
+      if (filters?.communityId) {
+        // 单个社区加载更多
+        const lastPost = get().posts[get().posts.length - 1]
+          ; ({ data, error } = await supabase
+            .from('production_posts')
+            .select('*')
+            .eq('community_id', filters.communityId)
+            .lt('created_at', lastPost?.created_at || new Date().toISOString())
+            .order('created_at', { ascending: false })
+            .limit(10))
+      } else if (filters?.followedIds && filters.followedIds.length > 0) {
+        // 关注列表加载更多
+        const lastPost = get().posts[get().posts.length - 1]
+          ; ({ data, error } = await supabase
+            .from('production_posts')
+            .select('*')
+            .in('community_id', filters.followedIds)
+            .lt('created_at', lastPost?.created_at || new Date().toISOString())
+            .order('created_at', { ascending: false })
+            .limit(10))
+      } else {
+        ; ({ data, error } = await supabase.rpc('get_random_posts', {
+          limit_count: 10,
+        }))
       }
 
+      if (error) throw error
+
       if (data && data.length > 0) {
-        // [无限回环关键] 直接追加 data，不过滤重复 ID
-        // 注意：React 渲染列表时我们会用 `${post.id}-${index}` 作为 key 来规避 ID 重复报错
         set((state) => ({
           posts: [...state.posts, ...data],
         }))
-        console.log(
-          `Loaded ${data.length} more posts. Total: ${get().posts.length + data.length}`,
-        )
       }
     } catch (err) {
-      console.error(
-        'Load more failed. Ensure get_random_posts RPC exists in Supabase.',
-        err,
-      )
+      console.error('Load more failed:', err)
     } finally {
       set({ isLoadingMore: false })
     }

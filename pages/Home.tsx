@@ -14,9 +14,18 @@ import { IMAGES } from '../constants'
 interface HomeProps {
   onNavigate: (page: Page) => void
   onPostSelect: (post: Post) => void
+  filteredCommunityId?: string | null
+  onClearFilter?: () => void
+  initialTab?: 'following' | 'foryou'
 }
 
-const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
+const Home: React.FC<HomeProps> = ({
+  onNavigate,
+  onPostSelect,
+  filteredCommunityId,
+  onClearFilter,
+  initialTab = 'foryou'
+}) => {
   const {
     posts,
     initFeed,
@@ -28,7 +37,8 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
     setCurrentPostIndex,
   } = useAppStore()
 
-  const [activeTab, setActiveTab] = useState<'following' | 'foryou'>('foryou')
+  const { followedCommunities } = useUserStore()
+  const [activeTab, setActiveTab] = useState<'following' | 'foryou'>(initialTab)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const [isReady, setIsReady] = useState(() => {
@@ -39,6 +49,22 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   const [pullY, setPullY] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const touchStartRef = useRef(0)
+
+  // 构造当前的过滤器参数
+  const getFilters = useCallback(() => {
+    if (activeTab === 'following') {
+      return { followedIds: followedCommunities }
+    }
+    if (filteredCommunityId) {
+      return { communityId: filteredCommunityId }
+    }
+    return {}
+  }, [activeTab, followedCommunities, filteredCommunityId])
+
+  // 切换标签或关注列表变化时，重新请求
+  useEffect(() => {
+    initFeed(getFilters())
+  }, [activeTab, filteredCommunityId, followedCommunities.length])
 
   // 同步恢复滚动位置
   useLayoutEffect(() => {
@@ -73,18 +99,14 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
       if (observer.current) observer.current.disconnect()
 
       observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && activeTab === 'foryou') {
-          loadMore()
+        if (entries[0].isIntersecting) {
+          loadMore(getFilters())
         }
       })
       if (node) observer.current.observe(node)
     },
-    [isLoading, isLoadingMore, loadMore, activeTab],
+    [isLoading, isLoadingMore, loadMore, getFilters],
   )
-
-  useEffect(() => {
-    initFeed()
-  }, [])
 
   const handleForYouClick = () => {
     if (activeTab === 'foryou') {
@@ -111,7 +133,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
     if (pullY > 80) {
       setIsRefreshing(true)
       setPullY(80)
-      await refreshFeed()
+      await refreshFeed(getFilters())
       setIsRefreshing(false)
     }
     setPullY(0)
@@ -123,7 +145,6 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
     setTransitionPostId(prodPost.id)
     if (navigator.vibrate) navigator.vibrate(20)
 
-    // 构造完整的 Post 对象传递给 App
     const mappedPost: Post = {
       id: prodPost.id,
       user: prodPost.subreddit || 'Anonymous',
@@ -146,6 +167,47 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
     }, 600)
   }
 
+  // 渲染空状态 (针对 Following 标签)
+  const renderEmptyState = () => {
+    if (activeTab === 'following' && followedCommunities.length === 0) {
+      return (
+        <div className="h-full w-full flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-500">
+          <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
+            <span className="material-symbols-outlined text-4xl text-white/20">explore</span>
+          </div>
+          <h2 className="text-xl font-black text-white mb-2">Following is empty</h2>
+          <p className="text-sm text-white/40 font-medium mb-8">
+            You haven't followed any communities yet. Go to Discovery to find communities you like!
+          </p>
+          <button
+            onClick={() => onNavigate(Page.Explore)}
+            className="px-8 py-3 bg-primary text-white font-black rounded-full active:scale-95 transition-transform shadow-[0_0_20px_rgba(var(--primary-rgb),0.4)]"
+          >
+            Go to Discovery
+          </button>
+        </div>
+      )
+    }
+
+    if (posts.length === 0 && !isLoading) {
+      return (
+        <div className="h-full w-full flex flex-col items-center justify-center p-10 text-center">
+          <p className="text-white/20 font-bold uppercase tracking-widest text-xs">- No posts found -</p>
+          {filteredCommunityId && (
+            <button
+              onClick={onClearFilter}
+              className="mt-4 text-primary text-xs font-black uppercase tracking-widest"
+            >
+              Clear Filter
+            </button>
+          )}
+        </div>
+      )
+    }
+
+    return null
+  }
+
   if (posts.length === 0 && isLoading && !isRefreshing) {
     return (
       <div className="h-full w-full bg-[#0B0A09] flex flex-col items-center justify-center">
@@ -157,6 +219,19 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
   return (
     <div
       className={`relative h-full w-full bg-[#0B0A09] overflow-hidden transition-colors duration-500 ${transitionPostId ? 'bg-black' : ''}`}>
+
+      {/* 社区过滤状态显示 */}
+      {filteredCommunityId && activeTab === 'foryou' && (
+        <div className="absolute top-[100px] left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/20 backdrop-blur-md border border-primary/30 rounded-full">
+            <span className="text-[10px] font-black text-primary uppercase tracking-wider">r/{posts[0]?.subreddit || 'Filtered'}</span>
+            <button onClick={onClearFilter} className="flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       <header
         className={`absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-5 pt-12 pb-8 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none transition-all duration-300 ease-apple ${transitionPostId ? 'opacity-0 -translate-y-10' : 'opacity-100 translate-y-0'}`}>
         <button className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
@@ -183,7 +258,9 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
           </button>
         </div>
 
-        <button className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
+        <button
+          onClick={() => onNavigate(Page.Explore)}
+          className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
           <span className="material-symbols-outlined text-[20px]">search</span>
         </button>
       </header>
@@ -199,47 +276,49 @@ const Home: React.FC<HomeProps> = ({ onNavigate, onPostSelect }) => {
         </div>
       </div>
 
-      <div
-        ref={scrollContainerRef}
-        className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 transition-transform duration-300 ${isReady ? 'opacity-100' : 'opacity-0'}`}
-        onScroll={handleScroll}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        style={{ transform: `translateY(${pullY > 0 ? pullY / 3 : 0}px)` }}>
-        {posts.map((post, index) => {
-          const isTriggerPoint = index === posts.length - 3
+      {renderEmptyState() || (
+        <div
+          ref={scrollContainerRef}
+          className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 transition-transform duration-300 ${isReady ? 'opacity-100' : 'opacity-0'}`}
+          onScroll={handleScroll}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          style={{ transform: `translateY(${pullY > 0 ? pullY / 3 : 0}px)` }}>
+          {posts.map((post, index) => {
+            const isTriggerPoint = index === posts.length - 3
 
-          return (
-            <div
-              key={`${post.id}-${index}`}
-              ref={isTriggerPoint ? lastPostElementRef : null}
-              className="h-full w-full snap-start relative"
-              style={{ scrollSnapStop: 'always' }}>
-              <FeedItem
-                post={post}
-                onOpenDiscussion={() => handleOpenDiscussion(post)}
-                isExiting={transitionPostId === post.id}
-              />
-            </div>
-          )
-        })}
-
-        {posts.length > 0 && (
-          <div
-            className="h-20 w-full flex items-center justify-center snap-start bg-black/50"
-            style={{ scrollSnapStop: 'always' }}>
-            {isLoadingMore ? (
-              <div className="flex items-center gap-2 text-white/50 text-xs font-bold uppercase tracking-widest">
-                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                Loading More...
+            return (
+              <div
+                key={`${post.id}-${index}`}
+                ref={isTriggerPoint ? lastPostElementRef : null}
+                className="h-full w-full snap-start relative"
+                style={{ scrollSnapStop: 'always' }}>
+                <FeedItem
+                  post={post}
+                  onOpenDiscussion={() => handleOpenDiscussion(post)}
+                  isExiting={transitionPostId === post.id}
+                />
               </div>
-            ) : (
-              <div className="text-white/20 text-[10px]">- End of Feed -</div>
-            )}
-          </div>
-        )}
-      </div>
+            )
+          })}
+
+          {posts.length > 0 && (
+            <div
+              className="h-20 w-full flex items-center justify-center snap-start bg-black/50"
+              style={{ scrollSnapStop: 'always' }}>
+              {isLoadingMore ? (
+                <div className="flex items-center gap-2 text-white/50 text-xs font-bold uppercase tracking-widest">
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                  Loading More...
+                </div>
+              ) : (
+                <div className="text-white/20 text-[10px]">- End of Feed -</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -251,8 +330,17 @@ export const FeedItem: React.FC<{
   isExiting: boolean
   onBack?: () => void
 }> = ({ post, onOpenDiscussion, isExiting, onBack }) => {
-  const { toggleLike, isLiked: checkIsLiked } = useUserStore()
+  const { toggleLike, isLiked: checkIsLiked, toggleFollowCommunity, isFollowing } = useUserStore()
   const isLiked = checkIsLiked(post.id)
+  const isSubscribed = post.community_id ? isFollowing(post.community_id) : false
+
+  const handleToggleSub = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (post.community_id) {
+      toggleFollowCommunity(post.community_id)
+      if (navigator.vibrate) navigator.vibrate(50)
+    }
+  }
 
   // [修复Bug] 兼容两种数据格式：
   // 1. upvotes (Home页的 ProductionPost)
@@ -325,11 +413,10 @@ export const FeedItem: React.FC<{
   return (
     <div className="h-full w-full bg-[#0B0A09] perspective-container">
       <div
-        className={`relative overflow-hidden bg-[#121212] origin-top transition-all duration-[600ms] ease-apple will-change-transform ${
-          isExiting
-            ? 'fixed z-[100] top-12 left-4 right-4 h-56 rounded-[2.5rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] translate-y-0 [transform:rotateX(2deg)] brightness-90'
-            : 'h-full w-full rounded-none translate-y-0 [transform:rotateX(0deg)] brightness-100'
-        }`}>
+        className={`relative overflow-hidden bg-[#121212] origin-top transition-all duration-[600ms] ease-apple will-change-transform ${isExiting
+          ? 'fixed z-[100] top-12 left-4 right-4 h-56 rounded-[2.5rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] translate-y-0 [transform:rotateX(2deg)] brightness-90'
+          : 'h-full w-full rounded-none translate-y-0 [transform:rotateX(0deg)] brightness-100'
+          }`}>
         {/* 返回按钮 (Preview模式) */}
         {onBack && !isExiting && (
           <button
@@ -415,8 +502,14 @@ export const FeedItem: React.FC<{
                   </div>
                 )}
               </div>
-              <button className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white text-[10px] font-bold px-3 py-1.5 rounded-full ml-2 transition-all active:scale-95 pointer-events-auto">
-                Subscribe
+              <button
+                onClick={handleToggleSub}
+                className={`backdrop-blur-md border text-[10px] font-bold px-3 py-1.5 rounded-full ml-2 transition-all active:scale-95 pointer-events-auto ${isSubscribed
+                    ? 'bg-primary/20 border-primary/30 text-primary'
+                    : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
+                  }`}
+              >
+                {isSubscribed ? 'Following' : 'Subscribe'}
               </button>
             </div>
             <div className="pointer-events-auto mb-2 space-y-1">
