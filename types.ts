@@ -5,7 +5,8 @@ export enum Page {
   Explore = 'explore',
   Study = 'study',
   Profile = 'profile',
-  Preview = 'preview', // [确保添加这一行]
+  Preview = 'preview',
+  CommunityDetail = 'community_detail',
 }
 
 export interface Post {

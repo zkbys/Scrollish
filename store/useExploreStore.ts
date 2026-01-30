@@ -20,6 +20,11 @@ interface ExploreState {
     // Refresh optimization
     excludedTrendingIds: string[]
 
+    // Page-specific scroll positions
+    scrollPositions: Record<string, number>
+    // Data cache
+    communityPostsCache: Record<string, any[]>
+
     // Actions
     setCategories: (categories: any[]) => void
     setTrendingPosts: (posts: any[]) => void
@@ -32,6 +37,8 @@ interface ExploreState {
     setShowResults: (show: boolean) => void
     addExcludedTrendingIds: (ids: string[]) => void
     resetSearch: () => void
+    setScrollPosition: (key: string, pos: number) => void
+    setCommunityPostsCache: (communityId: string, posts: any[]) => void
 }
 
 export const useExploreStore = create<ExploreState>((set) => ({
@@ -60,6 +67,14 @@ export const useExploreStore = create<ExploreState>((set) => ({
     setShowResults: (show) => set({ showResults: show }),
     addExcludedTrendingIds: (ids) => set((state) => ({
         excludedTrendingIds: Array.from(new Set([...state.excludedTrendingIds, ...ids])).slice(-50)
+    })),
+    scrollPositions: {},
+    communityPostsCache: {},
+    setCommunityPostsCache: (communityId, posts) => set((state) => ({
+        communityPostsCache: { ...state.communityPostsCache, [communityId]: posts }
+    })),
+    setScrollPosition: (key, pos) => set((state) => ({
+        scrollPositions: { ...state.scrollPositions, [key]: pos }
     })),
     resetSearch: () => set({ searchQuery: '', searchResults: { communities: [], posts: [] }, showResults: false }),
 }))

@@ -9,6 +9,7 @@ import ChatRoom from './pages/ChatRoom'
 import Explore from './pages/Explore'
 import Study from './pages/Study'
 import Profile from './pages/Profile'
+import CommunityDetail from './pages/CommunityDetail'
 import BottomNav from './components/BottomNav'
 
 const App: React.FC = () => {
@@ -17,10 +18,13 @@ const App: React.FC = () => {
   // [新增] 记录用户进入详情流的起始 Tab 页（Explore/Home/Profile）
   const [originPage, setOriginPage] = useState<Page>(Page.Home)
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
+  const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
   const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null)
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
+  // [新增] 追踪是否处于社区详情流中，用于 TopicHub 返回判断
+  const [isCommunityFlow, setIsCommunityFlow] = useState(false)
 
   useEffect(() => {
     const fetchAllPosts = async () => {
@@ -123,8 +127,10 @@ const App: React.FC = () => {
             initialCommentId={selectedCommentId}
             onNavigate={(p) => {
               if (p === Page.Home) {
-                // [智能返回] 基于 originPage (起始页) 决定回退目标
-                if (originPage === Page.Explore) {
+                // [智能返回] 优先判断是否处于社区详情流
+                if (isCommunityFlow) {
+                  navigateTo(Page.CommunityDetail)
+                } else if (originPage === Page.Explore) {
                   // 从 Explore 进来的，返回 Explore
                   navigateTo(Page.Explore)
                 } else if (originPage === Page.Profile) {
@@ -140,7 +146,7 @@ const App: React.FC = () => {
                   navigateTo(originPage)
                 }
               } else {
-                // 其他导航（如进入 ChatRoom）正常处理，保持 originPage 不变
+                // 其他导航（如进入 ChatRoom）正常处理
                 navigateTo(p)
               }
             }}
@@ -167,9 +173,23 @@ const App: React.FC = () => {
           <Explore
             onNavigate={navigateTo}
             onPostSelect={handlePostClick}
-            onCommunitySelect={(communityId) => {
-              setFilteredCommunityId(communityId)
-              navigateTo(Page.Home)
+            onCommunitySelect={(community) => {
+              setSelectedCommunity(community)
+              navigateTo(Page.CommunityDetail)
+            }}
+          />
+        )
+      case Page.CommunityDetail:
+        return (
+          <CommunityDetail
+            community={selectedCommunity}
+            onBack={() => {
+              setIsCommunityFlow(false)
+              navigateTo(originPage)
+            }}
+            onPostSelect={(post) => {
+              setIsCommunityFlow(true)
+              handlePostClick(post)
             }}
           />
         )
@@ -192,7 +212,8 @@ const App: React.FC = () => {
   const hideBottomNav =
     currentPage === Page.TopicHub ||
     currentPage === Page.ChatRoom ||
-    currentPage === Page.Preview
+    currentPage === Page.Preview ||
+    currentPage === Page.CommunityDetail
 
   // [新增] 定义页面顺序，用于决定滑动方向
   const getPageRank = (page: Page) => {
@@ -201,6 +222,7 @@ const App: React.FC = () => {
       case Page.Explore: return 1
       case Page.Study: return 2
       case Page.Profile: return 3
+      case Page.CommunityDetail: return 4
       default: return 0
     }
   }
@@ -225,7 +247,9 @@ const App: React.FC = () => {
               exit={
                 (currentPage === Page.Home && lastPage === Page.TopicHub) || currentPage === Page.TopicHub
                   ? { opacity: 0 }
-                  : { opacity: 0, x: direction * -50, scale: 0.98 }
+                  : currentPage === Page.CommunityDetail // [新增] 返回社区详情时，立即销毁当前页，避免双重动画
+                    ? { opacity: 0, transition: { duration: 0 } }
+                    : { opacity: 0, x: direction * -50, scale: 0.98 }
               }
               transition={{
                 duration: (currentPage === Page.Home && lastPage === Page.TopicHub) || currentPage === Page.TopicHub ? 0.2 : 0.4,

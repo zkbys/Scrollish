@@ -9,7 +9,7 @@ import { useExploreStore } from '../store/useExploreStore';
 interface ExploreProps {
   onNavigate?: (page: Page) => void;
   onPostSelect?: (post: Post) => void;
-  onCommunitySelect?: (communityId: string) => void;
+  onCommunitySelect?: (community: any) => void;
 }
 
 const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunitySelect }) => {
@@ -212,16 +212,19 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
         setSearchHistory(updatedHistory);
         localStorage.setItem('explore-search-history', JSON.stringify(updatedHistory));
 
+        // Escape query for Supabase search to prevent errors
+        const safeQuery = searchQuery.replace(/[%_]/g, '\\$&');
+
         const communityQuery = supabase
           .from('communities')
           .select('*')
-          .or(`name.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%`)
+          .or(`name.ilike.%${safeQuery}%,display_name.ilike.%${safeQuery}%`)
           .limit(5);
 
         const postQuery = supabase
           .from('production_posts')
           .select('*')
-          .or(`title_en.ilike.%${searchQuery}%,title_cn.ilike.%${searchQuery}%`)
+          .or(`title_en.ilike.%${safeQuery}%,title_cn.ilike.%${safeQuery}%`)
           .limit(5);
 
         const [commRes, postRes] = await Promise.all([communityQuery, postQuery]);
@@ -266,7 +269,7 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
 
   const handleCommunityClick = (community: any) => {
     if (onCommunitySelect) {
-      onCommunitySelect(community.id);
+      onCommunitySelect(community);
     }
   };
 
@@ -318,17 +321,26 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
   };
 
   const highlightText = (text: string, query: string) => {
+    if (!text) return null;
     if (!query.trim()) return text;
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) =>
-          part.toLowerCase() === query.toLowerCase() ? (
-            <span key={i} className="text-primary font-black underline decoration-primary/30 underline-offset-2">{part}</span>
-          ) : part
-        )}
-      </>
-    );
+
+    // Check for specialregex characters and escape them
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    try {
+      const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
+      return (
+        <>
+          {parts.map((part, i) =>
+            part.toLowerCase() === query.toLowerCase() ? (
+              <span key={i} className="text-primary font-black underline decoration-primary/30 underline-offset-2">{part}</span>
+            ) : part
+          )}
+        </>
+      );
+    } catch (e) {
+      return text;
+    }
   };
 
   if (isLoading) {
@@ -435,7 +447,7 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
                           </div>
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-white/90">r/{highlightText(comm.name, searchQuery)}</span>
-                            <span className="text-[10px] text-white/30 font-medium">{highlightText(comm.display_name, searchQuery)}</span>
+                            <span className="text-[10px] text-white/30 font-medium">{highlightText(comm.display_name || '', searchQuery)}</span>
                           </div>
                         </div>
                       ))}
@@ -459,7 +471,7 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
                           </div>
                           <div className="flex flex-col justify-center gap-1 min-w-0">
                             <span className="text-[13px] font-black text-white/90 line-clamp-1 tracking-tight">{highlightText(post.title_en, searchQuery)}</span>
-                            <p className="text-[11px] text-white/40 line-clamp-1 font-medium">{post.title_cn}</p>
+                            <p className="text-[11px] text-white/40 line-clamp-1 font-medium">{highlightText(post.title_cn || '', searchQuery)}</p>
                             <span className="text-[9px] text-primary font-black uppercase tracking-widest mt-0.5">r/{post.subreddit}</span>
                           </div>
                         </div>
@@ -551,7 +563,7 @@ const Explore: React.FC<ExploreProps> = ({ onNavigate, onPostSelect, onCommunity
                       )}
                     </div>
                     <p className="text-[14px] font-black text-white leading-snug tracking-tight line-clamp-1">{post.title_en}</p>
-                    <p className="text-[10px] font-bold text-white/50 line-clamp-1 mt-0.5">{post.title_cn}</p>
+                    <p className="text-[11px] font-medium text-white/70 line-clamp-1 mt-0.5">{post.title_cn}</p>
                   </div>
                 </div>
               </div>
