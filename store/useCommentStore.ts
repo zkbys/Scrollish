@@ -2,74 +2,104 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { supabase } from '../supabase'
 
-// 定义评论数据结构 (与数据库表结构一致)
+// 1. 扩展 Comment 类型，支持引用信息和本地状态
 export interface Comment {
   id: string
   post_id: string
   author: string
   author_avatar?: string
   content: string
-  content_zh?: string
+  content_zh?: string // 兼容旧字段
+  content_cn?: string // 数据库新字段
   upvotes: number
   depth: number
   parent_id: string | null
   created_at: string
   is_ai?: boolean
   analysis?: any
+
+  // [新增] 引用相关字段
+  replyToName?: string
+  replyText?: string
+  replyAvatar?: string // [新增] 支持引用头像
+
+  // [新增] 本地状态字段
+  isLocal?: boolean
+  isQuestion?: boolean // 标记是否为用户提问
+  isLocalAi?: boolean // 标记是否为本地 AI
 }
 
 interface CommentState {
-  // 数据结构：key 是 postId, value 是该帖子下的所有评论数组
-  // 这样设计是为了同时缓存多个帖子的评论，互不冲突
   commentsByPost: Record<string, Comment[]>
-
-  // 加载状态：key 是 postId, value 是 boolean
+  // [新增] 本地消息存储 (key: postId)
+  localComments: Record<string, Comment[]>
   isLoading: Record<string, boolean>
 
-  // Actions
   fetchComments: (postId: string, force?: boolean) => Promise<void>
   getComments: (postId: string) => Comment[]
+
+  // [新增] 本地消息操作
+  addLocalComment: (postId: string, comment: Comment) => void
+  deleteLocalComment: (postId: string, commentId: string) => void
 }
 
 export const useCommentStore = create<CommentState>()(
   persist(
     (set, get) => ({
       commentsByPost: {},
+      localComments: {}, // 初始化
       isLoading: {},
 
-      // 获取某个帖子的评论（直接从内存/缓存拿，同步操作）
       getComments: (postId: string) => {
-        return get().commentsByPost[postId] || []
+        const dbComments = get().commentsByPost[postId] || []
+        const localComments = get().localComments[postId] || []
+        // 合并 DB 消息和本地消息
+        // 注意：这里简单的合并在 UI 层还需要通过 parent_id 重组树状结构
+        return [...dbComments, ...localComments]
       },
 
-      // 从数据库拉取评论
-      fetchComments: async (postId: string, force = false) => {
-        // 1. 缓存优先策略 (Cache-First)
-        // 如果缓存里有数据，且不是强制刷新(force=false)，直接返回，不请求数据库！
-        const existingData = get().commentsByPost[postId]
-        if (existingData && existingData.length > 0 && !force) {
-          // console.log(`[Cache Hit] 命中缓存，不请求数据库: ${postId}`);
-          return
-        }
+      addLocalComment: (postId, comment) => {
+        set((state) => {
+          const current = state.localComments[postId] || []
+          return {
+            localComments: {
+              ...state.localComments,
+              [postId]: [...current, comment],
+            },
+          }
+        })
+      },
 
-        // 2. 标记该帖子正在加载
+      deleteLocalComment: (postId, commentId) => {
+        set((state) => {
+          const current = state.localComments[postId] || []
+          return {
+            localComments: {
+              ...state.localComments,
+              [postId]: current.filter((c) => c.id !== commentId),
+            },
+          }
+        })
+      },
+
+      fetchComments: async (postId: string, force = false) => {
+        const existingData = get().commentsByPost[postId]
+        if (existingData && existingData.length > 0 && !force) return
+
         set((state) => ({
           isLoading: { ...state.isLoading, [postId]: true },
         }))
 
         try {
-          // 3. 一次性获取该帖子下的“所有”评论
-          // 我们不分批获取，而是一次拿完，这样 TopicHub 和 ChatRoom 都能直接用
           const { data, error } = await supabase
             .from('comments')
             .select('*')
             .eq('post_id', postId)
-            .order('upvotes', { ascending: false }) // 默认按热度排
+            .order('upvotes', { ascending: false })
 
           if (error) throw error
 
           if (data) {
-            // 4. 更新 Store，Zustand 会自动把这个更新同步写入 LocalStorage
             set((state) => ({
               commentsByPost: { ...state.commentsByPost, [postId]: data },
             }))
@@ -84,13 +114,13 @@ export const useCommentStore = create<CommentState>()(
       },
     }),
     {
-      name: 'scrollish-comments-storage', // 在浏览器 LocalStorage 中看到的 Key 名字
-      storage: createJSONStorage(() => localStorage), // 指定存储引擎
-
-      // [优化] partialize: 决定哪些字段需要持久化
-      // 我们只持久化 `commentsByPost` (数据)，不持久化 `isLoading` (状态)
-      // 因为用户刷新页面后，loading 状态应该重置为 false
-      partialize: (state) => ({ commentsByPost: state.commentsByPost }),
+      name: 'scrollish-comments-storage', // LocalStorage Key
+      storage: createJSONStorage(() => localStorage),
+      // [关键] 确保持久化 localComments
+      partialize: (state) => ({
+        commentsByPost: state.commentsByPost,
+        localComments: state.localComments,
+      }),
     },
   ),
 )
