@@ -7,6 +7,7 @@ import React, {
 } from 'react'
 import { useAppStore, ProductionPost } from '../store/useAppStore'
 import { useUserStore } from '../store/useUserStore'
+import { useAnalyticsStore } from '../store/useAnalyticsStore'
 import { supabase } from '../supabase'
 import { Page, Post } from '../types' // 引入 Post 类型
 import { IMAGES } from '../constants'
@@ -293,6 +294,7 @@ const Home: React.FC<HomeProps> = ({
                   post={post}
                   onOpenDiscussion={() => handleOpenDiscussion(post)}
                   isExiting={false}
+                  isActive={index === currentPostIndex}
                 />
               </div>
             )
@@ -326,10 +328,17 @@ export const FeedItem: React.FC<{
   onOpenDiscussion: () => void
   isExiting: boolean
   onBack?: () => void
-}> = ({ post, onOpenDiscussion, isExiting, onBack }) => {
+  isActive?: boolean
+}> = ({ post, onOpenDiscussion, isExiting, onBack, isActive = true }) => {
   const { toggleLike, isLiked: checkIsLiked, toggleFollowCommunity, isFollowing } = useUserStore()
+  const { logEvent } = useAnalyticsStore()
+
   const isLiked = checkIsLiked(post.id)
   const isSubscribed = post.community_id ? isFollowing(post.community_id) : false
+
+  // Tracking Refs
+  const entryTimeRef = useRef<number>(0)
+  const hasLoggedDwell = useRef(false)
 
   const handleToggleSub = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -359,24 +368,73 @@ export const FeedItem: React.FC<{
 
   const hasVideo = !!videoUrl && !videoError
 
+  // Analytics: Dwell Time & Completion Logic
+  useEffect(() => {
+    if (isActive && !isExiting) {
+      // User started viewing this post
+      entryTimeRef.current = Date.now()
+      hasLoggedDwell.current = false
+    } else {
+      // User scrolled away or component unmounting/exiting
+      if (entryTimeRef.current > 0 && !hasLoggedDwell.current) {
+        const duration = Date.now() - entryTimeRef.current
+
+        // Only log if duration is meaningful (> 500ms to avoid fast scrolls)
+        if (duration > 500) {
+          const isInterest = duration > 3000 // > 3s
+
+          let isComplete = false
+          let progress = 0
+
+          // Calculate video completion if available
+          if (hasVideo && videoRef.current && videoRef.current.duration) {
+            progress = videoRef.current.currentTime / videoRef.current.duration
+            if (progress > 0.8) isComplete = true
+          }
+
+          logEvent({
+            post_id: post.id,
+            interaction_type: 'dwell',
+            metadata: {
+              duration_ms: duration,
+              is_interest: isInterest,
+              is_complete: isComplete,
+              progress: progress
+            }
+          })
+          hasLoggedDwell.current = true
+        }
+
+        // Reset
+        entryTimeRef.current = 0
+      }
+    }
+  }, [isActive, isExiting, hasVideo, post.id, logEvent])
+
   useEffect(() => {
     if (hasVideo && videoRef.current && !isExiting) {
       const attemptPlay = async () => {
         try {
-          videoRef.current!.muted = true
-          await videoRef.current!.play()
+          if (isActive) {
+            videoRef.current!.muted = true
+            await videoRef.current!.play()
+          } else {
+            videoRef.current!.pause()
+          }
         } catch (e) {
           console.log('Playback prevented:', e)
         }
       }
       attemptPlay()
     }
-  }, [hasVideo, isExiting])
+  }, [hasVideo, isExiting, isActive])
 
   const handleLike = async () => {
     if (isExiting) return
     toggleLike(post)
     if (navigator.vibrate) navigator.vibrate(50)
+
+    logEvent({ post_id: post.id, interaction_type: 'click_like' })
 
     // 更新本地显示
     if (isLiked) {
@@ -396,8 +454,16 @@ export const FeedItem: React.FC<{
     }
   }
 
+  const handleDiscussionClick = () => {
+    logEvent({ post_id: post.id, interaction_type: 'click_discussion' })
+    onOpenDiscussion()
+  }
+
   const handleShare = async () => {
     if (isExiting) return
+
+    logEvent({ post_id: post.id, interaction_type: 'click_share' })
+
     if (navigator.share) {
       navigator.share({
         title: titleEn,
@@ -450,7 +516,6 @@ export const FeedItem: React.FC<{
               muted
               playsInline
               {...{ 'webkit-playsinline': 'true' }}
-              autoPlay
               onError={() => {
                 setVideoError(true)
               }}
@@ -545,7 +610,7 @@ export const FeedItem: React.FC<{
             </div>
             <div className="flex flex-col items-center gap-1">
               <button
-                onClick={onOpenDiscussion}
+                onClick={handleDiscussionClick}
                 className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all active:scale-90 hover:bg-white/20">
                 <span className="material-symbols-outlined text-[28px] text-white fill-[1]">
                   mode_comment
