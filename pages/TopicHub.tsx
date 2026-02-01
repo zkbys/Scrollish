@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Page } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
+import InteractiveText from '../components/InteractiveText'
+import WordDetailOverlay from '../components/WordDetailOverlay'
 
 interface TopicHubProps {
   onNavigate: (page: Page) => void
@@ -18,6 +20,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [animationClass, setAnimationClass] = useState('')
+  const [selectedWord, setSelectedWord] = useState<string | null>(null)
 
   const startPos = useRef({ x: 0, y: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
@@ -203,8 +206,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const subreddit = post.subreddit || post.user || 'Community'
 
   return (
-    <div className={`h-full flex flex-col bg-[#0B0A09] overflow-hidden select-none perspective-container relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
-      {/* 动态环境光背景 (统一使用图片模糊，避免视频背景太耗电且可能加载失败) */}
+    <div
+      className={`h-full flex flex-col bg-[#0B0A09] overflow-hidden select-none perspective-container relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
+      {/* 动态环境光背景 */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div
           className="absolute inset-[-50%] bg-cover bg-center blur-[100px] opacity-40 animate-pulse-slow saturate-150"
@@ -213,23 +217,23 @@ const TopicHub: React.FC<TopicHubProps> = ({
         <div className="absolute inset-0 bg-black/60 mix-blend-multiply" />
       </div>
 
-      {/* 1. Hero Card - Lens Landing Effect */}
+      {/* Hero Card */}
       <div className="mx-4 mt-12 h-56 relative z-50">
-        {/* Lens shell (drops from sky) - image is INSIDE so it's clipped */}
         <motion.div
           initial={{ y: -200, opacity: 0 }}
-          animate={isExiting ? { y: -20, opacity: 0, scale: 0.95 } : { y: 0, opacity: 1, scale: 1 }}
+          animate={
+            isExiting
+              ? { y: -20, opacity: 0, scale: 0.95 }
+              : { y: 0, opacity: 1, scale: 1 }
+          }
           transition={{
-            type: "spring",
+            type: 'spring',
             stiffness: 50,
             damping: 15,
           }}
-          className="absolute inset-0 rounded-[2.5rem] bg-white/[0.05] backdrop-blur-3xl shadow-[0_50px_100px_rgba(0,0,0,0.7)] border-2 border-white/20 overflow-hidden"
-        >
-          {/* Top glass highlight */}
+          className="absolute inset-0 rounded-[2.5rem] bg-white/[0.05] backdrop-blur-3xl shadow-[0_50px_100px_rgba(0,0,0,0.7)] border-2 border-white/20 overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent z-20" />
 
-          {/* Background blur glow */}
           {!hasVideo && (
             <div
               className="absolute inset-0 bg-cover bg-center blur-2xl opacity-30 scale-110"
@@ -237,14 +241,12 @@ const TopicHub: React.FC<TopicHubProps> = ({
             />
           )}
 
-          {/* THE KEY: Image has COUNTER-MOTION - moves UP as lens moves DOWN */}
-          {/* This creates the illusion that the image is fixed while the lens reveals it */}
           {!hasVideo && (
             <motion.img
               initial={{ y: 200 }}
               animate={{ y: 0 }}
               transition={{
-                type: "spring",
+                type: 'spring',
                 stiffness: 50,
                 damping: 15,
               }}
@@ -254,7 +256,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
             />
           )}
 
-          {/* Video layer */}
           {hasVideo && (
             <>
               <video
@@ -273,13 +274,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 z-10" />
         </motion.div>
 
-        {/* 文字信息层 (跟随镜头) */}
         <motion.div
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="absolute inset-x-0 bottom-0 p-7 z-[70] flex flex-col gap-2 pointer-events-none"
-        >
+          className="absolute inset-x-0 bottom-0 p-7 z-[70] flex flex-col gap-2 pointer-events-none">
           <div className="flex items-center gap-2">
             <div className="h-1 w-1 rounded-full bg-white/60" />
             <span className="text-white/80 text-[10px] font-bold uppercase tracking-widest">
@@ -291,7 +290,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
           </h1>
         </motion.div>
 
-        {/* 返回按钮 (始终在最上层) */}
         <button
           onClick={handleBack}
           className="absolute top-5 left-5 text-white flex items-center justify-center h-11 w-11 bg-black/20 backdrop-blur-md rounded-2xl border border-white/20 active:scale-90 transition-all shadow-lg z-[80]">
@@ -301,8 +299,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
         </button>
       </div>
 
-      <main
-        className="flex-1 flex flex-col items-center justify-start pt-6 bg-transparent z-40 animate-in slide-in-from-bottom-24 fade-in duration-700 delay-200">
+      <main className="flex-1 flex flex-col items-center justify-start pt-6 bg-transparent z-40 animate-in slide-in-from-bottom-24 fade-in duration-700 delay-200">
         <div className="w-full px-8 flex justify-between items-center mb-5">
           <span className="text-white/40 text-[11px] font-black uppercase tracking-[0.2em] drop-shadow-md">
             {isPageLoading
@@ -390,7 +387,10 @@ const TopicHub: React.FC<TopicHubProps> = ({
                         border-l-[3px] border-l-orange-500/50 
                       `}
                       style={{ animationDelay: `${i * 80}ms` }}>
-                      {sentence.trim()}
+                      <InteractiveText
+                        text={sentence.trim()}
+                        onWordClick={(w) => setSelectedWord(w)}
+                      />
                     </div>
                   )
                 })
@@ -414,6 +414,14 @@ const TopicHub: React.FC<TopicHubProps> = ({
           <div className="absolute inset-x-12 top-8 bottom-[-20px] bg-white/5 rounded-[2.5rem] -z-20 scale-[0.92] border border-white/5 backdrop-blur-sm" />
         </div>
       </main>
+
+      {selectedWord && (
+        <WordDetailOverlay
+          word={selectedWord}
+          onClose={() => setSelectedWord(null)}
+          onSave={(w) => console.log('Saved word:', w)}
+        />
+      )}
 
       <style>{`
         .animate-pulse-slow { animation: pulse-slow 8s cubic-bezier(0.4, 0, 0.6, 1) infinite; }

@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../supabase'
 import { ChatMessage } from '../types'
 import { useCommentStore, Comment } from '../store/useCommentStore'
+import InteractiveText from '../components/InteractiveText'
+import WordDetailOverlay from '../components/WordDetailOverlay'
 
 // --- 配置区域 ---
 const SILICONFLOW_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'
@@ -45,6 +47,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     ChatMessage['analysis'] | null
   >(null)
   const [inputText, setInputText] = useState('')
+  const [selectedWord, setSelectedWord] = useState<string | null>(null)
 
   // AI 模式状态
   const [isAiMode, setIsAiMode] = useState(false)
@@ -100,7 +103,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
     // 第一次遍历：建立映射和分类
     allComments.forEach((c) => {
-      // 修复：确保 localComments 正确归类
       if (c.isLocal || c.isLocalAi) {
         const target = c.parent_id || 'root'
         if (!localRepliesMap.has(target)) {
@@ -133,9 +135,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
       const node: ThreadMessage = {
         ...comment,
-        // [修复] 移除 user 赋值，直接使用继承的 author
         contentZh: actualContentZh,
-        // 如果数据库没有存 reply 信息，尝试从父节点获取 (Fallback)
         replyToName:
           comment.replyToName || (parent ? parent.author : undefined),
         replyText: comment.replyText || (parent ? parent.content : undefined),
@@ -175,7 +175,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     return finalMessages
   }, [allComments])
 
-  // [修复] 参数改为 author
   const getInitials = (name: string) =>
     name ? name.substring(0, 2).toUpperCase() : '??'
 
@@ -183,7 +182,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     msg: ThreadMessage,
     currentDifficulty: DifficultyLevel,
   ) => {
-    // [修复] 优先使用 content，去掉 contentEn
     let sourceText = msg.content
     if (currentDifficulty === 'IELTS' && msg.contentIelts)
       sourceText = msg.contentIelts
@@ -225,21 +223,24 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }
 
+  // --- 关键修改：结合分词组件和高亮逻辑 ---
   const renderFragmentWithGlow = (text: string, analysis: any) => {
-    if (!analysis || !text.includes(analysis.keyword)) return text
+    if (!analysis || !text.includes(analysis.keyword)) {
+      return <InteractiveText text={text} onWordClick={setSelectedWord} />
+    }
     const parts = text.split(analysis.keyword)
     return (
       <>
-        {parts[0]}
+        <InteractiveText text={parts[0]} onWordClick={setSelectedWord} />
         <span
           onClick={(e) => {
             e.stopPropagation()
             setActiveAnalysis(analysis)
           }}
-          className="text-orange-400 font-black relative animate-glow cursor-help px-1 rounded-sm bg-orange-500/10 border-b-2 border-orange-500/40">
+          className="text-orange-400 font-black relative animate-glow cursor-help px-1 rounded-sm bg-orange-500/10 border-b-2 border-orange-500/40 mx-1">
           {analysis.keyword}
         </span>
-        {parts[1]}
+        <InteractiveText text={parts[1]} onWordClick={setSelectedWord} />
       </>
     )
   }
@@ -255,7 +256,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
       const userQuestionId = `local-q-${Date.now()}`
 
-      // 1. 创建用户提问消息 (引用 Original)
       const userQuestionMsg: Comment = {
         id: userQuestionId,
         post_id: postId,
@@ -264,15 +264,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         content: questionContent,
         content_zh: '',
         depth: (quotedMessage.depth || 0) + 1,
-        parent_id: quotedMessage.id, // 挂载在原消息下
+        parent_id: quotedMessage.id,
         upvotes: 0,
         created_at: new Date().toISOString(),
-
-        // 本地标记
         isLocal: true,
         isQuestion: true,
-
-        // 引用信息 (引用原贴)
         replyToName: quotedMessage.author,
         replyText: quotedMessage.content,
         replyAvatar: quotedMessage.author_avatar,
@@ -326,23 +322,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           data.choices?.[0]?.message?.content ||
           "Sorry, I couldn't understand that."
 
-        // 2. 创建 AI 回答消息
         const aiAnswerMsg: Comment = {
           id: `local-ai-${Date.now()}`,
           post_id: postId,
-          author: 'Scrollish AI', // [修复] 使用 author
+          author: 'Scrollish AI',
           author_avatar:
             'https://api.dicebear.com/7.x/bottts/svg?seed=ScrollishAI',
-          content: aiReply, // [修复] 使用 content
+          content: aiReply,
           content_zh: '',
           depth: userQuestionMsg.depth + 1,
           parent_id: userQuestionId,
           upvotes: 0,
           created_at: new Date().toISOString(),
-
           isLocal: true,
           isLocalAi: true,
-
           replyToName: 'You',
           replyText: questionContent,
         }
@@ -461,6 +454,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onClick={handleContainerClick}>
+      {/* 0. Word Detail Overlay */}
+      {selectedWord && (
+        <WordDetailOverlay
+          word={selectedWord}
+          onClose={() => setSelectedWord(null)}
+          onSave={(w) => console.log('Saved word:', w)}
+        />
+      )}
+
       {/* 1. Context Menu */}
       <AnimatePresence>
         {contextMenu && (
@@ -501,7 +503,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                 </span>
               </button>
 
-              {/* Delete Option (Only for Local Messages) */}
               {(contextMenu.msg.isLocal || contextMenu.msg.isLocalAi) && (
                 <button
                   onClick={handleDelete}
@@ -575,7 +576,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 3. Word Analysis Overlay */}
+      {/* 3. Word Analysis Overlay (Deprecated in favor of WordDetailOverlay but kept for 'Glow' logic) */}
       {activeAnalysis && (
         <div
           className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-end animate-in fade-in duration-200"
