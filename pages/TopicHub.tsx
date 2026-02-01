@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { supabase } from '../supabase' // 引入 supabase
 import { Page } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
 import { useDictionaryStore } from '../store/useDictionaryStore'
@@ -24,9 +25,12 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const [animationClass, setAnimationClass] = useState('')
   const [isExiting, setIsExiting] = useState(false)
   const [videoError, setVideoError] = useState(false)
-
-  // 单词查看状态
   const [viewingWord, setViewingWord] = useState<string | null>(null)
+
+  // 新增：存储完整的 OP 内容
+  const [opContent, setOpContent] = useState<{ en: string; cn: string } | null>(
+    null,
+  )
 
   const startPos = useRef({ x: 0, y: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
@@ -34,33 +38,54 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const { fetchComments, getComments, isLoading } = useCommentStore()
-  // 引入 Dictionary Store (虽然主要交互在 InteractiveText 内部，但 Overlay 需要数据)
-  const { getDefinition } = useDictionaryStore()
+  const { getDefinition, triggerAnalysis } = useDictionaryStore()
 
   useEffect(() => {
     if (post?.id) {
       fetchComments(post.id)
+      // 1. 单独拉取 OP 正文，解决 Card 0 为空的问题
+      const fetchOp = async () => {
+        const { data } = await supabase
+          .from('production_posts')
+          .select('content_en, content_cn')
+          .eq('id', post.id)
+          .single()
+        if (data) {
+          setOpContent({ en: data.content_en || '', cn: data.content_cn || '' })
+        }
+      }
+      fetchOp()
     }
   }, [post.id, fetchComments])
 
   const allComments = getComments(post.id)
 
   const comments = useMemo(() => {
-    const topLevel = allComments.filter((c) => c.depth === 0)
-    if (topLevel.length === 0 && !isLoading[post.id]) {
-      return [
-        {
-          id: 'mock-1',
-          author: 'ScrollishBot',
-          content:
-            'Be the first to share your thoughts on this topic! What do you think?',
-          upvotes: 0,
-          created_at: new Date().toISOString(),
-        } as any,
-      ]
+    // 2. 使用拉取到的 opContent (优先) 或 post 里的 fallback
+    const contentEn =
+      opContent?.en || post.content_en || post.title_en || 'Loading content...'
+    const contentCn = opContent?.cn || post.content_cn || post.title_cn || ''
+
+    const opCard = {
+      id: 'op-card-0',
+      isOpCard: true,
+      author: post.author || post.subreddit || 'OP',
+      content: contentEn,
+      content_cn: contentCn,
+      upvotes: post.upvotes || 0,
+      depth: -1,
+      enrichment: { sentence_segments: null },
     }
-    return topLevel.sort((a, b) => b.upvotes - a.upvotes)
-  }, [allComments, isLoading, post.id])
+
+    const topLevel = allComments.filter((c) => c.depth === 0)
+    const sortedComments = topLevel.sort((a, b) => b.upvotes - a.upvotes)
+
+    if (topLevel.length === 0 && isLoading[post.id]) {
+      return [opCard]
+    }
+
+    return [opCard, ...sortedComments]
+  }, [allComments, isLoading, post, opContent])
 
   const replyCounts = useMemo(() => {
     if (allComments.length === 0) return {}
@@ -80,7 +105,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
     }
     const counts: Record<string, number> = {}
     comments.forEach((c) => {
-      counts[c.id] = countDescendants(c.id)
+      if (!c.isOpCard) counts[c.id] = countDescendants(c.id)
     })
     return counts
   }, [allComments, comments])
@@ -89,7 +114,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
     if (
       !hasRestoredPosition.current &&
       initialCommentId &&
-      comments.length > 0
+      comments.length > 1
     ) {
       const targetIndex = comments.findIndex((c) => c.id === initialCommentId)
       if (targetIndex !== -1) {
@@ -99,43 +124,52 @@ const TopicHub: React.FC<TopicHubProps> = ({
     }
   }, [comments, initialCommentId])
 
+  const imageUrl = post.image_url || post.image || ''
   const videoUrl = post.videoUrl || post.video_url || ''
   const hasVideo = !!videoUrl && !videoError
 
   useEffect(() => {
     if (hasVideo && videoRef.current) {
-      const playVideo = async () => {
-        try {
-          videoRef.current!.muted = true
-          videoRef.current!.setAttribute('playsinline', 'true')
-          videoRef.current!.setAttribute('webkit-playsinline', 'true')
-          await videoRef.current!.play()
-        } catch (err) {
-          console.log('Autoplay prevented by browser', err)
-        }
-      }
-      playVideo()
+      videoRef.current.muted = true
+      videoRef.current.play().catch(() => {})
     }
   }, [hasVideo])
 
-  const isPageLoading =
-    isLoading[post.id] && comments.length === 0 && allComments.length === 0
-
-  const getMessageBubbles = (text: string) => {
-    if (!text) return []
-    const sentences = text.match(
-      /[^.!?。！？\n]+[.!?。！？\n]+|[^.!?。！？\n]+$/g,
-    )
-    return sentences || [text]
-  }
-
   const activeComment = comments[currentIndex] || comments[0]
-  const bubbles = activeComment ? getMessageBubbles(activeComment.content) : []
-  const currentReplyCount = activeComment
-    ? replyCounts[activeComment.id] || 0
-    : 0
+  const currentReplyCount =
+    activeComment && !activeComment.isOpCard
+      ? replyCounts[activeComment.id] || 0
+      : 0
+
+  const displaySegments = useMemo(() => {
+    if (!activeComment) return []
+
+    // OP Card 走正则分句，且不携带 zh (防止重复)
+    if (activeComment.isOpCard) {
+      const text = activeComment.content || ''
+      const rawSentences = text.match(
+        /[^.!?。！？\n]+[.!?。！？\n]+|[^.!?。！？\n]+$/g,
+      ) || [text]
+      return rawSentences.map((en) => ({ en: en.trim(), zh: null }))
+    }
+
+    if (activeComment.enrichment?.sentence_segments) {
+      return activeComment.enrichment.sentence_segments
+    }
+    const rawSentences = activeComment.content.match(
+      /[^.!?。！？\n]+[.!?。！？\n]+|[^.!?。！？\n]+$/g,
+    ) || [activeComment.content]
+    return rawSentences.map((en) => ({
+      en: en.trim(),
+      zh: null, // 降级模式，统一在底部显示
+    }))
+  }, [activeComment])
 
   const goToChatRoom = () => {
+    if (activeComment.isOpCard) {
+      if (navigator.vibrate) navigator.vibrate([20, 50, 20])
+      return
+    }
     if (activeComment) {
       onSelectComment(activeComment.id)
       onNavigate(Page.ChatRoom)
@@ -145,9 +179,13 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const handleBack = () => {
     if (navigator.vibrate) navigator.vibrate(20)
     setIsExiting(true)
-    setTimeout(() => {
-      onNavigate(Page.Home)
-    }, 50)
+    setTimeout(() => onNavigate(Page.Home), 50)
+  }
+
+  const handleWordClick = async (word: string, context: string) => {
+    if (navigator.vibrate) navigator.vibrate(10)
+    const cachedResult = await triggerAnalysis(word, context)
+    if (cachedResult) setViewingWord(word)
   }
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -157,33 +195,31 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const handleTouchEnd = (e: React.TouchEvent) => {
     const diffX = e.changedTouches[0].clientX - startPos.current.x
     const diffY = e.changedTouches[0].clientY - startPos.current.y
-
     if (Math.abs(diffX) > Math.abs(diffY)) {
-      if (Math.abs(diffX) > 50) {
-        if (diffX < 0) nextCard()
-        else prevCard()
-      }
+      if (Math.abs(diffX) > 50) diffX < 0 ? nextCard() : prevCard()
     } else {
       if (diffY < -50) {
+        if (activeComment.isOpCard) return
         const container = contentRef.current
         if (container) {
           const isAtBottom =
             Math.ceil(container.scrollTop + container.clientHeight) >=
-            container.scrollHeight - 10
-          const isScrollable = container.scrollHeight > container.clientHeight
-          if (isScrollable && !isAtBottom) return
+            container.scrollHeight - 5
+          const isContentShort =
+            container.scrollHeight <= container.clientHeight
+          if (isAtBottom || isContentShort) goToChatRoom()
+        } else {
+          goToChatRoom()
         }
-        goToChatRoom()
       }
     }
   }
 
   const nextCard = () => {
     if (currentIndex >= comments.length - 1) return
-    if (navigator.vibrate) navigator.vibrate(10)
     setAnimationClass('slide-out-left')
     setTimeout(() => {
-      setCurrentIndex((prev) => prev + 1)
+      setCurrentIndex((p) => p + 1)
       setAnimationClass('slide-in-right')
       setTimeout(() => setAnimationClass(''), 400)
     }, 200)
@@ -191,131 +227,91 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const prevCard = () => {
     if (currentIndex <= 0) return
-    if (navigator.vibrate) navigator.vibrate(10)
     setAnimationClass('slide-out-right')
     setTimeout(() => {
-      setCurrentIndex((prev) => prev - 1)
+      setCurrentIndex((p) => p - 1)
       setAnimationClass('slide-in-left')
       setTimeout(() => setAnimationClass(''), 400)
     }, 200)
   }
 
-  const titleEn = post.title_en || post.titleEn || ''
-  const imageUrl = post.image_url || post.image || ''
-  const subreddit = post.subreddit || post.user || 'Community'
+  const isPageLoading = isLoading[post.id] && comments.length <= 1
 
   return (
     <div
-      className={`h-full flex flex-col bg-[#0B0A09] overflow-hidden select-none perspective-container relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
-      {/* 1. 全局通知：当 Store 分析完成后弹出 */}
-      <AnalysisNotification onView={(word) => setViewingWord(word)} />
-
-      {/* 2. 详情弹窗：显示在最顶层 */}
+      className={`h-full flex flex-col bg-[#0B0A09] overflow-hidden select-none relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
+      <AnalysisNotification onView={setViewingWord} />
       {viewingWord && (
         <WordDetailOverlay
           word={viewingWord}
           definition={getDefinition(viewingWord)}
           onClose={() => setViewingWord(null)}
-          onSave={(w) => console.log('Saved word:', w)}
         />
       )}
 
-      {/* 背景层 */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none">
         <div
-          className="absolute inset-[-50%] bg-cover bg-center blur-[100px] opacity-40 animate-pulse-slow saturate-150"
+          className="absolute inset-[-50%] bg-cover bg-center blur-[100px] opacity-40 animate-pulse-slow"
           style={{ backgroundImage: `url("${imageUrl}")` }}
         />
         <div className="absolute inset-0 bg-black/60 mix-blend-multiply" />
       </div>
 
-      {/* Hero Card */}
       <div className="mx-4 mt-12 h-56 relative z-50">
         <motion.div
           initial={{ y: -200, opacity: 0 }}
-          animate={
-            isExiting
-              ? { y: -20, opacity: 0, scale: 0.95 }
-              : { y: 0, opacity: 1, scale: 1 }
-          }
-          transition={{ type: 'spring', stiffness: 50, damping: 15 }}
-          className="absolute inset-0 rounded-[2.5rem] bg-white/[0.05] backdrop-blur-3xl shadow-[0_50px_100px_rgba(0,0,0,0.7)] border-2 border-white/20 overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent z-20" />
-          {!hasVideo && (
-            <div
-              className="absolute inset-0 bg-cover bg-center blur-2xl opacity-30 scale-110"
-              style={{ backgroundImage: `url("${imageUrl}")` }}
+          animate={{ y: 0, opacity: 1 }}
+          className="absolute inset-0 rounded-[2.5rem] overflow-hidden border-2 border-white/20 shadow-2xl bg-[#1C1C1E]">
+          {hasVideo ? (
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              className="w-full h-full object-cover"
+              loop
+              muted
+              playsInline
+              autoPlay
             />
-          )}
-          {!hasVideo && (
-            <motion.img
-              initial={{ y: 200 }}
-              animate={{ y: 0 }}
-              transition={{ type: 'spring', stiffness: 50, damping: 15 }}
+          ) : (
+            <img
               src={imageUrl}
+              className="w-full h-full object-contain bg-black/50"
               alt=""
-              className="absolute inset-0 w-full h-full object-contain object-center z-[15]"
             />
           )}
-          {hasVideo && (
-            <>
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                className="absolute inset-0 w-full h-full object-cover"
-                loop
-                muted
-                playsInline
-                {...{ 'webkit-playsinline': 'true' }}
-                autoPlay
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 z-10" />
-            </>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60 z-10" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/80" />
         </motion.div>
 
-        <motion.div
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="absolute inset-x-0 bottom-0 p-7 z-[70] flex flex-col gap-2 pointer-events-none">
-          <div className="flex items-center gap-2">
-            <div className="h-1 w-1 rounded-full bg-white/60" />
-            <span className="text-white/80 text-[10px] font-bold uppercase tracking-widest">
-              {subreddit}
-            </span>
-          </div>
-          <h1 className="text-white text-2xl font-black leading-tight drop-shadow-lg line-clamp-2">
-            {titleEn}
+        <div className="absolute inset-x-0 bottom-0 p-6 z-[70]">
+          <span className="text-white/60 text-[10px] font-bold uppercase tracking-widest">
+            {post.subreddit || 'Community'}
+          </span>
+          <h1 className="text-white text-xl font-black leading-tight line-clamp-2 mt-1">
+            {post.title_en}
           </h1>
-        </motion.div>
+        </div>
 
         <button
           onClick={handleBack}
-          className="absolute top-5 left-5 text-white flex items-center justify-center h-11 w-11 bg-black/20 backdrop-blur-md rounded-2xl border border-white/20 active:scale-90 transition-all shadow-lg z-[80]">
-          <span className="material-symbols-outlined text-[26px]">
-            arrow_back
-          </span>
+          className="absolute top-5 left-5 w-10 h-10 bg-black/30 backdrop-blur rounded-full flex items-center justify-center text-white border border-white/20 z-[80]">
+          <span className="material-symbols-outlined">arrow_back</span>
         </button>
       </div>
 
-      <main className="flex-1 flex flex-col items-center justify-start pt-6 bg-transparent z-40 animate-in slide-in-from-bottom-24 fade-in duration-700 delay-200">
-        <div className="w-full px-8 flex justify-between items-center mb-5">
-          <span className="text-white/40 text-[11px] font-black uppercase tracking-[0.2em] drop-shadow-md">
-            {isPageLoading
-              ? 'Thinking...'
-              : `Opinion ${currentIndex + 1} / ${comments.length}`}
+      <main className="flex-1 flex flex-col items-center justify-start pt-6 z-40">
+        <div className="w-full px-8 flex justify-between items-center mb-4">
+          <span className="text-white/40 text-[10px] font-bold uppercase tracking-widest">
+            {activeComment?.isOpCard
+              ? 'Original Post'
+              : `Opinion ${currentIndex}/${comments.length - 1}`}
           </span>
-          <div className="flex items-center gap-2">
-            <div className="h-[4px] w-16 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm border border-white/5">
-              <div
-                className="h-full bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 transition-all duration-300 animate-gradient-x"
-                style={{
-                  width: `${((currentIndex + 1) / Math.max(comments.length, 1)) * 100}%`,
-                }}
-              />
-            </div>
+          <div className="h-1 w-16 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-orange-500 transition-all duration-300"
+              style={{
+                width: `${((currentIndex + 1) / Math.max(comments.length, 1)) * 100}%`,
+              }}
+            />
           </div>
         </div>
 
@@ -324,107 +320,149 @@ const TopicHub: React.FC<TopicHubProps> = ({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}>
           <div
-            className={`absolute inset-x-4 top-0 bottom-0 bg-[#121212]/80 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden flex flex-col transition-all duration-300 ${animationClass}`}>
+            className={`absolute inset-x-4 top-0 bottom-0 bg-[#121212]/80 backdrop-blur-2xl rounded-[2.5rem] border border-white/10 flex flex-col overflow-hidden transition-all duration-300 ${animationClass}`}>
             <div
-              className="h-18 pt-4 pb-2 border-b border-white/5 flex items-center justify-between px-6 shrink-0 cursor-pointer"
+              className="h-16 border-b border-white/5 flex items-center justify-between px-6 shrink-0"
               onClick={goToChatRoom}>
               <div className="flex items-center gap-3">
-                <div className="p-[2px] rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-red-500">
-                  <div className="w-9 h-9 rounded-full bg-[#121212] flex items-center justify-center text-white text-xs font-black border border-white/10">
-                    {activeComment?.author.substring(0, 2).toUpperCase()}
+                <div
+                  className={`w-8 h-8 rounded-full p-[2px] ${activeComment?.isOpCard ? 'bg-white' : 'bg-gradient-to-tr from-orange-500 to-red-500'}`}>
+                  <div className="w-full h-full rounded-full bg-[#121212] flex items-center justify-center text-[10px] font-black text-white">
+                    {activeComment?.isOpCard
+                      ? 'OP'
+                      : activeComment?.author.slice(0, 2).toUpperCase()}
                   </div>
                 </div>
-                <div>
-                  <div className="font-black text-[14px] text-white tracking-wide drop-shadow-sm">
+                <div className="flex flex-col">
+                  <span className="text-white font-bold text-sm">
                     {activeComment?.author}
-                  </div>
-
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[12px] text-orange-500">
-                        favorite
+                  </span>
+                  {!activeComment?.isOpCard && (
+                    <div className="flex gap-2 text-[10px] text-white/50">
+                      <span className="flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[10px]">
+                          favorite
+                        </span>
+                        {activeComment?.upvotes}
                       </span>
-                      <span className="text-[10px] text-white/60 font-bold">
-                        {activeComment?.upvotes || 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[12px] text-blue-400">
-                        chat_bubble
-                      </span>
-                      <span className="text-[10px] text-white/60 font-bold">
+                      <span className="flex items-center gap-0.5 ml-2">
+                        <span className="material-symbols-outlined text-[10px] text-blue-400">
+                          chat_bubble
+                        </span>
                         {currentReplyCount}
                       </span>
                     </div>
-                  </div>
+                  )}
+                  {activeComment?.isOpCard && (
+                    <span className="text-[10px] text-white/40 font-medium">
+                      Post Content
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="bg-white/5 text-white/60 p-2 rounded-full hover:bg-white/10 transition-colors border border-white/5">
-                <span className="material-symbols-outlined text-[20px] font-bold">
-                  expand_less
-                </span>
-              </div>
+              {!activeComment?.isOpCard && (
+                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white/50 text-[18px]">
+                    expand_less
+                  </span>
+                </div>
+              )}
             </div>
 
             <div
               ref={contentRef}
-              className="flex-1 p-6 space-y-4 overflow-y-auto no-scrollbar mask-image-gradient">
+              className="flex-1 p-6 overflow-y-auto no-scrollbar mask-image-gradient">
               {isPageLoading ? (
-                <div className="h-full flex items-center justify-center">
-                  <div className="w-8 h-8 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
+                <div className="flex justify-center mt-10">
+                  <span className="animate-spin text-orange-500 material-symbols-outlined">
+                    progress_activity
+                  </span>
                 </div>
               ) : (
-                bubbles.map((sentence, i) => {
-                  return (
+                <div className="space-y-4">
+                  {displaySegments.map((seg, i) => (
                     <div
                       key={i}
-                      className={`
-                        relative p-4 rounded-[1.2rem] text-[15px] leading-relaxed font-medium 
-                        animate-in slide-in-from-bottom-4 fade-in duration-500 
-                        bg-white/5 border border-white/5 
-                        text-gray-100 shadow-sm backdrop-blur-md rounded-tl-none
-                        hover:bg-white/10 transition-colors
-                        border-l-[3px] border-l-orange-500/50 
-                      `}
-                      style={{ animationDelay: `${i * 80}ms` }}>
-                      <InteractiveText
-                        text={sentence.trim()}
-                        contextSentence={sentence.trim()} // 传入完整句子给 AI 参考
-                      />
+                      // 3. 解决长按冲突
+                      className="bg-white/5 border border-white/5 p-4 rounded-xl rounded-tl-none border-l-2 border-l-orange-500/50 select-none touch-callout-none"
+                      onContextMenu={(e) => e.preventDefault()}>
+                      <span onClick={() => {}}>
+                        <InteractiveText
+                          text={seg.en}
+                          contextSentence={seg.en}
+                          className="text-gray-100 text-[15px] font-medium"
+                          externalOnClick={(w) => handleWordClick(w, seg.en)}
+                        />
+                      </span>
+                      {seg.zh && (
+                        <div className="mt-3 pt-2 border-t border-white/10">
+                          <p className="text-white/60 text-sm leading-relaxed italic">
+                            {seg.zh}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  )
-                })
+                  ))}
+
+                  {/* 底部完整翻译： OP卡片 OR 没有精准分句的评论 */}
+                  {(activeComment?.isOpCard ||
+                    !activeComment?.enrichment?.sentence_segments) &&
+                    activeComment?.content_cn && (
+                      <div
+                        className="px-2 mt-4 select-none touch-callout-none"
+                        onContextMenu={(e) => e.preventDefault()}>
+                        <div className="flex items-center gap-2 mb-2 opacity-50">
+                          <div className="h-[1px] flex-1 bg-white/20" />
+                          <span className="text-[9px] uppercase tracking-widest text-white">
+                            Full Translation
+                          </span>
+                          <div className="h-[1px] flex-1 bg-white/20" />
+                        </div>
+                        <p className="text-white/60 text-sm leading-relaxed italic">
+                          {activeComment.content_cn}
+                        </p>
+                      </div>
+                    )}
+                </div>
               )}
               <div className="h-12" />
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#121212] to-transparent pointer-events-none flex items-end justify-center pb-6">
-              <div className="flex flex-col items-center gap-1 animate-bounce-subtle opacity-50">
-                <span className="material-symbols-outlined text-[16px] text-white">
-                  keyboard_double_arrow_up
-                </span>
-                <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">
-                  Full Thread
-                </span>
-              </div>
+            <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-[#121212] to-transparent pointer-events-none flex items-end justify-center pb-4 opacity-50">
+              {activeComment?.isOpCard ? (
+                <div className="flex flex-col items-center animate-bounce-subtle">
+                  <span className="material-symbols-outlined text-white text-[16px] rotate-90">
+                    keyboard_double_arrow_up
+                  </span>
+                  <span className="text-[8px] font-black text-white uppercase tracking-widest mt-1">
+                    Swipe for Opinions
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center animate-bounce-subtle">
+                  <span className="material-symbols-outlined text-white text-[16px]">
+                    keyboard_double_arrow_up
+                  </span>
+                  <span className="text-[8px] font-black text-white uppercase tracking-widest">
+                    Discussion
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-          <div className="absolute inset-x-8 top-4 bottom-[-10px] bg-white/5 rounded-[2.5rem] -z-10 scale-[0.96] border border-white/5 backdrop-blur-sm" />
-          <div className="absolute inset-x-12 top-8 bottom-[-20px] bg-white/5 rounded-[2.5rem] -z-20 scale-[0.92] border border-white/5 backdrop-blur-sm" />
         </div>
       </main>
 
       <style>{`
-        .animate-pulse-slow { animation: pulse-slow 8s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse-slow { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.1); } }
-        .slide-out-left { animation: slideOutLeft 0.3s forwards cubic-bezier(0.2, 0.8, 0.2, 1); }
-        .slide-in-right { animation: slideInRight 0.3s forwards cubic-bezier(0.2, 0.8, 0.2, 1); }
-        .slide-out-right { animation: slideOutRight 0.3s forwards cubic-bezier(0.2, 0.8, 0.2, 1); }
-        .slide-in-left { animation: slideInLeft 0.3s forwards cubic-bezier(0.2, 0.8, 0.2, 1); }
-        @keyframes slideOutLeft { to { transform: translateX(-120%) scale(0.9) rotate(-5deg); opacity: 0; } }
-        @keyframes slideInRight { from { transform: translateX(100%) scale(0.9); opacity: 0; } to { transform: translateX(0) scale(1); opacity: 1; } }
-        @keyframes slideOutRight { to { transform: translateX(120%) scale(0.9) rotate(5deg); opacity: 0; } }
-        @keyframes slideInLeft { from { transform: translateX(-100%) scale(0.9); opacity: 0; } to { transform: translateX(0) scale(1); opacity: 1; } }
+        .slide-out-left { animation: slideOutLeft 0.3s forwards ease-in; }
+        .slide-in-right { animation: slideInRight 0.3s forwards ease-out; }
+        .slide-out-right { animation: slideOutRight 0.3s forwards ease-in; }
+        .slide-in-left { animation: slideInLeft 0.3s forwards ease-out; }
+        @keyframes slideOutLeft { to { transform: translateX(-120%) rotate(-5deg); opacity: 0; } }
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOutRight { to { transform: translateX(120%) rotate(5deg); opacity: 0; } }
+        @keyframes slideInLeft { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .touch-callout-none { -webkit-touch-callout: none; }
       `}</style>
     </div>
   )

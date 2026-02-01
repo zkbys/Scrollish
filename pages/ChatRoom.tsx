@@ -1,246 +1,259 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../supabase'
-import { ChatMessage } from '../types'
-import { useCommentStore, Comment } from '../store/useCommentStore'
+import { useCommentStore } from '../store/useCommentStore'
 import { useDictionaryStore } from '../store/useDictionaryStore'
+import { Comment, CulturalNote } from '../types'
 import InteractiveText from '../components/InteractiveText'
 import WordDetailOverlay from '../components/WordDetailOverlay'
-import AnalysisNotification from '../components/AnalysisNotification'
 
-// --- 配置区域 ---
 const SILICONFLOW_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'
 const AI_MODEL = 'deepseek-ai/DeepSeek-V2.5'
 
 interface ChatRoomProps {
   postId: string
-  postImage?: string
   focusCommentId?: string | null
   onBack: () => void
 }
 
-interface ThreadMessage extends Comment {
-  sentenceData?: { en: string; zh: string }[]
-  contentIelts?: string
-  contentCet6?: string
-  contentCet4?: string
-  contentZh?: string
-}
-
-type DifficultyLevel = 'Original' | 'IELTS' | 'CET6' | 'CET4'
-
 const ChatRoom: React.FC<ChatRoomProps> = ({
   postId,
-  postImage,
   focusCommentId,
   onBack,
 }) => {
-  const [fetchedImage, setFetchedImage] = useState<string>('')
-
-  // --- Stores ---
   const { getComments, fetchComments, addLocalComment, deleteLocalComment } =
     useCommentStore()
-  // 引入 Dictionary Store (InteractiveText 会自动使用，但我们需要 setViewingWord)
-  const { getDefinition } = useDictionaryStore()
+  const { getDefinition, triggerAnalysis } = useDictionaryStore()
 
-  // --- 交互状态 ---
-  const [quotedMessage, setQuotedMessage] = useState<ThreadMessage | null>(null)
-  const [activeAnalysis, setActiveAnalysis] = useState<
-    ChatMessage['analysis'] | null
-  >(null)
-  const [inputText, setInputText] = useState('')
+  const [opPostData, setOpPostData] = useState<{
+    content: string
+    content_cn: string
+    author: string
+  } | null>(null)
 
-  // 新增：单词查看状态
   const [viewingWord, setViewingWord] = useState<string | null>(null)
+  const [viewingNote, setViewingNote] = useState<CulturalNote[] | null>(null)
 
-  // AI 模式状态
+  const [inputText, setInputText] = useState('')
+  const [showGlobalTranslation, setShowGlobalTranslation] = useState(false)
+  const [quotedMessage, setQuotedMessage] = useState<Comment | null>(null)
   const [isAiMode, setIsAiMode] = useState(false)
-  const [isAiLoading, setIsAiLoading] = useState(false)
-
-  // 设置与显示
-  const [showTranslation, setShowTranslation] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [difficulty, setDifficulty] = useState<DifficultyLevel>('Original')
-
-  // 上下文菜单
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
-    msg: ThreadMessage
+    msg: Comment
   } | null>(null)
+  const [expandedTranslations, setExpandedTranslations] = useState<
+    Record<string, boolean>
+  >({})
+  const [isAiLoading, setIsAiLoading] = useState(false)
 
-  // 手势状态
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const [returnToId, setReturnToId] = useState<string | null>(null)
+  const [flashMessageId, setFlashMessageId] = useState<string | null>(null)
+
   const [pullY, setPullY] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const touchStartRef = useRef(0)
-  const lastTapRef = useRef(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const bgPressTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const bubblePressTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  const bubblePressTimer = useRef<NodeJS.Timeout | null>(null)
-  const pressStartPos = useRef({ x: 0, y: 0 })
-
+  // 1. 全局抑制浏览器默认菜单
   useEffect(() => {
-    fetchComments(postId)
-    if (!postImage) {
-      const fetchImage = async () => {
-        const { data } = await supabase
-          .from('production_posts')
-          .select('image_url')
-          .eq('id', postId)
-          .single()
-        if (data) setFetchedImage(data.image_url)
-      }
-      fetchImage()
+    const handleContextMenu = (e: Event) => {
+      e.preventDefault()
+      e.stopPropagation()
+      return false
     }
-  }, [postId, postImage, fetchComments])
+    window.addEventListener('contextmenu', handleContextMenu, { capture: true })
+    return () =>
+      window.removeEventListener('contextmenu', handleContextMenu, {
+        capture: true,
+      })
+  }, [])
 
-  const allComments = getComments(postId) as ThreadMessage[]
-
-  const messages = useMemo(() => {
-    if (!allComments || allComments.length === 0) return []
-
-    const dbMessages: ThreadMessage[] = []
-    const localRepliesMap = new Map<string, ThreadMessage[]>()
-
-    allComments.forEach((c) => {
-      if (c.isLocal || c.isLocalAi) {
-        const target = c.parent_id || 'root'
-        if (!localRepliesMap.has(target)) {
-          localRepliesMap.set(target, [])
-        }
-        localRepliesMap.get(target)!.push(c)
-      }
-    })
-
-    const commentMap = new Map<string, ThreadMessage>()
-    const childrenMap = new Map<string, ThreadMessage[]>()
-
-    allComments.forEach((c) => {
-      if (!c.isLocal && !c.isLocalAi) {
-        commentMap.set(c.id, c)
-        if (c.parent_id) {
-          if (!childrenMap.has(c.parent_id)) childrenMap.set(c.parent_id, [])
-          childrenMap.get(c.parent_id)?.push(c)
-        }
-      }
-    })
-
-    const traverse = (comment: ThreadMessage) => {
-      const actualContentZh = comment.content_cn || comment.content_zh || ''
-      const parent = comment.parent_id
-        ? commentMap.get(comment.parent_id)
-        : null
-
-      const node: ThreadMessage = {
-        ...comment,
-        contentZh: actualContentZh,
-        replyToName:
-          comment.replyToName || (parent ? parent.author : undefined),
-        replyText: comment.replyText || (parent ? parent.content : undefined),
-      }
-
-      dbMessages.push(node)
-
-      const children = childrenMap.get(comment.id) || []
-      children.sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0))
-      children.forEach((child) => traverse(child))
-    }
-
-    allComments
-      .filter((c) => c.depth === 0 && !c.isLocal && !c.isLocalAi)
-      .sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0))
-      .forEach((root) => traverse(root))
-
-    const finalMessages: ThreadMessage[] = []
-    const appendMessageWithLocalReplies = (msg: ThreadMessage) => {
-      finalMessages.push(msg)
-      if (localRepliesMap.has(msg.id)) {
-        const replies = localRepliesMap.get(msg.id)!
-        replies.forEach((reply) => {
-          appendMessageWithLocalReplies(reply)
+  // 2. Fetch Data
+  useEffect(() => {
+    const fetchOp = async () => {
+      const { data } = await supabase
+        .from('production_posts')
+        .select('*')
+        .eq('id', postId)
+        .single()
+      if (data) {
+        setOpPostData({
+          content: data.content_en || data.title_en,
+          content_cn: data.content_cn || data.title_cn,
+          author: data.author || data.subreddit || 'OP',
         })
       }
     }
+    fetchOp()
+    fetchComments(postId)
+  }, [postId, fetchComments])
 
-    dbMessages.forEach((msg) => {
-      appendMessageWithLocalReplies(msg)
+  const allComments = getComments(postId)
+
+  // 3. 构建消息树 (包含 OP -> OP追问 -> TopComment -> Children)
+  const messages = useMemo(() => {
+    if (!opPostData || !allComments.length || !focusCommentId) return []
+
+    // A. 构造 OP 消息
+    const opMessage: Comment = {
+      id: 'op-message',
+      post_id: postId,
+      author: opPostData.author,
+      content: opPostData.content,
+      content_cn: opPostData.content_cn,
+      upvotes: 0,
+      depth: -1,
+      parent_id: null,
+      created_at: new Date().toISOString(),
+      enrichment: { sentence_segments: null, cultural_notes: [] } as any,
+    }
+
+    const rootComment = allComments.find((c) => c.id === focusCommentId)
+    if (!rootComment) return [opMessage]
+
+    // B. 建立索引
+    const childrenMap = new Map<string, Comment[]>()
+    // 特殊处理：找出所有回复给 'op-message' 的本地消息
+    const opChildren: Comment[] = []
+
+    allComments.forEach((c) => {
+      if (c.parent_id === 'op-message') {
+        opChildren.push(c)
+      } else if (c.parent_id) {
+        if (!childrenMap.has(c.parent_id)) childrenMap.set(c.parent_id, [])
+        childrenMap.get(c.parent_id)?.push(c)
+      }
     })
 
-    return finalMessages
-  }, [allComments])
+    const result: Comment[] = []
+
+    // C. 压入 OP
+    result.push(opMessage)
+
+    // D. 压入 OP 的追问 (修复：之前这些消息因为没有遍历入口而丢失)
+    // 同样需要递归遍历 OP 的子孙（如果有 AI 回复用户追问）
+    const traverseOpChildren = (nodes: Comment[]) => {
+      nodes.sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      )
+      nodes.forEach((child) => {
+        result.push({
+          ...child,
+          replyToName: 'OP',
+          replyText: opMessage.content,
+        })
+        // 检查该追问是否有 AI 回复
+        if (childrenMap.has(child.id)) {
+          traverse(child.id) // 复用通用遍历逻辑
+        }
+      })
+    }
+    traverseOpChildren(opChildren)
+
+    // E. 压入 Top Comment (Sub-OP)
+    result.push({ ...rootComment, replyToName: 'OP' })
+
+    // F. 遍历 Top Comment 的子树
+    const traverse = (parentId: string) => {
+      const children = childrenMap.get(parentId) || []
+
+      children.sort((a, b) => {
+        // 本地消息 (用户追问/AI回复) 永远排在最前 (紧贴父节点)
+        if (a.isLocal && !b.isLocal) return -1
+        if (!a.isLocal && b.isLocal) return 1
+        if (a.isLocal && b.isLocal) {
+          return (
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          )
+        }
+        return (b.upvotes || 0) - (a.upvotes || 0)
+      })
+
+      children.forEach((child) => {
+        const parentNode =
+          allComments.find((p) => p.id === parentId) ||
+          (parentId === 'op-message' ? opMessage : null)
+        result.push({
+          ...child,
+          replyToName: parentNode?.author,
+          replyText: parentNode?.content,
+        })
+        traverse(child.id)
+      })
+    }
+    traverse(focusCommentId)
+
+    return result
+  }, [allComments, focusCommentId, opPostData])
+
+  // Scroll to bottom on new AI message
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg && lastMsg.isLocalAi && lastMsg.id !== flashMessageId) {
+      setFlashMessageId(lastMsg.id)
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({
+            top: scrollContainerRef.current.scrollHeight,
+            behavior: 'smooth',
+          })
+        }
+      }, 100)
+    }
+  }, [messages])
 
   const getInitials = (name: string) =>
     name ? name.substring(0, 2).toUpperCase() : '??'
 
-  const getSmartSentences = (
-    msg: ThreadMessage,
-    currentDifficulty: DifficultyLevel,
-  ) => {
-    let sourceText = msg.content
-    if (currentDifficulty === 'IELTS' && msg.contentIelts)
-      sourceText = msg.contentIelts
-    else if (currentDifficulty === 'CET6' && msg.contentCet6)
-      sourceText = msg.contentCet6
-    else if (currentDifficulty === 'CET4' && msg.contentCet4)
-      sourceText = msg.contentCet4
+  // --- 分句逻辑 ---
+  const getDisplaySentences = (msg: Comment) => {
+    let text = msg.content || ''
 
-    if (!sourceText) return []
-
-    try {
-      // @ts-ignore
-      const segmenterEn = new Intl.Segmenter('en', { granularity: 'sentence' })
-      const enSegments = [...segmenterEn.segment(sourceText)]
-        .map((s: any) => s.segment.trim())
-        .filter((s: string) => s.length > 0)
-
-      let zhSegments: string[] = []
-      const zhContent = msg.content_cn || msg.contentZh || msg.content_zh
-      if (zhContent) {
+    // 如果是 OP 消息，我们手动分句
+    if (msg.id === 'op-message') {
+      try {
         // @ts-ignore
-        const segmenterZh = new Intl.Segmenter('zh', {
-          granularity: 'sentence',
-        })
-        zhSegments = [...segmenterZh.segment(zhContent)]
-          .map((s: any) => s.segment.trim())
-          .filter((s: string) => s.length > 0)
+        const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
+        // OP 的中文统一放在最后一个气泡或者作为单独的逻辑，这里我们简单处理：
+        // 英文分句显示，中文不显示在气泡内（用底部兜底逻辑），或者
+        // 让每个英文分句都带个 null 中文，然后在最后一个气泡带上完整中文？
+        // 方案：OP 消息不带中文对照，整段翻译显示在气泡组的最下方（通过 isOp 判断）
+        return [...segmenter.segment(text)].map((s: any) => ({
+          en: s.segment.trim(),
+          zh: null,
+        }))
+      } catch {
+        return [{ en: text, zh: null }]
       }
-
-      return enSegments.map((en: string, i: number) => ({
-        en,
-        zh: zhSegments[i] || '',
-      }))
-    } catch (e) {
-      const fallbackEn = sourceText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [
-        sourceText,
-      ]
-      return fallbackEn.map((s) => ({ en: s.trim(), zh: msg.content_cn || '' }))
     }
+
+    let segments: { en: string; zh: string | null }[] = []
+    if (msg.enrichment?.sentence_segments) {
+      segments = msg.enrichment.sentence_segments
+    } else {
+      try {
+        // @ts-ignore
+        const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
+        segments = [...segmenter.segment(text)].map((s: any) => ({
+          en: s.segment.trim(),
+          zh: msg.content_cn,
+        }))
+      } catch {
+        segments = [{ en: text, zh: msg.content_cn }]
+      }
+    }
+    return segments.filter((s) => s.en && s.en.trim() !== '')
   }
 
-  // --- 渲染逻辑 ---
-  const renderFragmentWithGlow = (
-    text: string,
-    contextSentence: string,
-    analysis: any,
-  ) => {
-    if (!analysis || !text.includes(analysis.keyword)) {
-      return <InteractiveText text={text} contextSentence={contextSentence} />
-    }
-    const parts = text.split(analysis.keyword)
-    return (
-      <>
-        <InteractiveText text={parts[0]} contextSentence={contextSentence} />
-        <span
-          onClick={(e) => {
-            e.stopPropagation()
-            setActiveAnalysis(analysis)
-          }}
-          className="text-orange-400 font-black relative animate-glow cursor-help px-1 rounded-sm bg-orange-500/10 border-b-2 border-orange-500/40 mx-1">
-          {analysis.keyword}
-        </span>
-        <InteractiveText text={parts[1]} contextSentence={contextSentence} />
-      </>
-    )
+  const handleWordClick = async (word: string, context: string) => {
+    const cachedResult = await triggerAnalysis(word, context)
+    setViewingWord(word)
   }
 
   const handleSend = async () => {
@@ -256,9 +269,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         id: userQuestionId,
         post_id: postId,
         author: 'You',
-        author_avatar: '',
         content: questionContent,
-        content_zh: '',
+        content_cn: '',
         depth: (quotedMessage.depth || 0) + 1,
         parent_id: quotedMessage.id,
         upvotes: 0,
@@ -267,10 +279,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         isQuestion: true,
         replyToName: quotedMessage.author,
         replyText: quotedMessage.content,
-        replyAvatar: quotedMessage.author_avatar,
       }
-
       addLocalComment(postId, userQuestionMsg)
+
       setQuotedMessage(null)
       setIsAiMode(false)
 
@@ -289,34 +300,30 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             messages: [
               {
                 role: 'system',
-                content: `You are a cool English learning partner.`,
+                content: `You are simulating the persona of a Reddit user named "${quotedMessage.author}".
+                Context: "${quotedMessage.content}"
+                User asks: "${questionContent}"
+                Reply as "${quotedMessage.author}". Keep it short.`,
               },
-              {
-                role: 'user',
-                content: `Context: "${quotedMessage.content}"\nQuestion: ${questionContent}`,
-              },
+              { role: 'user', content: questionContent },
             ],
             stream: false,
           }),
         })
 
         const data = await response.json()
-        const aiReply =
-          data.choices?.[0]?.message?.content ||
-          "Sorry, I couldn't understand that."
+        const aiReply = data.choices?.[0]?.message?.content || '...'
 
         const aiAnswerMsg: Comment = {
           id: `local-ai-${Date.now()}`,
           post_id: postId,
-          author: 'Scrollish AI',
-          author_avatar:
-            'https://api.dicebear.com/7.x/bottts/svg?seed=ScrollishAI',
+          author: quotedMessage.author,
           content: aiReply,
-          content_zh: '',
+          content_cn: '',
           depth: userQuestionMsg.depth + 1,
           parent_id: userQuestionId,
           upvotes: 0,
-          created_at: new Date().toISOString(),
+          created_at: new Date(Date.now() + 100).toISOString(),
           isLocal: true,
           isLocalAi: true,
           replyToName: 'You',
@@ -330,31 +337,60 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         setIsAiLoading(false)
       }
     } else {
-      console.log('Send normal comment:', inputText)
+      console.log('Sending normal reply:', inputText)
       setInputText('')
-      setQuotedMessage(null)
     }
   }
 
-  const handleContainerClick = () => {
-    const now = Date.now()
-    if (now - lastTapRef.current < 300) {
-      if (navigator.vibrate) navigator.vibrate(50)
-      setShowTranslation((prev) => !prev)
+  // --- 跳转 ---
+  const handleJumpTo = (targetId: string | null) => {
+    if (!targetId) return
+    const el = document.getElementById(`msg-${targetId}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setHighlightedId(targetId)
+      setTimeout(() => setHighlightedId(null), 1500)
     }
-    lastTapRef.current = now
-    setContextMenu(null)
-    if (showSettings) setShowSettings(false)
+  }
+  const handleJumpToWithReturn = (
+    targetParentId: string | null,
+    currentMsgId: string,
+  ) => {
+    if (!targetParentId) return
+    setReturnToId(currentMsgId)
+    handleJumpTo(targetParentId)
+  }
+  const handleReturnJump = () => {
+    if (returnToId) {
+      handleJumpTo(returnToId)
+      setReturnToId(null)
+    }
   }
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (showSettings) setShowSettings(false)
+  // --- 交互 ---
+  const handleBgTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('input') || contextMenu) return
     if (scrollContainerRef.current?.scrollTop === 0) {
       touchStartRef.current = e.touches[0].clientY
       setIsDragging(true)
     }
+    bgPressTimerRef.current = setTimeout(() => {
+      if (navigator.vibrate) navigator.vibrate(50)
+      setShowGlobalTranslation(true)
+    }, 400)
   }
-  const handleTouchMove = (e: React.TouchEvent) => {
+  const handleBgTouchEnd = () => {
+    if (bgPressTimerRef.current) clearTimeout(bgPressTimerRef.current)
+    setShowGlobalTranslation(false)
+    setIsDragging(false)
+    if (pullY > 100) onBack()
+    setPullY(0)
+  }
+  const handleBgTouchMove = (e: React.TouchEvent) => {
+    if (bgPressTimerRef.current) {
+      clearTimeout(bgPressTimerRef.current)
+      bgPressTimerRef.current = null
+    }
     if (!isDragging) return
     const currentY = e.touches[0].clientY
     const diff = currentY - touchStartRef.current
@@ -362,93 +398,123 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       setPullY(Math.pow(diff, 0.8))
     }
   }
-  const handleTouchEnd = () => {
-    setIsDragging(false)
-    if (pullY > 100) {
-      if (navigator.vibrate) navigator.vibrate(10)
-      onBack()
-    }
-    setPullY(0)
-    touchStartRef.current = 0
-  }
-
-  const handleBubbleTouchStart = (e: React.TouchEvent, msg: ThreadMessage) => {
+  const handleBubbleTouchStart = (e: React.TouchEvent, msg: Comment) => {
     e.stopPropagation()
     const touch = e.touches[0]
-    pressStartPos.current = { x: touch.clientX, y: touch.clientY }
-    bubblePressTimer.current = setTimeout(() => {
+    const x = touch.clientX
+    const y = touch.clientY
+    bubblePressTimerRef.current = setTimeout(() => {
       if (navigator.vibrate) navigator.vibrate(50)
-      setContextMenu({ x: touch.clientX, y: touch.clientY, msg })
-    }, 600)
+      setContextMenu({ x, y, msg })
+    }, 500)
   }
-  const handleBubbleTouchMove = (e: React.TouchEvent) => {
-    e.stopPropagation()
-    const touch = e.touches[0]
-    const moveDist = Math.hypot(
-      touch.clientX - pressStartPos.current.x,
-      touch.clientY - pressStartPos.current.y,
-    )
-    if (moveDist > 10 && bubblePressTimer.current) {
-      clearTimeout(bubblePressTimer.current)
-      bubblePressTimer.current = null
+  const handleBubbleTouchEnd = () => {
+    if (bubblePressTimerRef.current) {
+      clearTimeout(bubblePressTimerRef.current)
+      bubblePressTimerRef.current = null
     }
   }
-  const handleBubbleTouchEnd = (e: React.TouchEvent) => {
-    e.stopPropagation()
-    if (bubblePressTimer.current) {
-      clearTimeout(bubblePressTimer.current)
-      bubblePressTimer.current = null
+  const handleBubbleTouchMove = () => {
+    if (bubblePressTimerRef.current) {
+      clearTimeout(bubblePressTimerRef.current)
+      bubblePressTimerRef.current = null
     }
   }
-
-  const handleCopy = () => {
-    if (contextMenu) {
-      navigator.clipboard.writeText(contextMenu.msg.content)
-      setContextMenu(null)
-    }
+  const toggleSingleTranslation = (msgId: string) => {
+    setExpandedTranslations((prev) => ({ ...prev, [msgId]: !prev[msgId] }))
+    setContextMenu(null)
   }
-  const handleQuoteAsk = () => {
-    if (contextMenu) {
-      setQuotedMessage(contextMenu.msg)
-      setIsAiMode(true)
-      setContextMenu(null)
-    }
+  const handleQuote = (msg: Comment) => {
+    setQuotedMessage(msg)
+    setIsAiMode(true)
+    setContextMenu(null)
   }
-  const handleDelete = () => {
-    if (contextMenu && (contextMenu.msg.isLocal || contextMenu.msg.isLocalAi)) {
-      deleteLocalComment(postId, contextMenu.msg.id)
-      setContextMenu(null)
-    }
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setContextMenu(null)
   }
-
-  const bgImage = postImage || fetchedImage
-  const isLoading = messages.length === 0
+  const handleBookmark = (msg: Comment) => {
+    if (navigator.vibrate) navigator.vibrate(50)
+    setContextMenu(null)
+  }
 
   return (
     <div
-      className={`fixed inset-0 z-[60] flex flex-col bg-[#0B0A09] overflow-hidden overscroll-none shadow-2xl ${!isDragging ? 'transition-transform duration-300 ease-out' : ''}`}
+      className={`fixed inset-0 z-[60] flex flex-col bg-[#0B0A09] transition-transform duration-300 ease-out max-w-[100vw] overflow-x-hidden touch-action-pan-y select-none`}
       style={{
         transform: `translateY(${pullY}px)`,
-        borderRadius: pullY > 0 ? `${Math.min(pullY / 10, 40)}px` : '0px',
+        borderRadius: pullY > 0 ? '40px' : '0px',
       }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onClick={handleContainerClick}>
-      {/* 1. 通知组件 (ChatRoom 新增) */}
-      <AnalysisNotification onView={(word) => setViewingWord(word)} />
-
-      {/* 2. 单词详情弹窗 */}
+      onTouchStart={handleBgTouchStart}
+      onTouchMove={handleBgTouchMove}
+      onTouchEnd={handleBgTouchEnd}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        return false
+      }} // 组件级兜底
+    >
       {viewingWord && (
         <WordDetailOverlay
           word={viewingWord}
           definition={getDefinition(viewingWord)}
           onClose={() => setViewingWord(null)}
-          onSave={(w) => console.log('Saved word:', w)}
         />
       )}
 
-      {/* Context Menu */}
+      <AnimatePresence>
+        {viewingNote && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed inset-x-4 bottom-24 z-[90] bg-[#1C1C1E] border border-yellow-500/30 p-5 rounded-2xl shadow-2xl"
+            onClick={() => setViewingNote(null)}>
+            <div className="flex items-center gap-2 mb-3 text-yellow-500">
+              <span className="material-symbols-outlined">lightbulb</span>
+              <span className="font-bold text-sm uppercase tracking-widest">
+                Cultural Insight
+              </span>
+            </div>
+            {viewingNote.map((note, idx) => (
+              <div key={idx} className="mb-3 last:mb-0">
+                <p className="text-white font-bold text-sm mb-1">
+                  {note.trigger_word}
+                </p>
+                <p className="text-white/70 text-sm leading-relaxed">
+                  {note.explanation}
+                </p>
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showGlobalTranslation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute top-20 left-1/2 -translate-x-1/2 bg-black/60 px-4 py-1 rounded-full text-white/80 text-xs font-bold z-50 backdrop-blur pointer-events-none">
+            Translation Visible
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {returnToId && (
+          <motion.button
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0 }}
+            onClick={handleReturnJump}
+            className="fixed bottom-24 right-4 z-[80] bg-white/10 backdrop-blur border border-white/20 text-white p-3 rounded-full shadow-lg flex items-center gap-2">
+            <span className="material-symbols-outlined">u_turn_left</span>
+            <span className="text-xs font-bold pr-1">Return</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {contextMenu && (
           <>
@@ -460,37 +526,56 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               }}
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="fixed z-[101] bg-[#1C1C1E] border border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[160px] flex flex-col"
+              className="fixed z-[101] bg-[#1C1C1E] border border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[180px] flex flex-col"
               style={{
-                left: Math.min(contextMenu.x, window.innerWidth - 170),
-                top: Math.min(contextMenu.y, window.innerHeight - 150),
+                left: Math.min(contextMenu.x, window.innerWidth - 190),
+                top: Math.min(contextMenu.y, window.innerHeight - 240),
               }}
               onClick={(e) => e.stopPropagation()}>
               <button
-                onClick={handleCopy}
-                className="w-full text-left px-4 py-3.5 text-white text-sm font-medium hover:bg-white/10 flex items-center gap-3 border-b border-white/5 active:bg-white/20">
+                onClick={() => handleQuote(contextMenu.msg)}
+                className="menu-item text-orange-400">
+                <span className="material-symbols-outlined text-[18px]">
+                  format_quote
+                </span>{' '}
+                Quote & Ask
+              </button>
+              <button
+                onClick={() => toggleSingleTranslation(contextMenu.msg.id)}
+                className="menu-item text-gray-200">
+                <span className="material-symbols-outlined text-[18px]">
+                  translate
+                </span>
+                {expandedTranslations[contextMenu.msg.id]
+                  ? 'Hide Translation'
+                  : 'Translate'}
+              </button>
+              <button
+                onClick={() => handleCopy(contextMenu.msg.content)}
+                className="menu-item text-gray-200">
                 <span className="material-symbols-outlined text-[18px]">
                   content_copy
                 </span>{' '}
                 Copy
               </button>
               <button
-                onClick={handleQuoteAsk}
-                className="w-full text-left px-4 py-3.5 text-white text-sm font-medium hover:bg-white/10 flex items-center gap-3 active:bg-white/20 border-b border-white/5">
-                <span className="material-symbols-outlined text-[18px] text-orange-500">
-                  auto_awesome
-                </span>
-                <span className="bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent font-bold">
-                  Quote & Ask
-                </span>
+                onClick={() => handleBookmark(contextMenu.msg)}
+                className="menu-item text-gray-200">
+                <span className="material-symbols-outlined text-[18px]">
+                  bookmark
+                </span>{' '}
+                Bookmark
               </button>
-              {(contextMenu.msg.isLocal || contextMenu.msg.isLocalAi) && (
+              {contextMenu.msg.isLocal && (
                 <button
-                  onClick={handleDelete}
-                  className="w-full text-left px-4 py-3.5 text-red-500 text-sm font-medium hover:bg-white/10 flex items-center gap-3 active:bg-white/20">
+                  onClick={() => {
+                    deleteLocalComment(postId, contextMenu.msg.id)
+                    setContextMenu(null)
+                  }}
+                  className="menu-item text-red-500">
                   <span className="material-symbols-outlined text-[18px]">
                     delete
                   </span>{' '}
@@ -502,309 +587,170 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Settings */}
-      <AnimatePresence>
-        {showSettings && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 z-[90] backdrop-blur-sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowSettings(false)
-              }}
-            />
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute top-0 bottom-0 right-0 w-64 bg-[#1C1C1E] border-l border-white/10 z-[95] shadow-2xl p-6 flex flex-col"
-              onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-white text-lg font-black mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined">tune</span>{' '}
-                Preferences
-              </h2>
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-3">
-                    Content Difficulty
-                  </h3>
-                  <div className="flex flex-col gap-2">
-                    {(
-                      ['Original', 'IELTS', 'CET6', 'CET4'] as DifficultyLevel[]
-                    ).map((level) => (
-                      <button
-                        key={level}
-                        onClick={() => setDifficulty(level)}
-                        className={`flex items-center justify-between p-3 rounded-xl border transition-all active:scale-95 ${
-                          difficulty === level
-                            ? 'bg-primary/20 border-primary/50 text-primary'
-                            : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
-                        }`}>
-                        <span className="text-sm font-bold">{level}</span>
-                        {difficulty === level && (
-                          <span className="material-symbols-outlined text-[16px]">
-                            check_circle
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Original DeepSeek Analysis Overlay (For Phrase Highlight) */}
-      {activeAnalysis && (
-        <div
-          className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-end animate-in fade-in duration-200"
-          onClick={() => setActiveAnalysis(null)}>
-          <div
-            className="w-full bg-[#1A1A1A] rounded-t-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom duration-300 border-t border-white/10"
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-orange-500 fill-[1]">
-                    auto_awesome
-                  </span>
-                  <span className="bg-orange-500/10 text-orange-500 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-widest">
-                    {activeAnalysis.type}
-                  </span>
-                </div>
-                <h3 className="text-2xl font-black text-white capitalize tracking-tight">
-                  {activeAnalysis.keyword}
-                </h3>
-              </div>
-              <button
-                onClick={() => setActiveAnalysis(null)}
-                className="text-white/40 bg-white/5 p-2 rounded-full">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <p className="text-gray-300 leading-relaxed text-[16px] font-medium">
-              {activeAnalysis.explanation}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Pull Indicator */}
-      <div
-        className="absolute top-0 left-0 right-0 h-16 flex items-center justify-center pointer-events-none transition-opacity duration-200 z-[70]"
-        style={{
-          opacity: Math.min(pullY / 80, 1),
-          transform: `translateY(-${30 - Math.min(pullY / 3, 30)}px)`,
-        }}>
-        <div className="flex flex-col items-center gap-1">
-          <span className="material-symbols-outlined text-white/50 text-[20px] animate-bounce">
-            keyboard_arrow_down
-          </span>
-          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
-            Release to Close
-          </span>
-        </div>
-      </div>
-
-      <div className="absolute inset-0 pointer-events-none">
-        {bgImage ? (
-          <div
-            className="absolute inset-[-50%] bg-cover bg-center blur-[100px] opacity-40 saturate-150 transform scale-110"
-            style={{ backgroundImage: `url("${bgImage}")` }}
-          />
-        ) : (
-          <div className="absolute inset-[-20%] bg-gradient-to-br from-purple-900/30 via-black to-blue-900/30 blur-[80px] opacity-60" />
-        )}
-        <div className="absolute inset-0 bg-black/80 mix-blend-multiply" />
-      </div>
-
-      <header className="relative z-50 bg-[#0B0A09]/80 backdrop-blur-xl border-b border-white/5 min-h-[64px] py-2 flex items-center px-4 shrink-0 justify-between">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-white/5 bg-[#0B0A09]/90 backdrop-blur shrink-0 relative z-50">
         <button
           onClick={(e) => {
             e.stopPropagation()
             onBack()
           }}
-          className="text-white flex items-center justify-center w-10 h-10 rounded-full bg-white/5 active:scale-90 transition-transform">
-          <span className="material-symbols-outlined text-[24px]">
-            keyboard_arrow_down
-          </span>
+          className="w-10 h-10 flex items-center justify-center text-white/60">
+          <span className="material-symbols-outlined">keyboard_arrow_down</span>
         </button>
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-white font-bold text-[15px] leading-tight">
-            Discussion
+        <div className="flex flex-col items-center">
+          <span className="text-white font-bold text-sm">Thread</span>
+          <span className="text-white/40 text-[10px]">
+            {messages.length - 1} comments
           </span>
-          <span className="text-white/40 text-[10px] font-medium tracking-wider leading-tight">
-            {isLoading ? 'Syncing...' : `${messages.length} replies`}
-          </span>
-          <div
-            className={`
-            px-3 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-[0.15em] transition-all mt-0.5
-            ${showTranslation ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-white/5 border-white/5 text-white/30'}
-          `}>
-            {showTranslation ? 'Bilingual On' : 'Double Tap Trans'}
-          </div>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setShowSettings(true)
-          }}
-          className="text-white flex items-center justify-center w-10 h-10 rounded-full bg-white/5 active:scale-90 transition-transform hover:bg-white/10">
-          <span className="material-symbols-outlined text-[20px]">
-            more_horiz
-          </span>
-        </button>
-      </header>
+        <div className="w-10" />
+      </div>
 
       <main
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar relative z-10 overflow-x-hidden">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <div className="w-8 h-8 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
-            <p className="text-orange-500/50 text-[10px] font-black tracking-widest uppercase animate-pulse">
-              Syncing Context Tree...
-            </p>
-          </div>
-        ) : (
-          <>
-            {messages.map((msg, index) => {
-              const smartSentences = getSmartSentences(msg, difficulty)
-              const isMe = msg.isQuestion
+        className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-[#0B0A09]">
+        {messages.map((msg, index) => {
+          const isOP = msg.id === 'op-message'
+          const isRoot = index === 1
+          const sentences = getDisplaySentences(msg)
+          const hasCulturalNote =
+            msg.enrichment?.cultural_notes &&
+            msg.enrichment.cultural_notes.length > 0
+          const isHighlighted = highlightedId === msg.id
+          const isUser = msg.isLocal && !msg.isLocalAi
+          const isFlash = flashMessageId === msg.id
 
-              return (
+          return (
+            <div
+              id={`msg-${msg.id}`}
+              key={msg.id}
+              className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''} ${isRoot || isOP ? 'mb-8' : ''} transition-all duration-500 ${isHighlighted ? 'bg-white/5 -mx-2 px-2 py-2 rounded-xl' : ''} ${isFlash ? 'animate-flash bg-white/10 rounded-xl' : ''}`}>
+              <div className="shrink-0">
                 <div
-                  key={`${msg.id}-${index}`}
-                  className={`flex items-start gap-3 group animate-in slide-in-from-bottom-4 duration-500 fill-mode-backwards ${isMe ? 'flex-row-reverse' : ''}`}
-                  style={{ animationDelay: `${index * 50}ms` }}>
-                  <div className="shrink-0 pt-1">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-700 to-black p-[1px] shadow-lg">
-                      {msg.author_avatar &&
-                      !msg.author_avatar.includes('default') &&
-                      !msg.isLocal ? (
-                        <div
-                          className="w-full h-full rounded-full bg-cover bg-center border border-white/10"
-                          style={{
-                            backgroundImage: `url("${msg.author_avatar}")`,
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full rounded-full bg-[#1A1A1A] flex items-center justify-center border border-white/10">
-                          <span className="text-[10px] font-black text-white/60">
-                            {msg.isAi || msg.isLocalAi
-                              ? 'AI'
-                              : msg.isLocal
-                                ? 'ME'
-                                : getInitials(msg.author)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border border-white/10 ${isRoot || isOP ? 'bg-gradient-to-tr from-orange-500 to-red-500 text-white w-10 h-10 text-xs' : 'bg-[#1A1A1A] text-white/60'}`}>
+                  {getInitials(msg.author)}
+                </div>
+                {(isRoot || isOP) && (
+                  <div className="h-full w-[1px] bg-white/10 mx-auto my-2" />
+                )}
+              </div>
 
+              <div
+                className={`flex flex-col gap-1 max-w-[85%] ${isUser ? 'items-end' : ''}`}>
+                <div
+                  className={`flex items-baseline gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
+                  <span
+                    className={`text-xs font-bold ${isRoot || isOP ? 'text-white text-sm' : 'text-gray-400'}`}>
+                    {msg.author}
+                  </span>
+                  {(isRoot || isOP) && (
+                    <span className="bg-orange-500/20 text-orange-500 text-[9px] px-1 rounded font-bold">
+                      OP
+                    </span>
+                  )}
+                  {msg.isLocalAi && (
+                    <span className="bg-blue-500/20 text-blue-400 text-[9px] px-1 rounded font-bold">
+                      AI
+                    </span>
+                  )}
+                </div>
+
+                {!isRoot && !isOP && msg.replyText && (
                   <div
-                    className={`flex flex-1 flex-col gap-1.5 min-w-0 max-w-full ${isMe ? 'items-end' : ''}`}>
-                    <div
-                      className={`flex items-baseline gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
-                      <span
-                        className={`text-[12px] font-bold truncate ${msg.isLocalAi ? 'text-orange-400' : msg.isQuestion ? 'text-white/90' : 'text-gray-300'}`}>
-                        {msg.author}
-                      </span>
-                      {(msg.isAi || msg.isLocalAi) && (
-                        <span className="bg-primary/20 text-primary text-[9px] px-1.5 py-0.5 rounded font-black uppercase">
-                          AI Bot
-                        </span>
-                      )}
-                    </div>
+                    onClick={() =>
+                      handleJumpToWithReturn(msg.parent_id, msg.id)
+                    }
+                    className={`text-[11px] text-white/40 italic border-l-2 border-white/20 pl-2 mb-1 active:bg-white/5 rounded-r cursor-pointer break-all whitespace-pre-wrap ${isUser ? 'text-right border-l-0 border-r-2 pr-2' : ''}`}>
+                    <span className="font-bold not-italic text-white/30 mr-1">
+                      @{msg.replyToName}
+                    </span>
+                    {msg.replyText}
+                  </div>
+                )}
 
-                    {msg.replyText && (
+                {sentences.map((s, i) => (
+                  <div
+                    key={i}
+                    onTouchStart={(e) => handleBubbleTouchStart(e, msg)}
+                    onTouchEnd={handleBubbleTouchEnd}
+                    onTouchMove={handleBubbleTouchMove}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className={`
+                           relative p-3 pr-6 rounded-2xl text-[15px] leading-relaxed border transition-all duration-300 select-none touch-callout-none
+                           ${isRoot || isOP ? 'bg-white/10 border-white/10 text-white' : 'bg-[#1A1A1A] border-white/5 text-gray-200'}
+                           ${hasCulturalNote ? 'shadow-[0_0_15px_rgba(234,179,8,0.2)] border-yellow-500/40 bg-gradient-to-br from-[#1A1A1A] to-yellow-900/20' : ''}
+                         `}>
+                    {hasCulturalNote && i === 0 && (
                       <div
-                        className={`mb-1 pl-2 pr-2 py-1.5 rounded-lg max-w-[95%] flex items-center gap-2 ${isMe ? 'border-r-[3px] border-orange-500/50 bg-orange-500/10 flex-row-reverse text-right' : 'border-l-[3px] border-white/20 bg-white/5 text-left'}`}>
-                        {/* Reply content ... */}
-                        <div className="flex flex-col min-w-0">
-                          <p className="text-[11px] text-white/40 line-clamp-1 italic">
-                            {msg.replyText}
-                          </p>
-                        </div>
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setViewingNote(msg.enrichment!.cultural_notes)
+                        }}
+                        className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg border-2 border-[#0B0A09] z-10 animate-pulse cursor-pointer active:scale-90">
+                        <span className="material-symbols-outlined text-[12px] text-black font-bold">
+                          lightbulb
+                        </span>
                       </div>
                     )}
 
-                    <div
-                      className={`flex flex-col gap-2 w-full cursor-pointer group-hover:brightness-110 transition-all select-none ${isMe ? 'items-end' : 'items-start'} ${msg.isQuestion ? 'opacity-90' : ''}`}
-                      onTouchStart={(e) => handleBubbleTouchStart(e, msg)}
-                      onTouchMove={handleBubbleTouchMove}
-                      onTouchEnd={handleBubbleTouchEnd}>
-                      {smartSentences.map(
-                        (sentenceData: any, bubbleIdx: number) => (
-                          <div
-                            key={bubbleIdx}
-                            className={`relative px-4 py-3 shadow-sm backdrop-blur-md border text-[15px] leading-relaxed font-medium break-words max-w-full ${bubbleIdx === 0 ? (isMe ? 'rounded-2xl rounded-tr-none' : 'rounded-2xl rounded-tl-none') : 'rounded-2xl'} ${msg.isQuestion ? 'bg-orange-500/20 border-orange-500/40 text-white' : 'bg-[#1A1A1A]/80 border-white/5 text-gray-100'}`}>
-                            {/* 渲染文本：这里将传入 contextSentence 确保 AI 理解语境 */}
-                            {renderFragmentWithGlow(
-                              sentenceData.en,
-                              msg.content,
-                              msg.analysis,
-                            )}
+                    <InteractiveText
+                      text={s.en || ''}
+                      contextSentence={s.en || ''}
+                      externalOnClick={(w) => handleWordClick(w, s.en)}
+                    />
 
-                            <AnimatePresence>
-                              {showTranslation &&
-                                sentenceData.zh &&
-                                !msg.isLocal && (
-                                  <motion.div
-                                    initial={{
-                                      height: 0,
-                                      opacity: 0,
-                                      marginTop: 0,
-                                    }}
-                                    animate={{
-                                      height: 'auto',
-                                      opacity: 1,
-                                      marginTop: 8,
-                                    }}
-                                    exit={{
-                                      height: 0,
-                                      opacity: 0,
-                                      marginTop: 0,
-                                    }}
-                                    className="overflow-hidden border-t border-white/10">
-                                    <p className="text-[13px] text-white/50 italic leading-relaxed pt-2">
-                                      {sentenceData.zh}
-                                    </p>
-                                  </motion.div>
-                                )}
-                            </AnimatePresence>
-                          </div>
-                        ),
-                      )}
-                    </div>
+                    <AnimatePresence>
+                      {(showGlobalTranslation ||
+                        expandedTranslations[msg.id]) &&
+                        // 如果有分句中文则显示，否则如果是OP且是最后一句，显示全文
+                        (s.zh ||
+                          (isOP &&
+                            i === sentences.length - 1 &&
+                            msg.content_cn)) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="mt-2 pt-2 border-t border-white/5 text-sm text-white/50 italic overflow-hidden">
+                            {s.zh || msg.content_cn}
+                          </motion.div>
+                        )}
+                    </AnimatePresence>
                   </div>
-                </div>
-              )
-            })}
-            <div className="h-32" />
-          </>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+
+        {isAiLoading && (
+          <div className="flex justify-start px-12 py-4 animate-in slide-in-from-bottom-2 fade-in">
+            <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+              <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" />
+              <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce delay-100" />
+              <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce delay-200" />
+              <span className="text-[10px] text-orange-500 font-bold ml-2">
+                {quotedMessage
+                  ? `${quotedMessage.author} is typing...`
+                  : 'AI is typing...'}
+              </span>
+            </div>
+          </div>
         )}
+
+        <div className="h-32" />
       </main>
 
-      {/* Input Area */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-50 bg-[#0B0A09]/90 backdrop-blur-xl border-t border-white/5 px-4 pt-3 pb-8 safe-area-bottom"
+        className="p-4 border-t border-white/5 bg-[#0B0A09] safe-area-bottom"
         onClick={(e) => e.stopPropagation()}>
         {quotedMessage && (
-          <div
-            className={`flex justify-between items-center rounded-t-xl px-4 py-2 mx-2 -mt-14 mb-2 border border-b-0 animate-in slide-in-from-bottom ${isAiMode ? 'bg-orange-500/10 border-orange-500/30' : 'bg-white/5 border-white/5'}`}>
+          <div className="flex justify-between items-center bg-white/5 rounded-t-lg p-2 mb-2 border border-white/5 border-b-0 animate-in slide-in-from-bottom">
             <div className="flex flex-col max-w-[85%]">
               <span
                 className={`text-[9px] font-black uppercase tracking-widest ${isAiMode ? 'text-orange-500' : 'text-white/30'}`}>
-                {isAiMode ? '✨ Ask AI about this' : 'Replying to'}
+                {isAiMode ? `✨ Ask ${quotedMessage.author}` : 'Replying to'}
               </span>
-              <span className="text-[11px] text-white/70 truncate font-medium mt-0.5">
+              <span className="text-[11px] text-white/70 truncate font-medium mt-0.5 break-all">
                 "{quotedMessage.content}"
               </span>
             </div>
@@ -813,41 +759,45 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                 setQuotedMessage(null)
                 setIsAiMode(false)
               }}>
-              <span className="material-symbols-outlined text-[16px] text-white/40">
+              <span className="material-symbols-outlined text-sm text-white/50">
                 close
               </span>
             </button>
           </div>
         )}
-        <div className="flex items-center gap-3">
-          <div
-            className={`flex-1 rounded-full h-11 flex items-center px-4 border transition-all ${isAiMode ? 'bg-orange-500/5 border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-white/10 border-white/5 focus-within:bg-white/15'}`}>
-            <input
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              className="bg-transparent border-none outline-none text-white text-[16px] w-full placeholder-white/30"
-              placeholder={
-                isAiMode
-                  ? 'E.g. Explain the grammar...'
-                  : 'Add to the discussion...'
-              }
-            />
-          </div>
+        <div className="flex gap-3 items-center">
+          <input
+            className={`flex-1 h-10 rounded-full px-4 text-white text-sm outline-none border transition-colors ${isAiMode ? 'bg-orange-500/10 border-orange-500/50' : 'bg-white/5 border-white/5 focus:border-white/20'}`}
+            placeholder={
+              isAiMode ? `Ask ${quotedMessage?.author}...` : 'Reply...'
+            }
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          />
           <button
             onClick={handleSend}
-            disabled={!inputText.trim()}
-            className={`w-11 h-11 rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform ${!inputText.trim() ? 'opacity-50 grayscale' : ''} ${isAiMode ? 'bg-gradient-to-tr from-orange-400 to-red-500' : 'bg-gradient-to-tr from-orange-500 to-red-600'}`}>
+            className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isAiMode ? 'bg-gradient-to-tr from-orange-500 to-red-500' : 'bg-orange-600'}`}>
             <span className="material-symbols-outlined text-[20px]">
               {isAiMode ? 'auto_awesome' : 'send'}
             </span>
           </button>
         </div>
       </div>
+
       <style>{`
-        @keyframes glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-        .animate-glow { animation: glow 2s ease-in-out infinite; }
-        .fill-mode-backwards { animation-fill-mode: backwards; }
+         .menu-item {
+            @apply w-full text-left px-4 py-3.5 text-sm font-medium hover:bg-white/10 flex items-center gap-3 border-b border-white/5 active:bg-white/20 transition-colors;
+         }
+         .touch-callout-none { -webkit-touch-callout: none; }
+         @keyframes flash {
+            0% { background-color: rgba(255,255,255,0.1); }
+            50% { background-color: rgba(59, 130, 246, 0.2); }
+            100% { background-color: rgba(255,255,255,0.05); }
+         }
+         .animate-flash {
+            animation: flash 1s ease-out;
+         }
       `}</style>
     </div>
   )

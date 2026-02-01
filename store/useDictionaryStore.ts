@@ -1,22 +1,30 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-// 配置区域
 const SILICONFLOW_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'
-const AI_MODEL = 'deepseek-ai/DeepSeek-V2.5'
+const AI_MODEL = 'Qwen/Qwen2.5-7B-Instruct'
+
+export interface DictionaryResult {
+  word: string
+  ipa: string
+  context_meaning_cn: string
+  context_meaning_en: string
+  definition_cn: string
+  definition_en: string
+  roots: string
+}
 
 interface DictionaryState {
-  // 正在分析的词
   analyzingWords: string[]
-  // 已分析完成的词缓存: { "word": "definition" }
-  cachedDefinitions: Record<string, string>
-  // 当前准备好展示的通知
-  latestReadyWord: string | null
+  cachedDefinitions: Record<string, DictionaryResult>
 
   // Actions
-  triggerAnalysis: (word: string, context: string) => Promise<void>
-  dismissNotification: () => void
-  getDefinition: (word: string) => string | null
+  triggerAnalysis: (
+    word: string,
+    context: string,
+  ) => Promise<DictionaryResult | null>
+  forgetWord: (word: string) => void
+  getDefinition: (word: string) => DictionaryResult | null
   isAnalyzing: (word: string) => boolean
 }
 
@@ -25,32 +33,22 @@ export const useDictionaryStore = create<DictionaryState>()(
     (set, get) => ({
       analyzingWords: [],
       cachedDefinitions: {},
-      latestReadyWord: null,
 
       triggerAnalysis: async (word, context) => {
         const { analyzingWords, cachedDefinitions } = get()
 
-        // 1. 如果已经有缓存，直接触发通知（让用户可以再次查看）
         if (cachedDefinitions[word]) {
-          set({ latestReadyWord: word })
-          return
+          return cachedDefinitions[word]
         }
 
-        // 2. 如果正在分析，忽略重复请求
-        if (analyzingWords.includes(word)) return
+        if (analyzingWords.includes(word)) return null
 
-        // 3. 标记为正在分析
         set({ analyzingWords: [...analyzingWords, word] })
 
         try {
           const apiKey = import.meta.env.VITE_SILICONFLOW_API_KEY
-          if (!apiKey) {
-            console.error('Missing API Key')
-            // 模拟一个错误或回退
-            throw new Error('No API Key')
-          }
+          if (!apiKey) throw new Error('No API Key')
 
-          // 4. 真实的 LLM 调用
           const response = await fetch(SILICONFLOW_API_URL, {
             method: 'POST',
             headers: {
@@ -62,56 +60,80 @@ export const useDictionaryStore = create<DictionaryState>()(
               messages: [
                 {
                   role: 'system',
-                  content: `You are a concise English dictionary assistant for non-native speakers.
-                  Task: Explain the meaning of the target word based on the provided context sentence.
-                  Output Format:
-                  1. Pronunciation (IPA) if possible.
-                  2. Definition: A short, clear explanation of what the word means *in this specific context*.
-                  3. Nuance: A brief note on why this word was chosen (e.g., tone, slang, formal) if applicable.
-                  
-                  Keep it under 100 words. Use emojis sparingly to make it friendly.`,
+                  content: `You are a linguistic expert API. 
+                  Analyze the target word in the given context.
+                  Output strictly valid JSON with this structure:
+                  {
+                    "ipa": "pronunciation",
+                    "context_meaning_cn": "Meaning in this specific sentence (Chinese)",
+                    "context_meaning_en": "Meaning in this specific sentence (English)",
+                    "definition_cn": "General dictionary definition (Chinese)",
+                    "definition_en": "General dictionary definition (English)",
+                    "roots": "Etymology/Roots breakdown (e.g., 're-(again) + act(do)')"
+                  }
+                  Do not output markdown code blocks, just the raw JSON string.`,
                 },
                 {
                   role: 'user',
-                  content: `Target Word: "${word}"
-                  Context Sentence: "${context}"`,
+                  content: `Word: "${word}"\nContext: "${context}"`,
                 },
               ],
               stream: false,
+              temperature: 0.3,
             }),
           })
 
           const data = await response.json()
-          const aiDefinition =
-            data.choices?.[0]?.message?.content ||
-            'Sorry, could not define this word.'
+          const content = data.choices?.[0]?.message?.content || '{}'
+          const jsonStr = content.replace(/```json|```/g, '').trim()
 
-          // 5. 更新状态：存入缓存，移除 Loading，触发通知
+          let parsedResult: DictionaryResult
+          try {
+            parsedResult = JSON.parse(jsonStr)
+          } catch (e) {
+            parsedResult = {
+              word,
+              ipa: '',
+              roots: '',
+              context_meaning_cn: '解析失败，请重试',
+              context_meaning_en: 'Parse failed',
+              definition_cn: '',
+              definition_en: '',
+            }
+          }
+          parsedResult.word = word
+
           set((state) => ({
             cachedDefinitions: {
               ...state.cachedDefinitions,
-              [word]: aiDefinition,
+              [word]: parsedResult,
             },
             analyzingWords: state.analyzingWords.filter((w) => w !== word),
-            latestReadyWord: word,
           }))
+          return parsedResult
         } catch (error) {
-          console.error('Dictionary API Error:', error)
-          // 发生错误时，移除 Loading 状态，避免卡死
+          console.error('Dict API Error:', error)
           set((state) => ({
             analyzingWords: state.analyzingWords.filter((w) => w !== word),
           }))
+          return null
         }
       },
 
-      dismissNotification: () => set({ latestReadyWord: null }),
+      forgetWord: (word) => {
+        set((state) => {
+          const newCache = { ...state.cachedDefinitions }
+          delete newCache[word]
+          return { cachedDefinitions: newCache }
+        })
+      },
+
       getDefinition: (word) => get().cachedDefinitions[word] || null,
       isAnalyzing: (word) => get().analyzingWords.includes(word),
     }),
     {
-      name: 'scrollish-dictionary-cache',
+      name: 'scrollish-dict-v3',
       storage: createJSONStorage(() => localStorage),
-      // 只持久化缓存，不持久化正在分析的状态和通知
       partialize: (state) => ({ cachedDefinitions: state.cachedDefinitions }),
     },
   ),

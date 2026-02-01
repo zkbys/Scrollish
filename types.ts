@@ -1,56 +1,93 @@
+// types.ts
+
 export enum Page {
-  Home = 'home',
-  TopicHub = 'topichub',
-  ChatRoom = 'chatroom',
-  Explore = 'explore',
-  Study = 'study',
-  Profile = 'profile',
-  Preview = 'preview',
-  CommunityDetail = 'community_detail',
+  Home = 'Home',
+  TopicHub = 'TopicHub',
+  ChatRoom = 'ChatRoom',
+  Profile = 'Profile',
+  Study = 'Study',
+  Explore = 'Explore',
+  CommunityDetail = 'CommunityDetail',
 }
 
-export interface Post {
+/**
+ * 单词高亮与释义结构
+ */
+export interface Highlight {
+  word: string
+  meaning: string
+}
+
+/**
+ * 难度等级内容
+ */
+export interface Variant {
+  content: string
+  highlights: Highlight[]
+}
+
+/**
+ * 文化背景或俚语解析
+ */
+export interface CulturalNote {
+  trigger_word: string
+  explanation: string
+}
+
+/**
+ * 完整的评论增强数据 (来自 comments_enrichment 表)
+ */
+export interface EnrichmentData {
+  comment_id: string
+  corrected_content: string
+  sentence_segments: { en: string; zh: string }[]
+  difficulty_variants: {
+    Mixed?: Variant
+    PrimarySchool?: Variant
+    MiddleSchool?: Variant
+    HighSchool?: Variant
+    CET4?: Variant
+    CET6?: Variant
+    IELTS?: Variant
+    [key: string]: Variant | undefined
+  }
+  cultural_notes: CulturalNote[]
+}
+
+/**
+ * 联表查询后的完整评论对象
+ */
+export interface Comment {
   id: string
-  user: string
-  avatar: string
-  titleEn: string
-  titleZh: string
-  hashtags: string[]
-  image: string
-  videoUrl?: string | null // 确保有这个
-  image_type?: string
-  subreddit?: string
-  likes: string
-  stars: string
-  comments: number
-  community_id?: string
+  post_id: string
+  parent_id: string | null
+  author: string
+  author_avatar?: string // 兼容前端现有逻辑
+  content: string
+  content_cn: string
+  upvotes: number
+  depth: number
+  created_at: string
+
+  // 业务逻辑字段
+  isLocal?: boolean
+  isQuestion?: boolean
+  isLocalAi?: boolean
+  replyToName?: string
+  replyText?: string
+  replyAvatar?: string
+
+  // 增强数据
+  enrichment?: EnrichmentData
 }
 
 export interface ChatMessage {
   id: string
-  user: string
-  avatar: string
-  contentEn: string
-  contentZh?: string
-  level: number // 1: Main, 2: Reply, 3+: Deep Reply
-  isAi?: boolean
-  isMe?: boolean
-  replyTo?: string
-  replyContent?: string
+  role: 'user' | 'assistant'
+  content: string
   analysis?: {
     keyword: string
-    type: 'slang' | 'culture' | 'grammar' | 'irony'
+    type: string
     explanation: string
   }
-}
-
-export interface GroupChat {
-  id: string
-  user: string
-  avatar: string
-  lastMessage: string
-  time: string
-  isActive?: boolean
-  isAi?: boolean
-  previewMessages?: { text: string; isMe?: boolean }[]
 }

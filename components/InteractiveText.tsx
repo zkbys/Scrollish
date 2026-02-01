@@ -3,15 +3,16 @@ import { useDictionaryStore } from '../store/useDictionaryStore'
 
 interface InteractiveTextProps {
   text: string
-  contextSentence?: string // 新增：传入完整句子作为上下文
-  onWordClick?: (word: string) => void // 可选，主要由 Store 接管
+  contextSentence?: string
   className?: string
+  externalOnClick?: (word: string) => void // 新增
 }
 
 const InteractiveText: React.FC<InteractiveTextProps> = ({
   text,
-  contextSentence = '', // 默认为空，最好从父组件传入
+  contextSentence = '',
   className = '',
+  externalOnClick,
 }) => {
   const { triggerAnalysis, isAnalyzing, cachedDefinitions } =
     useDictionaryStore()
@@ -30,11 +31,15 @@ const InteractiveText: React.FC<InteractiveTextProps> = ({
     }
   }, [text])
 
+  // 在 InteractiveText 组件内修改 handleWordClick
   const handleWordClick = (word: string) => {
-    if (navigator.vibrate) navigator.vibrate(20)
-    // 触发 Store 的异步动作
-    // 如果没有传入专门的 contextSentence，就用当前 text
-    triggerAnalysis(word, contextSentence || text)
+    if (externalOnClick) {
+      externalOnClick(word) // 优先使用外部控制
+    } else {
+      // 默认行为
+      if (navigator.vibrate) navigator.vibrate(20)
+      triggerAnalysis(word, contextSentence || text)
+    }
   }
 
   return (
@@ -54,19 +59,15 @@ const InteractiveText: React.FC<InteractiveTextProps> = ({
                 handleWordClick(word)
               }}
               className={`
-                relative inline-block cursor-pointer transition-all duration-300 rounded-sm px-0.5 -mx-0.5
+                relative inline-block cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5
                 hover:bg-white/10 active:scale-95
                 ${isLoading ? 'animate-pulse text-orange-400/80' : ''} 
-                ${isReady ? 'text-white' : ''}
+                ${isReady ? 'decoration-green-500 decoration-wavy underline underline-offset-4 decoration-2' : ''}
               `}>
               {word}
               {/* Loading 状态下的下划线动画 */}
               {isLoading && (
                 <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-orange-500/50 animate-progress-line" />
-              )}
-              {/* Ready 状态下的标记 (可选，比如一个小点) */}
-              {isReady && !isLoading && (
-                <span className="absolute -top-0.5 -right-0.5 w-1 h-1 bg-green-500 rounded-full shadow-[0_0_4px_#22c55e]" />
               )}
             </span>
           )

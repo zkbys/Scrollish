@@ -1,126 +1,83 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
 import { supabase } from '../supabase'
-
-// 1. 扩展 Comment 类型，支持引用信息和本地状态
-export interface Comment {
-  id: string
-  post_id: string
-  author: string
-  author_avatar?: string
-  content: string
-  content_zh?: string // 兼容旧字段
-  content_cn?: string // 数据库新字段
-  upvotes: number
-  depth: number
-  parent_id: string | null
-  created_at: string
-  is_ai?: boolean
-  analysis?: any
-
-  // [新增] 引用相关字段
-  replyToName?: string
-  replyText?: string
-  replyAvatar?: string // [新增] 支持引用头像
-
-  // [新增] 本地状态字段
-  isLocal?: boolean
-  isQuestion?: boolean // 标记是否为用户提问
-  isLocalAi?: boolean // 标记是否为本地 AI
-}
+import { Comment } from '../types'
 
 interface CommentState {
-  commentsByPost: Record<string, Comment[]>
-  // [新增] 本地消息存储 (key: postId)
-  localComments: Record<string, Comment[]>
+  comments: Record<string, Comment[]>
   isLoading: Record<string, boolean>
-
-  fetchComments: (postId: string, force?: boolean) => Promise<void>
+  fetchComments: (postId: string) => Promise<void>
   getComments: (postId: string) => Comment[]
-
-  // [新增] 本地消息操作
   addLocalComment: (postId: string, comment: Comment) => void
   deleteLocalComment: (postId: string, commentId: string) => void
 }
 
-export const useCommentStore = create<CommentState>()(
-  persist(
-    (set, get) => ({
-      commentsByPost: {},
-      localComments: {}, // 初始化
-      isLoading: {},
+export const useCommentStore = create<CommentState>((set, get) => ({
+  comments: {},
+  isLoading: {},
 
-      getComments: (postId: string) => {
-        const dbComments = get().commentsByPost[postId] || []
-        const localComments = get().localComments[postId] || []
-        // 合并 DB 消息和本地消息
-        // 注意：这里简单的合并在 UI 层还需要通过 parent_id 重组树状结构
-        return [...dbComments, ...localComments]
-      },
+  fetchComments: async (postId) => {
+    if (get().comments[postId]?.length > 0) return
 
-      addLocalComment: (postId, comment) => {
-        set((state) => {
-          const current = state.localComments[postId] || []
-          return {
-            localComments: {
-              ...state.localComments,
-              [postId]: [...current, comment],
-            },
-          }
-        })
-      },
+    set((state) => ({ isLoading: { ...state.isLoading, [postId]: true } }))
 
-      deleteLocalComment: (postId, commentId) => {
-        set((state) => {
-          const current = state.localComments[postId] || []
-          return {
-            localComments: {
-              ...state.localComments,
-              [postId]: current.filter((c) => c.id !== commentId),
-            },
-          }
-        })
-      },
+    try {
+      // 联表查询 comments_enrichment
+      const { data, error } = await supabase
+        .from('comments')
+        .select(
+          `
+          *,
+          enrichment:comments_enrichment (
+            corrected_content,
+            sentence_segments,
+            difficulty_variants,
+            cultural_notes
+          )
+        `,
+        )
+        .eq('post_id', postId)
+        .order('upvotes', { ascending: false })
 
-      fetchComments: async (postId: string, force = false) => {
-        const existingData = get().commentsByPost[postId]
-        if (existingData && existingData.length > 0 && !force) return
+      if (error) throw error
 
-        set((state) => ({
-          isLoading: { ...state.isLoading, [postId]: true },
-        }))
+      // 处理数据，确保 enrichment 是对象而不是数组（Supabase 1:1 关系有时返回数组）
+      const formattedData = (data || []).map((item: any) => ({
+        ...item,
+        enrichment: Array.isArray(item.enrichment)
+          ? item.enrichment[0]
+          : item.enrichment,
+      }))
 
-        try {
-          const { data, error } = await supabase
-            .from('comments')
-            .select('*')
-            .eq('post_id', postId)
-            .order('upvotes', { ascending: false })
+      set((state) => ({
+        comments: { ...state.comments, [postId]: formattedData as Comment[] },
+      }))
+    } catch (error) {
+      console.error('Error fetching comments:', error)
+    } finally {
+      set((state) => ({ isLoading: { ...state.isLoading, [postId]: false } }))
+    }
+  },
 
-          if (error) throw error
+  getComments: (postId) => get().comments[postId] || [],
 
-          if (data) {
-            set((state) => ({
-              commentsByPost: { ...state.commentsByPost, [postId]: data },
-            }))
-          }
-        } catch (err) {
-          console.error('Fetch comments failed:', err)
-        } finally {
-          set((state) => ({
-            isLoading: { ...state.isLoading, [postId]: false },
-          }))
-        }
-      },
-    }),
-    {
-      name: 'scrollish-comments-storage', // LocalStorage Key
-      storage: createJSONStorage(() => localStorage),
-      // [关键] 确保持久化 localComments
-      partialize: (state) => ({
-        commentsByPost: state.commentsByPost,
-        localComments: state.localComments,
-      }),
-    },
-  ),
-)
+  addLocalComment: (postId, comment) => {
+    set((state) => {
+      const current = state.comments[postId] || []
+      return {
+        comments: { ...state.comments, [postId]: [...current, comment] },
+      }
+    })
+  },
+
+  deleteLocalComment: (postId, commentId) => {
+    set((state) => {
+      const current = state.comments[postId] || []
+      return {
+        comments: {
+          ...state.comments,
+          [postId]: current.filter((c) => c.id !== commentId),
+        },
+      }
+    })
+  },
+}))
