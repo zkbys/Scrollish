@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../supabase'
 import { ChatMessage } from '../types'
 import { useCommentStore, Comment } from '../store/useCommentStore'
+import { useDictionaryStore } from '../store/useDictionaryStore'
 import InteractiveText from '../components/InteractiveText'
 import WordDetailOverlay from '../components/WordDetailOverlay'
+import AnalysisNotification from '../components/AnalysisNotification'
 
 // --- 配置区域 ---
 const SILICONFLOW_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'
@@ -17,13 +19,11 @@ interface ChatRoomProps {
   onBack: () => void
 }
 
-// 扩展消息类型，继承自数据库的 Comment 类型
 interface ThreadMessage extends Comment {
   sentenceData?: { en: string; zh: string }[]
   contentIelts?: string
   contentCet6?: string
   contentCet4?: string
-  // 兼容旧的 UI 逻辑字段 (可选)
   contentZh?: string
 }
 
@@ -37,9 +37,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 }) => {
   const [fetchedImage, setFetchedImage] = useState<string>('')
 
-  // --- Store Hooks ---
+  // --- Stores ---
   const { getComments, fetchComments, addLocalComment, deleteLocalComment } =
     useCommentStore()
+  // 引入 Dictionary Store (InteractiveText 会自动使用，但我们需要 setViewingWord)
+  const { getDefinition } = useDictionaryStore()
 
   // --- 交互状态 ---
   const [quotedMessage, setQuotedMessage] = useState<ThreadMessage | null>(null)
@@ -47,7 +49,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     ChatMessage['analysis'] | null
   >(null)
   const [inputText, setInputText] = useState('')
-  const [selectedWord, setSelectedWord] = useState<string | null>(null)
+
+  // 新增：单词查看状态
+  const [viewingWord, setViewingWord] = useState<string | null>(null)
 
   // AI 模式状态
   const [isAiMode, setIsAiMode] = useState(false)
@@ -90,18 +94,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }, [postId, postImage, fetchComments])
 
-  // 直接获取所有评论（包含 Local）
   const allComments = getComments(postId) as ThreadMessage[]
 
-  // --- 消息流合并与插入 ---
   const messages = useMemo(() => {
     if (!allComments || allComments.length === 0) return []
 
-    // 1. 分离 DB 消息和 Local 消息
     const dbMessages: ThreadMessage[] = []
     const localRepliesMap = new Map<string, ThreadMessage[]>()
 
-    // 第一次遍历：建立映射和分类
     allComments.forEach((c) => {
       if (c.isLocal || c.isLocalAi) {
         const target = c.parent_id || 'root'
@@ -112,11 +112,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       }
     })
 
-    // 构建 DB 消息树 (DFS)
     const commentMap = new Map<string, ThreadMessage>()
     const childrenMap = new Map<string, ThreadMessage[]>()
 
-    // 仅针对 DB 消息构建基础骨架
     allComments.forEach((c) => {
       if (!c.isLocal && !c.isLocalAi) {
         commentMap.set(c.id, c)
@@ -148,18 +146,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       children.forEach((child) => traverse(child))
     }
 
-    // 找到根节点开始遍历
     allComments
       .filter((c) => c.depth === 0 && !c.isLocal && !c.isLocalAi)
       .sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0))
       .forEach((root) => traverse(root))
 
-    // 3. 递归插入本地消息
     const finalMessages: ThreadMessage[] = []
-
     const appendMessageWithLocalReplies = (msg: ThreadMessage) => {
       finalMessages.push(msg)
-
       if (localRepliesMap.has(msg.id)) {
         const replies = localRepliesMap.get(msg.id)!
         replies.forEach((reply) => {
@@ -196,8 +190,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       // @ts-ignore
       const segmenterEn = new Intl.Segmenter('en', { granularity: 'sentence' })
       const enSegments = [...segmenterEn.segment(sourceText)]
-        .map((s) => s.segment.trim())
-        .filter((s) => s.length > 0)
+        .map((s: any) => s.segment.trim())
+        .filter((s: string) => s.length > 0)
 
       let zhSegments: string[] = []
       const zhContent = msg.content_cn || msg.contentZh || msg.content_zh
@@ -207,11 +201,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           granularity: 'sentence',
         })
         zhSegments = [...segmenterZh.segment(zhContent)]
-          .map((s) => s.segment.trim())
-          .filter((s) => s.length > 0)
+          .map((s: any) => s.segment.trim())
+          .filter((s: string) => s.length > 0)
       }
 
-      return enSegments.map((en, i) => ({
+      return enSegments.map((en: string, i: number) => ({
         en,
         zh: zhSegments[i] || '',
       }))
@@ -223,15 +217,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }
 
-  // --- 关键修改：结合分词组件和高亮逻辑 ---
-  const renderFragmentWithGlow = (text: string, analysis: any) => {
+  // --- 渲染逻辑 ---
+  const renderFragmentWithGlow = (
+    text: string,
+    contextSentence: string,
+    analysis: any,
+  ) => {
     if (!analysis || !text.includes(analysis.keyword)) {
-      return <InteractiveText text={text} onWordClick={setSelectedWord} />
+      return <InteractiveText text={text} contextSentence={contextSentence} />
     }
     const parts = text.split(analysis.keyword)
     return (
       <>
-        <InteractiveText text={parts[0]} onWordClick={setSelectedWord} />
+        <InteractiveText text={parts[0]} contextSentence={contextSentence} />
         <span
           onClick={(e) => {
             e.stopPropagation()
@@ -240,12 +238,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           className="text-orange-400 font-black relative animate-glow cursor-help px-1 rounded-sm bg-orange-500/10 border-b-2 border-orange-500/40 mx-1">
           {analysis.keyword}
         </span>
-        <InteractiveText text={parts[1]} onWordClick={setSelectedWord} />
+        <InteractiveText text={parts[1]} contextSentence={contextSentence} />
       </>
     )
   }
 
-  // --- API 调用与发送逻辑 ---
   const handleSend = async () => {
     if (!inputText.trim()) return
 
@@ -255,7 +252,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       setIsAiLoading(true)
 
       const userQuestionId = `local-q-${Date.now()}`
-
       const userQuestionMsg: Comment = {
         id: userQuestionId,
         post_id: postId,
@@ -275,7 +271,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       }
 
       addLocalComment(postId, userQuestionMsg)
-
       setQuotedMessage(null)
       setIsAiMode(false)
 
@@ -294,23 +289,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             messages: [
               {
                 role: 'system',
-                content: `You are a cool, knowledgeable English learning partner. 
-                Your style is casual, witty, and native-like. 
-                When answering:
-                1. Focus on the nuances, slang, and cultural context of the quoted sentence.
-                2. Avoid stiff textbook definitions unless specifically asked.
-                3. Use emojis to make it fun.
-                4. Keep explanations concise and punchy.`,
+                content: `You are a cool English learning partner.`,
               },
               {
                 role: 'user',
-                content: `Here is the context (a sentence from a social media discussion):
-                "${quotedMessage.content}"
-                
-                My Question: 
-                ${questionContent}
-                
-                Please answer my question specifically based on the context above.`,
+                content: `Context: "${quotedMessage.content}"\nQuestion: ${questionContent}`,
               },
             ],
             stream: false,
@@ -353,7 +336,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }
 
-  // --- 手势交互 ---
   const handleContainerClick = () => {
     const now = Date.now()
     if (now - lastTapRef.current < 300) {
@@ -390,7 +372,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     touchStartRef.current = 0
   }
 
-  // 气泡长按
   const handleBubbleTouchStart = (e: React.TouchEvent, msg: ThreadMessage) => {
     e.stopPropagation()
     const touch = e.touches[0]
@@ -454,16 +435,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onClick={handleContainerClick}>
-      {/* 0. Word Detail Overlay */}
-      {selectedWord && (
+      {/* 1. 通知组件 (ChatRoom 新增) */}
+      <AnalysisNotification onView={(word) => setViewingWord(word)} />
+
+      {/* 2. 单词详情弹窗 */}
+      {viewingWord && (
         <WordDetailOverlay
-          word={selectedWord}
-          onClose={() => setSelectedWord(null)}
+          word={viewingWord}
+          definition={getDefinition(viewingWord)}
+          onClose={() => setViewingWord(null)}
           onSave={(w) => console.log('Saved word:', w)}
         />
       )}
 
-      {/* 1. Context Menu */}
+      {/* Context Menu */}
       <AnimatePresence>
         {contextMenu && (
           <>
@@ -502,7 +487,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   Quote & Ask
                 </span>
               </button>
-
               {(contextMenu.msg.isLocal || contextMenu.msg.isLocalAi) && (
                 <button
                   onClick={handleDelete}
@@ -518,7 +502,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 2. Settings Sidebar */}
+      {/* Settings */}
       <AnimatePresence>
         {showSettings && (
           <>
@@ -576,7 +560,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 3. Word Analysis Overlay (Deprecated in favor of WordDetailOverlay but kept for 'Glow' logic) */}
+      {/* Original DeepSeek Analysis Overlay (For Phrase Highlight) */}
       {activeAnalysis && (
         <div
           className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-end animate-in fade-in duration-200"
@@ -611,7 +595,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         </div>
       )}
 
-      {/* Top Pull Indicator */}
+      {/* Pull Indicator */}
       <div
         className="absolute top-0 left-0 right-0 h-16 flex items-center justify-center pointer-events-none transition-opacity duration-200 z-[70]"
         style={{
@@ -737,48 +721,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                           AI Bot
                         </span>
                       )}
-                      {msg.isQuestion && (
-                        <span className="bg-white/10 text-white/50 text-[9px] px-1.5 py-0.5 rounded font-black uppercase">
-                          Question
-                        </span>
-                      )}
                     </div>
 
                     {msg.replyText && (
                       <div
-                        className={`
-                        mb-1 pl-2 pr-2 py-1.5 rounded-lg max-w-[95%] flex items-center gap-2
-                        ${
-                          isMe
-                            ? 'border-r-[3px] border-orange-500/50 bg-orange-500/10 flex-row-reverse text-right'
-                            : 'border-l-[3px] border-white/20 bg-white/5 text-left'
-                        }
-                      `}>
-                        <div className="shrink-0 w-5 h-5 rounded-full bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center">
-                          {msg.replyAvatar &&
-                          !msg.replyAvatar.includes('default') ? (
-                            <img
-                              src={msg.replyAvatar}
-                              className="w-full h-full object-cover"
-                              alt=""
-                            />
-                          ) : (
-                            <span className="text-[8px] font-black text-white/60">
-                              {getInitials(msg.replyToName || '')}
-                            </span>
-                          )}
-                        </div>
-
+                        className={`mb-1 pl-2 pr-2 py-1.5 rounded-lg max-w-[95%] flex items-center gap-2 ${isMe ? 'border-r-[3px] border-orange-500/50 bg-orange-500/10 flex-row-reverse text-right' : 'border-l-[3px] border-white/20 bg-white/5 text-left'}`}>
+                        {/* Reply content ... */}
                         <div className="flex flex-col min-w-0">
-                          <div
-                            className={`flex items-center gap-1 ${isMe ? 'flex-row-reverse' : ''}`}>
-                            <span className="material-symbols-outlined text-[10px] text-white/40">
-                              reply
-                            </span>
-                            <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider truncate">
-                              {msg.replyToName}
-                            </span>
-                          </div>
                           <p className="text-[11px] text-white/40 line-clamp-1 italic">
                             {msg.replyText}
                           </p>
@@ -787,85 +736,57 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                     )}
 
                     <div
-                      className={`
-                        flex flex-col gap-2 w-full cursor-pointer group-hover:brightness-110 transition-all select-none
-                        ${isMe ? 'items-end' : 'items-start'}
-                        ${msg.isQuestion ? 'opacity-90' : ''}
-                      `}
+                      className={`flex flex-col gap-2 w-full cursor-pointer group-hover:brightness-110 transition-all select-none ${isMe ? 'items-end' : 'items-start'} ${msg.isQuestion ? 'opacity-90' : ''}`}
                       onTouchStart={(e) => handleBubbleTouchStart(e, msg)}
                       onTouchMove={handleBubbleTouchMove}
                       onTouchEnd={handleBubbleTouchEnd}>
-                      {smartSentences.map((sentenceData, bubbleIdx) => (
-                        <div
-                          key={bubbleIdx}
-                          className={`
-                          relative px-4 py-3 shadow-sm backdrop-blur-md border 
-                          text-[15px] leading-relaxed font-medium break-words max-w-full
-                          ${bubbleIdx === 0 ? (isMe ? 'rounded-2xl rounded-tr-none' : 'rounded-2xl rounded-tl-none') : 'rounded-2xl'} 
-                          ${
-                            msg.isQuestion
-                              ? 'bg-orange-500/20 border-orange-500/40 text-white'
-                              : 'bg-[#1A1A1A]/80 border-white/5 text-gray-100'
-                          }
-                        `}>
-                          {difficulty !== 'Original' &&
-                            bubbleIdx === 0 &&
-                            !msg.isQuestion &&
-                            !msg.isLocalAi && (
-                              <span className="text-[9px] font-black text-primary/60 uppercase tracking-wider mr-2 border border-primary/20 px-1 rounded align-middle">
-                                {difficulty} AI
-                              </span>
+                      {smartSentences.map(
+                        (sentenceData: any, bubbleIdx: number) => (
+                          <div
+                            key={bubbleIdx}
+                            className={`relative px-4 py-3 shadow-sm backdrop-blur-md border text-[15px] leading-relaxed font-medium break-words max-w-full ${bubbleIdx === 0 ? (isMe ? 'rounded-2xl rounded-tr-none' : 'rounded-2xl rounded-tl-none') : 'rounded-2xl'} ${msg.isQuestion ? 'bg-orange-500/20 border-orange-500/40 text-white' : 'bg-[#1A1A1A]/80 border-white/5 text-gray-100'}`}>
+                            {/* 渲染文本：这里将传入 contextSentence 确保 AI 理解语境 */}
+                            {renderFragmentWithGlow(
+                              sentenceData.en,
+                              msg.content,
+                              msg.analysis,
                             )}
 
-                          {renderFragmentWithGlow(
-                            sentenceData.en,
-                            msg.analysis,
-                          )}
-
-                          <AnimatePresence>
-                            {showTranslation &&
-                              sentenceData.zh &&
-                              !msg.isLocal && (
-                                <motion.div
-                                  initial={{
-                                    height: 0,
-                                    opacity: 0,
-                                    marginTop: 0,
-                                  }}
-                                  animate={{
-                                    height: 'auto',
-                                    opacity: 1,
-                                    marginTop: 8,
-                                  }}
-                                  exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                                  className="overflow-hidden border-t border-white/10">
-                                  <p className="text-[13px] text-white/50 italic leading-relaxed pt-2">
-                                    {sentenceData.zh}
-                                  </p>
-                                </motion.div>
-                              )}
-                          </AnimatePresence>
-                        </div>
-                      ))}
+                            <AnimatePresence>
+                              {showTranslation &&
+                                sentenceData.zh &&
+                                !msg.isLocal && (
+                                  <motion.div
+                                    initial={{
+                                      height: 0,
+                                      opacity: 0,
+                                      marginTop: 0,
+                                    }}
+                                    animate={{
+                                      height: 'auto',
+                                      opacity: 1,
+                                      marginTop: 8,
+                                    }}
+                                    exit={{
+                                      height: 0,
+                                      opacity: 0,
+                                      marginTop: 0,
+                                    }}
+                                    className="overflow-hidden border-t border-white/10">
+                                    <p className="text-[13px] text-white/50 italic leading-relaxed pt-2">
+                                      {sentenceData.zh}
+                                    </p>
+                                  </motion.div>
+                                )}
+                            </AnimatePresence>
+                          </div>
+                        ),
+                      )}
                     </div>
                   </div>
                 </div>
               )
             })}
-
-            {isAiLoading && (
-              <div className="flex justify-start px-12 py-4 animate-in slide-in-from-bottom-2 fade-in">
-                <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
-                  <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" />
-                  <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce delay-100" />
-                  <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce delay-200" />
-                  <span className="text-[10px] text-orange-500 font-bold ml-2">
-                    DeepSeek Analyzing...
-                  </span>
-                </div>
-              </div>
-            )}
-
             <div className="h-32" />
           </>
         )}
@@ -877,10 +798,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         onClick={(e) => e.stopPropagation()}>
         {quotedMessage && (
           <div
-            className={`
-            flex justify-between items-center rounded-t-xl px-4 py-2 mx-2 -mt-14 mb-2 border border-b-0 animate-in slide-in-from-bottom
-            ${isAiMode ? 'bg-orange-500/10 border-orange-500/30' : 'bg-white/5 border-white/5'}
-          `}>
+            className={`flex justify-between items-center rounded-t-xl px-4 py-2 mx-2 -mt-14 mb-2 border border-b-0 animate-in slide-in-from-bottom ${isAiMode ? 'bg-orange-500/10 border-orange-500/30' : 'bg-white/5 border-white/5'}`}>
             <div className="flex flex-col max-w-[85%]">
               <span
                 className={`text-[9px] font-black uppercase tracking-widest ${isAiMode ? 'text-orange-500' : 'text-white/30'}`}>
@@ -903,14 +821,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
         <div className="flex items-center gap-3">
           <div
-            className={`
-            flex-1 rounded-full h-11 flex items-center px-4 border transition-all
-            ${
-              isAiMode
-                ? 'bg-orange-500/5 border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.1)]'
-                : 'bg-white/10 border-white/5 focus-within:bg-white/15'
-            }
-          `}>
+            className={`flex-1 rounded-full h-11 flex items-center px-4 border transition-all ${isAiMode ? 'bg-orange-500/5 border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-white/10 border-white/5 focus-within:bg-white/15'}`}>
             <input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -926,18 +837,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           <button
             onClick={handleSend}
             disabled={!inputText.trim()}
-            className={`
-              w-11 h-11 rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform
-              ${!inputText.trim() ? 'opacity-50 grayscale' : ''}
-              ${isAiMode ? 'bg-gradient-to-tr from-orange-400 to-red-500' : 'bg-gradient-to-tr from-orange-500 to-red-600'}
-            `}>
+            className={`w-11 h-11 rounded-full flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform ${!inputText.trim() ? 'opacity-50 grayscale' : ''} ${isAiMode ? 'bg-gradient-to-tr from-orange-400 to-red-500' : 'bg-gradient-to-tr from-orange-500 to-red-600'}`}>
             <span className="material-symbols-outlined text-[20px]">
               {isAiMode ? 'auto_awesome' : 'send'}
             </span>
           </button>
         </div>
       </div>
-
       <style>{`
         @keyframes glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         .animate-glow { animation: glow 2s ease-in-out infinite; }

@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Page } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
+import { useDictionaryStore } from '../store/useDictionaryStore'
 import InteractiveText from '../components/InteractiveText'
 import WordDetailOverlay from '../components/WordDetailOverlay'
+import AnalysisNotification from '../components/AnalysisNotification'
 
 interface TopicHubProps {
   onNavigate: (page: Page) => void
@@ -20,17 +22,20 @@ const TopicHub: React.FC<TopicHubProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [animationClass, setAnimationClass] = useState('')
-  const [selectedWord, setSelectedWord] = useState<string | null>(null)
+  const [isExiting, setIsExiting] = useState(false)
+  const [videoError, setVideoError] = useState(false)
+
+  // 单词查看状态
+  const [viewingWord, setViewingWord] = useState<string | null>(null)
 
   const startPos = useRef({ x: 0, y: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
   const hasRestoredPosition = useRef(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  // 视频错误状态
-  const [videoError, setVideoError] = useState(false)
-
   const { fetchComments, getComments, isLoading } = useCommentStore()
+  // 引入 Dictionary Store (虽然主要交互在 InteractiveText 内部，但 Overlay 需要数据)
+  const { getDefinition } = useDictionaryStore()
 
   useEffect(() => {
     if (post?.id) {
@@ -57,7 +62,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
     return topLevel.sort((a, b) => b.upvotes - a.upvotes)
   }, [allComments, isLoading, post.id])
 
-  // 计算子孙回复数量
   const replyCounts = useMemo(() => {
     if (allComments.length === 0) return {}
     const childrenMap: Record<string, string[]> = {}
@@ -81,7 +85,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
     return counts
   }, [allComments, comments])
 
-  // 恢复上次阅读位置
   useEffect(() => {
     if (
       !hasRestoredPosition.current &&
@@ -96,7 +99,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
     }
   }, [comments, initialCommentId])
 
-  // 强制播放视频
   const videoUrl = post.videoUrl || post.video_url || ''
   const hasVideo = !!videoUrl && !videoError
 
@@ -133,8 +135,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
     ? replyCounts[activeComment.id] || 0
     : 0
 
-  const [isExiting, setIsExiting] = useState(false)
-
   const goToChatRoom = () => {
     if (activeComment) {
       onSelectComment(activeComment.id)
@@ -145,7 +145,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const handleBack = () => {
     if (navigator.vibrate) navigator.vibrate(20)
     setIsExiting(true)
-    // 给一点时间让退出动画开始
     setTimeout(() => {
       onNavigate(Page.Home)
     }, 50)
@@ -208,7 +207,20 @@ const TopicHub: React.FC<TopicHubProps> = ({
   return (
     <div
       className={`h-full flex flex-col bg-[#0B0A09] overflow-hidden select-none perspective-container relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
-      {/* 动态环境光背景 */}
+      {/* 1. 全局通知：当 Store 分析完成后弹出 */}
+      <AnalysisNotification onView={(word) => setViewingWord(word)} />
+
+      {/* 2. 详情弹窗：显示在最顶层 */}
+      {viewingWord && (
+        <WordDetailOverlay
+          word={viewingWord}
+          definition={getDefinition(viewingWord)}
+          onClose={() => setViewingWord(null)}
+          onSave={(w) => console.log('Saved word:', w)}
+        />
+      )}
+
+      {/* 背景层 */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div
           className="absolute inset-[-50%] bg-cover bg-center blur-[100px] opacity-40 animate-pulse-slow saturate-150"
@@ -226,36 +238,25 @@ const TopicHub: React.FC<TopicHubProps> = ({
               ? { y: -20, opacity: 0, scale: 0.95 }
               : { y: 0, opacity: 1, scale: 1 }
           }
-          transition={{
-            type: 'spring',
-            stiffness: 50,
-            damping: 15,
-          }}
+          transition={{ type: 'spring', stiffness: 50, damping: 15 }}
           className="absolute inset-0 rounded-[2.5rem] bg-white/[0.05] backdrop-blur-3xl shadow-[0_50px_100px_rgba(0,0,0,0.7)] border-2 border-white/20 overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent z-20" />
-
           {!hasVideo && (
             <div
               className="absolute inset-0 bg-cover bg-center blur-2xl opacity-30 scale-110"
               style={{ backgroundImage: `url("${imageUrl}")` }}
             />
           )}
-
           {!hasVideo && (
             <motion.img
               initial={{ y: 200 }}
               animate={{ y: 0 }}
-              transition={{
-                type: 'spring',
-                stiffness: 50,
-                damping: 15,
-              }}
+              transition={{ type: 'spring', stiffness: 50, damping: 15 }}
               src={imageUrl}
               alt=""
               className="absolute inset-0 w-full h-full object-contain object-center z-[15]"
             />
           )}
-
           {hasVideo && (
             <>
               <video
@@ -347,7 +348,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
                         {activeComment?.upvotes || 0}
                       </span>
                     </div>
-
                     <div className="flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px] text-blue-400">
                         chat_bubble
@@ -389,7 +389,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
                       style={{ animationDelay: `${i * 80}ms` }}>
                       <InteractiveText
                         text={sentence.trim()}
-                        onWordClick={(w) => setSelectedWord(w)}
+                        contextSentence={sentence.trim()} // 传入完整句子给 AI 参考
                       />
                     </div>
                   )
@@ -409,19 +409,10 @@ const TopicHub: React.FC<TopicHubProps> = ({
               </div>
             </div>
           </div>
-
           <div className="absolute inset-x-8 top-4 bottom-[-10px] bg-white/5 rounded-[2.5rem] -z-10 scale-[0.96] border border-white/5 backdrop-blur-sm" />
           <div className="absolute inset-x-12 top-8 bottom-[-20px] bg-white/5 rounded-[2.5rem] -z-20 scale-[0.92] border border-white/5 backdrop-blur-sm" />
         </div>
       </main>
-
-      {selectedWord && (
-        <WordDetailOverlay
-          word={selectedWord}
-          onClose={() => setSelectedWord(null)}
-          onSave={(w) => console.log('Saved word:', w)}
-        />
-      )}
 
       <style>{`
         .animate-pulse-slow { animation: pulse-slow 8s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
