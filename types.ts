@@ -8,6 +8,8 @@ export enum Page {
   Study = 'Study',
   Explore = 'Explore',
   CommunityDetail = 'CommunityDetail',
+  Login = 'Login',
+  Preview = 'Preview',
 }
 
 // 补全 Post 类型定义

@@ -10,7 +10,9 @@ import Explore from './pages/Explore'
 import Study from './pages/Study'
 import Profile from './pages/Profile'
 import CommunityDetail from './pages/CommunityDetail'
+import Login from './pages/Login'
 import BottomNav from './components/BottomNav'
+import { useUserStore } from './store/useUserStore'
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
@@ -23,8 +25,20 @@ const App: React.FC = () => {
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null)
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
-  // [新增] 追踪是否处于社区详情流中，用于 TopicHub 返回判断
   const [isCommunityFlow, setIsCommunityFlow] = useState(false)
+  const { currentUser, login, logout, setLoading: setAuthLoading, isLoading: isAuthLoading } = useUserStore()
+
+  // [修改] 仅在初始化时确认加载完成
+  useEffect(() => {
+    setAuthLoading(false)
+  }, [])
+
+  // [新增] 未登录拦截
+  useEffect(() => {
+    if (!isAuthLoading && !currentUser && currentPage !== Page.Login) {
+      setCurrentPage(Page.Login)
+    }
+  }, [currentUser, currentPage, isAuthLoading])
 
   useEffect(() => {
     const fetchAllPosts = async () => {
@@ -202,6 +216,16 @@ const App: React.FC = () => {
             onPostSelect={handleProfilePostClick}
           />
         )
+      case Page.Login:
+        return (
+          <Login
+            onNavigate={navigateTo}
+            onLoginSuccess={(user) => {
+              login(user)
+              navigateTo(Page.Home)
+            }}
+          />
+        )
       default:
         return (
           <Home onNavigate={navigateTo} onPostSelect={handlePostClick} />
@@ -213,7 +237,8 @@ const App: React.FC = () => {
     currentPage === Page.TopicHub ||
     currentPage === Page.ChatRoom ||
     currentPage === Page.Preview ||
-    currentPage === Page.CommunityDetail
+    currentPage === Page.CommunityDetail ||
+    currentPage === Page.Login
 
   // [新增] 定义页面顺序，用于决定滑动方向
   const getPageRank = (page: Page) => {
@@ -223,11 +248,20 @@ const App: React.FC = () => {
       case Page.Study: return 2
       case Page.Profile: return 3
       case Page.CommunityDetail: return 4
+      case Page.Login: return -1
       default: return 0
     }
   }
 
   const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#0B0A09]">
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex justify-center bg-black min-h-screen">

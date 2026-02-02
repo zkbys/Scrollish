@@ -1,16 +1,22 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { supabase } from '../supabase'
 import { ProductionPost } from './useAppStore'
 
 interface UserState {
   likedPosts: ProductionPost[]
   followedCommunities: string[] // 存储关注的社区 ID
 
+  currentUser: any | null
+  isLoading: boolean
   // Actions
   toggleLike: (post: ProductionPost) => void
   isLiked: (postId: string) => boolean
   toggleFollowCommunity: (communityId: string) => void
   isFollowing: (communityId: string) => boolean
+  login: (user: any) => void
+  logout: () => void
+  setLoading: (loading: boolean) => void
 }
 
 export const useUserStore = create<UserState>()(
@@ -18,6 +24,8 @@ export const useUserStore = create<UserState>()(
     (set, get) => ({
       likedPosts: [],
       followedCommunities: [],
+      currentUser: null,
+      isLoading: true,
 
       toggleLike: (post: ProductionPost) => {
         const currentLikes = get().likedPosts
@@ -49,6 +57,18 @@ export const useUserStore = create<UserState>()(
 
       isFollowing: (communityId: string) => {
         return get().followedCommunities.includes(communityId)
+      },
+
+      login: (userData: any) => {
+        set({ currentUser: userData, isLoading: false })
+      },
+
+      logout: () => {
+        set({ currentUser: null, likedPosts: [], followedCommunities: [] })
+      },
+
+      setLoading: (loading: boolean) => {
+        set({ isLoading: loading })
       },
     }),
     {
