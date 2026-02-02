@@ -152,7 +152,6 @@ const Home: React.FC<HomeProps> = ({
       videoUrl: prodPost.video_url || null,
       likes: prodPost.upvotes?.toString() || '0',
       stars: '0',
-      // 修复：确保 comments 映射正确 (后端字段名可能是 comments 或 comment_count)
       comments: prodPost.comments || prodPost.comment_count || 0,
       image_type: prodPost.image_type,
       subreddit: prodPost.subreddit,
@@ -231,7 +230,7 @@ const Home: React.FC<HomeProps> = ({
         </div>
       )}
 
-      {/* Header: 修复背景适配，亮色下也保持一定深色遮罩或清晰度，但遵循设计要求 */}
+      {/* Header: 沉浸式遮罩 */}
       <header className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-5 pt-12 pb-8 bg-gradient-to-b from-black/60 via-black/20 to-transparent pointer-events-none transition-all duration-300">
         <button className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
           <span className="material-symbols-outlined text-[20px]">menu</span>
@@ -340,15 +339,6 @@ export const FeedItem: React.FC<{
   const isSubscribed = post.community_id
     ? isFollowing(post.community_id)
     : false
-
-  const handleToggleSub = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (post.community_id) {
-      toggleFollowCommunity(post.community_id)
-      if (navigator.vibrate) navigator.vibrate(50)
-    }
-  }
-
   const initialLikes =
     typeof post.upvotes === 'number' ? post.upvotes : parseInt(post.likes) || 0
   const [likes, setLikes] = useState(initialLikes)
@@ -360,8 +350,15 @@ export const FeedItem: React.FC<{
   const titleEn = post.title_en || post.titleEn || ''
   const titleCn = post.title_cn || post.titleZh || ''
   const subreddit = post.subreddit || 'Community'
-  // 修复：正确显示评论数
   const commentCount = post.comments || post.comment_count || 0
+
+  const handleToggleSub = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (post.community_id) {
+      toggleFollowCommunity(post.community_id)
+      if (navigator.vibrate) navigator.vibrate(50)
+    }
+  }
 
   useEffect(() => {
     if (hasVideo && videoRef.current && !isExiting) {
@@ -463,7 +460,7 @@ export const FeedItem: React.FC<{
               />
             </>
           )}
-          {/* 修复：移除白色雾气，始终使用深色遮罩以保证白色文字可读 */}
+          {/* 始终保持深色渐变，保障文字可读性，同时为透明 BottomNav 提供背景 */}
           <div
             className={`absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none z-20 transition-opacity duration-300 ${isExiting ? 'opacity-0' : 'opacity-100'}`}
           />
@@ -536,8 +533,9 @@ export const FeedItem: React.FC<{
                   mode_comment
                 </span>
               </button>
+              {/* 修复：0 评论时显示 Discuss */}
               <span className="text-white text-[12px] font-bold drop-shadow-md">
-                {commentCount}
+                {parseInt(commentCount) > 0 ? commentCount : 'Discuss'}
               </span>
             </div>
             <div className="flex flex-col items-center gap-1">

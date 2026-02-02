@@ -15,9 +15,10 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
   ]
 
   return (
-    // 容器渐变：亮色用白渐变，暗色用黑渐变，确保遮挡下方内容
-    <div className="fixed bottom-0 left-0 right-0 z-[60] pb-8 pt-6 px-6 pointer-events-none flex justify-center bg-gradient-to-t from-white/90 via-white/50 to-transparent dark:from-black/80 dark:via-black/40 dark:to-transparent transition-colors duration-300">
-      {/* 导航本体：亮色白底，暗色黑底 */}
+    // 修复：移除外层背景渐变 (from-white/90 等)，改为完全透明
+    // 仅保留 padding 和 pointer-events 控制
+    <div className="fixed bottom-0 left-0 right-0 z-[60] pb-8 pt-6 px-6 pointer-events-none flex justify-center transition-all duration-300">
+      {/* 导航本体：保留毛玻璃和阴影，确保在任何背景上都清晰可见 */}
       <nav className="pointer-events-auto bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-[2.5rem] px-2 py-2 flex justify-between items-center w-full max-w-[320px] shadow-[0_8px_32px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-300">
         {navItems.map((item) => {
           const isActive = activePage === item.id
@@ -31,7 +32,6 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
                   : 'hover:bg-gray-50 dark:hover:bg-white/5'
               }`}>
               <div className="flex flex-col items-center gap-0.5">
-                {/* 图标颜色适配 */}
                 <span
                   className={`material-symbols-outlined text-[24px] transition-all duration-300 ${
                     isActive
@@ -41,7 +41,6 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
                   {item.icon}
                 </span>
 
-                {/* 指示点 */}
                 <div
                   className={`w-1 h-1 rounded-full bg-primary transition-all duration-300 ${isActive ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`}
                 />
