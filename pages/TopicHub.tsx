@@ -46,7 +46,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
       fetchComments(post.id)
 
       // 优先使用 props 里的内容，如果缺失则去数据库查
-      if (post.content_en && post.content_en.length > 20) {
+      if (post.content_en && post.content_en.length > 10) {
         setOpContent({ en: post.content_en, cn: post.content_cn })
       } else {
         const fetchOp = async () => {
@@ -91,7 +91,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
     const topLevel = allComments.filter((c) => c.depth === 0)
     const sortedComments = topLevel.sort((a, b) => b.upvotes - a.upvotes)
 
-    // 即使评论没加载完，也要先显示 OP 卡片
+    // 即使评论没加载完，也要先显示 OP 卡片，而不是空列表
     if (topLevel.length === 0 && isLoading[post.id]) {
       return [opCard]
     }
@@ -153,7 +153,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
       ? replyCounts[activeComment.id] || 0
       : 0
 
-  // --- 核心修复：TopicHub 分句逻辑 ---
+  // --- 分句逻辑 ---
   const displaySegments = useMemo(() => {
     if (!activeComment) return []
 
@@ -186,7 +186,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   }, [activeComment])
 
   const goToChatRoom = () => {
-    if (activeComment.isOpCard) {
+    if (activeComment?.isOpCard) {
       if (navigator.vibrate) navigator.vibrate([20, 50, 20])
       return
     }
@@ -259,7 +259,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   return (
     <div
-      className={`h-full flex flex-col bg-[#0B0A09] overflow-hidden select-none relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
+      className={`h-full flex flex-col bg-gray-50 dark:bg-[#0B0A09] overflow-hidden select-none relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
       <AnalysisNotification onView={setViewingWord} />
       {viewingWord && (
         <WordDetailOverlay
@@ -271,17 +271,17 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
       <div className="absolute inset-0 pointer-events-none">
         <div
-          className="absolute inset-[-50%] bg-cover bg-center blur-[100px] opacity-40 animate-pulse-slow"
+          className="absolute inset-[-50%] bg-cover bg-center blur-[100px] opacity-30 dark:opacity-40 animate-pulse-slow"
           style={{ backgroundImage: `url("${imageUrl}")` }}
         />
-        <div className="absolute inset-0 bg-black/60 mix-blend-multiply" />
+        <div className="absolute inset-0 bg-white/40 dark:bg-black/60 mix-blend-overlay dark:mix-blend-multiply" />
       </div>
 
       <div className="mx-4 mt-12 h-56 relative z-50">
         <motion.div
           initial={{ y: -200, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="absolute inset-0 rounded-[2.5rem] overflow-hidden border-2 border-white/20 shadow-2xl bg-[#1C1C1E]">
+          className="absolute inset-0 rounded-[2.5rem] overflow-hidden border-2 border-white/40 dark:border-white/20 shadow-2xl bg-gray-200 dark:bg-[#1C1C1E]">
           {hasVideo ? (
             <video
               ref={videoRef}
@@ -295,37 +295,37 @@ const TopicHub: React.FC<TopicHubProps> = ({
           ) : (
             <img
               src={imageUrl}
-              className="w-full h-full object-contain bg-black/50"
+              className="w-full h-full object-contain bg-black/10 dark:bg-black/50"
               alt=""
             />
           )}
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/80" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/60 dark:to-black/80" />
         </motion.div>
 
         <div className="absolute inset-x-0 bottom-0 p-6 z-[70]">
-          <span className="text-white/60 text-[10px] font-bold uppercase tracking-widest">
+          <span className="text-white/80 text-[10px] font-bold uppercase tracking-widest">
             {post.subreddit || 'Community'}
           </span>
           <h1 className="text-white text-xl font-black leading-tight line-clamp-2 mt-1">
-            {post.title_en}
+            {post.titleEn}
           </h1>
         </div>
 
         <button
           onClick={handleBack}
-          className="absolute top-5 left-5 w-10 h-10 bg-black/30 backdrop-blur rounded-full flex items-center justify-center text-white border border-white/20 z-[80]">
+          className="absolute top-5 left-5 w-10 h-10 bg-black/20 backdrop-blur rounded-full flex items-center justify-center text-white border border-white/20 z-[80]">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
       </div>
 
       <main className="flex-1 flex flex-col items-center justify-start pt-6 z-40">
         <div className="w-full px-8 flex justify-between items-center mb-4">
-          <span className="text-white/40 text-[10px] font-bold uppercase tracking-widest">
+          <span className="text-gray-500 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest">
             {activeComment?.isOpCard
               ? 'Original Post'
               : `Opinion ${currentIndex}/${comments.length - 1}`}
           </span>
-          <div className="h-1 w-16 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-1 w-16 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
             <div
               className="h-full bg-orange-500 transition-all duration-300"
               style={{
@@ -340,25 +340,25 @@ const TopicHub: React.FC<TopicHubProps> = ({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}>
           <div
-            className={`absolute inset-x-4 top-0 bottom-0 bg-[#121212]/80 backdrop-blur-2xl rounded-[2.5rem] border border-white/10 flex flex-col overflow-hidden transition-all duration-300 ${animationClass}`}>
+            className={`absolute inset-x-4 top-0 bottom-0 bg-white/90 dark:bg-[#121212]/80 backdrop-blur-2xl rounded-[2.5rem] border border-gray-200 dark:border-white/10 flex flex-col overflow-hidden transition-all duration-300 shadow-2xl dark:shadow-[0_20px_50px_-10px_rgba(0,0,0,0.5)] ${animationClass}`}>
             <div
-              className="h-16 border-b border-white/5 flex items-center justify-between px-6 shrink-0"
+              className="h-16 border-b border-gray-100 dark:border-white/5 flex items-center justify-between px-6 shrink-0"
               onClick={goToChatRoom}>
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-8 h-8 rounded-full p-[2px] ${activeComment?.isOpCard ? 'bg-white' : 'bg-gradient-to-tr from-orange-500 to-red-500'}`}>
-                  <div className="w-full h-full rounded-full bg-[#121212] flex items-center justify-center text-[10px] font-black text-white">
+                  className={`w-8 h-8 rounded-full p-[2px] ${activeComment?.isOpCard ? 'bg-gray-200 dark:bg-white' : 'bg-gradient-to-tr from-orange-500 to-red-500'}`}>
+                  <div className="w-full h-full rounded-full bg-white dark:bg-[#121212] flex items-center justify-center text-[10px] font-black text-gray-900 dark:text-white">
                     {activeComment?.isOpCard
                       ? 'OP'
                       : activeComment?.author.slice(0, 2).toUpperCase()}
                   </div>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-white font-bold text-sm">
+                  <span className="text-gray-900 dark:text-white font-bold text-sm">
                     {activeComment?.author}
                   </span>
                   {!activeComment?.isOpCard && (
-                    <div className="flex gap-2 text-[10px] text-white/50">
+                    <div className="flex gap-2 text-[10px] text-gray-500 dark:text-white/50">
                       <span className="flex items-center gap-0.5">
                         <span className="material-symbols-outlined text-[10px]">
                           favorite
@@ -366,7 +366,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
                         {activeComment?.upvotes}
                       </span>
                       <span className="flex items-center gap-0.5 ml-2">
-                        <span className="material-symbols-outlined text-[10px] text-blue-400">
+                        <span className="material-symbols-outlined text-[10px] text-blue-500 dark:text-blue-400">
                           chat_bubble
                         </span>
                         {currentReplyCount}
@@ -374,15 +374,15 @@ const TopicHub: React.FC<TopicHubProps> = ({
                     </div>
                   )}
                   {activeComment?.isOpCard && (
-                    <span className="text-[10px] text-white/40 font-medium">
+                    <span className="text-[10px] text-gray-400 dark:text-white/40 font-medium">
                       Post Content
                     </span>
                   )}
                 </div>
               </div>
               {!activeComment?.isOpCard && (
-                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-white/50 text-[18px]">
+                <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-gray-400 dark:text-white/50 text-[18px]">
                     expand_less
                   </span>
                 </div>
@@ -403,20 +403,20 @@ const TopicHub: React.FC<TopicHubProps> = ({
                   {displaySegments.map((seg, i) => (
                     <div
                       key={i}
-                      className="bg-white/5 border border-white/5 p-4 rounded-xl rounded-tl-none border-l-2 border-l-orange-500/50 select-none touch-callout-none"
+                      className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 p-4 rounded-xl rounded-tl-none border-l-2 border-l-orange-500/50 select-none touch-callout-none"
                       onContextMenu={(e) => e.preventDefault()}>
                       <span onClick={() => {}}>
                         <InteractiveText
                           text={seg.en}
                           contextSentence={seg.en}
-                          className="text-gray-100 text-[15px] font-medium"
+                          className="text-gray-800 dark:text-gray-100 text-[15px] font-medium"
                           externalOnClick={(w) => handleWordClick(w, seg.en)}
                         />
                       </span>
                       {/* 只有在 enrichment 数据存在时，才按句显示中文 */}
                       {seg.zh && (
-                        <div className="mt-3 pt-2 border-t border-white/10">
-                          <p className="text-white/60 text-sm leading-relaxed italic">
+                        <div className="mt-3 pt-2 border-t border-gray-200 dark:border-white/10">
+                          <p className="text-gray-500 dark:text-white/60 text-sm leading-relaxed italic">
                             {seg.zh}
                           </p>
                         </div>
@@ -432,13 +432,13 @@ const TopicHub: React.FC<TopicHubProps> = ({
                         className="px-2 mt-4 select-none touch-callout-none"
                         onContextMenu={(e) => e.preventDefault()}>
                         <div className="flex items-center gap-2 mb-2 opacity-50">
-                          <div className="h-[1px] flex-1 bg-white/20" />
-                          <span className="text-[9px] uppercase tracking-widest text-white">
-                            Translation
+                          <div className="h-[1px] flex-1 bg-gray-300 dark:bg-white/20" />
+                          <span className="text-[9px] uppercase tracking-widest text-gray-400 dark:text-white">
+                            Full Translation
                           </span>
-                          <div className="h-[1px] flex-1 bg-white/20" />
+                          <div className="h-[1px] flex-1 bg-gray-300 dark:bg-white/20" />
                         </div>
-                        <p className="text-white/60 text-sm leading-relaxed italic px-2">
+                        <p className="text-gray-600 dark:text-white/60 text-sm leading-relaxed italic px-2">
                           {activeComment.content_cn}
                         </p>
                       </div>
@@ -448,22 +448,22 @@ const TopicHub: React.FC<TopicHubProps> = ({
               <div className="h-12" />
             </div>
 
-            <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-[#121212] to-transparent pointer-events-none flex items-end justify-center pb-4 opacity-50">
+            <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white dark:from-[#121212] to-transparent pointer-events-none flex items-end justify-center pb-4 opacity-50">
               {activeComment?.isOpCard ? (
                 <div className="flex flex-col items-center animate-bounce-subtle">
-                  <span className="material-symbols-outlined text-white text-[16px] rotate-90">
+                  <span className="material-symbols-outlined text-gray-400 dark:text-white text-[16px] rotate-90">
                     keyboard_double_arrow_up
                   </span>
-                  <span className="text-[8px] font-black text-white uppercase tracking-widest mt-1">
+                  <span className="text-[8px] font-black text-gray-400 dark:text-white uppercase tracking-widest mt-1">
                     Swipe for Opinions
                   </span>
                 </div>
               ) : (
                 <div className="flex flex-col items-center animate-bounce-subtle">
-                  <span className="material-symbols-outlined text-white text-[16px]">
+                  <span className="material-symbols-outlined text-gray-400 dark:text-white text-[16px]">
                     keyboard_double_arrow_up
                   </span>
-                  <span className="text-[8px] font-black text-white uppercase tracking-widest">
+                  <span className="text-[8px] font-black text-gray-400 dark:text-white uppercase tracking-widest">
                     Discussion
                   </span>
                 </div>

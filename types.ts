@@ -10,6 +10,24 @@ export enum Page {
   CommunityDetail = 'CommunityDetail',
 }
 
+// 补全 Post 类型定义
+export interface Post {
+  id: string
+  user: string
+  avatar: string
+  titleEn: string
+  titleZh: string
+  hashtags: string[]
+  image: string
+  videoUrl: string | null
+  likes: string
+  stars: string
+  comments: number
+  image_type?: 'original' | 'generated'
+  subreddit?: string
+  community_id?: string
+}
+
 /**
  * 单词高亮与释义结构
  */

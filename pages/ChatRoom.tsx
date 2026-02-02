@@ -16,7 +16,6 @@ interface ChatRoomProps {
   onBack: () => void
 }
 
-// ... Type definitions ...
 type DifficultyLevel =
   | 'Original'
   | 'Mixed'
@@ -32,23 +31,25 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   focusCommentId,
   onBack,
 }) => {
+  // --- Stores ---
   const { getComments, fetchComments, addLocalComment, deleteLocalComment } =
     useCommentStore()
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
 
+  // --- State: Data & Content ---
   const [opPostData, setOpPostData] = useState<{
     content: string
     content_cn: string
     author: string
   } | null>(null)
+  const [inputText, setInputText] = useState('')
+  const [quotedMessage, setQuotedMessage] = useState<Comment | null>(null)
 
+  // --- State: UI & Interaction ---
   const [viewingWord, setViewingWord] = useState<string | null>(null)
   const [viewingNote, setViewingNote] = useState<CulturalNote[] | null>(null)
-
-  const [inputText, setInputText] = useState('')
   const [showGlobalTranslation, setShowGlobalTranslation] = useState(false)
-  const [quotedMessage, setQuotedMessage] = useState<Comment | null>(null)
-  const [isAiMode, setIsAiMode] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -57,26 +58,29 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const [expandedTranslations, setExpandedTranslations] = useState<
     Record<string, boolean>
   >({})
+
+  // --- State: AI & Difficulty ---
+  const [isAiMode, setIsAiMode] = useState(false)
   const [isAiLoading, setIsAiLoading] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('Original')
 
+  // --- State: Navigation & Highlight ---
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [returnToId, setReturnToId] = useState<string | null>(null)
   const [flashMessageId, setFlashMessageId] = useState<string | null>(null)
 
+  // --- State: Gestures ---
   const [pullY, setPullY] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+
+  // --- Refs ---
   const touchStartRef = useRef(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-
-  // 1. 新增：输入框 Ref，用于自动聚焦
   const inputRef = useRef<HTMLInputElement>(null)
-
   const bgPressTimerRef = useRef<NodeJS.Timeout | null>(null)
   const bubblePressTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // 全局抑制菜单
+  // 1. 全局抑制浏览器默认菜单
   useEffect(() => {
     const handleContextMenu = (e: Event) => {
       e.preventDefault()
@@ -93,13 +97,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   // 2. 自动聚焦 Effect：当进入引用模式时，自动拉起键盘
   useEffect(() => {
     if (quotedMessage && inputRef.current) {
-      // 稍微延迟一点点，确保 UI 渲染完成（特别是移动端键盘动画）
       setTimeout(() => {
         inputRef.current?.focus()
       }, 100)
     }
   }, [quotedMessage])
 
+  // 3. Fetch OP Data & Comments
   useEffect(() => {
     const fetchOp = async () => {
       const { data } = await supabase
@@ -121,10 +125,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
   const allComments = getComments(postId)
 
-  // 构建消息树逻辑保持不变 ... (为节省篇幅省略，逻辑与上一版完全一致)
+  // 4. 构建消息树 (OP -> OP追问 -> Top Comment -> Children)
   const messages = useMemo(() => {
     if (!opPostData || !allComments.length || !focusCommentId) return []
 
+    // A. 构造 OP 消息
     const opMessage: Comment = {
       id: 'op-message',
       post_id: postId,
@@ -141,7 +146,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     const rootComment = allComments.find((c) => c.id === focusCommentId)
     if (!rootComment) return [opMessage]
 
+    // B. 建立索引
     const childrenMap = new Map<string, Comment[]>()
+    // 特殊处理：找出所有回复给 'op-message' 的本地消息
     const opChildren: Comment[] = []
 
     allComments.forEach((c) => {
@@ -154,8 +161,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     })
 
     const result: Comment[] = []
+
+    // C. 压入 OP
     result.push(opMessage)
 
+    // D. 压入 OP 的追问 (插在 Top Comment 之前)
     const traverseOpChildren = (nodes: Comment[]) => {
       nodes.sort(
         (a, b) =>
@@ -167,18 +177,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           replyToName: 'OP',
           replyText: opMessage.content,
         })
+        // 检查该追问是否有 AI 回复
         if (childrenMap.has(child.id)) {
-          traverse(child.id)
+          traverse(child.id) // 复用通用遍历逻辑
         }
       })
     }
     traverseOpChildren(opChildren)
 
+    // E. 压入 Top Comment (Sub-OP)
     result.push({ ...rootComment, replyToName: 'OP' })
 
+    // F. 遍历 Top Comment 的子树
     const traverse = (parentId: string) => {
       const children = childrenMap.get(parentId) || []
+
       children.sort((a, b) => {
+        // 核心修复：本地消息 (用户追问/AI回复) 永远排在最前 (紧贴父节点)
         if (a.isLocal && !b.isLocal) return -1
         if (!a.isLocal && b.isLocal) return 1
         if (a.isLocal && b.isLocal) {
@@ -202,9 +217,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       })
     }
     traverse(focusCommentId)
+
     return result
   }, [allComments, focusCommentId, opPostData])
 
+  // 5. 新消息自动滚动
   useEffect(() => {
     const lastMsg = messages[messages.length - 1]
     if (lastMsg && lastMsg.isLocalAi && lastMsg.id !== flashMessageId) {
@@ -223,7 +240,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const getInitials = (name: string) =>
     name ? name.substring(0, 2).toUpperCase() : '??'
 
+  // 6. 分句与难度处理逻辑
   const getDisplaySentences = (msg: Comment) => {
+    // A. 难度替换 (AI Rewriting)
     if (difficulty !== 'Original' && msg.enrichment?.difficulty_variants) {
       const variant = msg.enrichment.difficulty_variants[difficulty]
       if (variant && variant.content) {
@@ -237,13 +256,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               en: s.segment.trim(),
               zh: msg.content_cn,
             }))
-            .filter((s) => s.en.length > 0)
+            .filter((s: any) => s.en.length > 0)
         } catch {
           return [{ en: variant.content, zh: msg.content_cn }]
         }
       }
     }
 
+    // B. OP 消息强制分句
     if (msg.id === 'op-message') {
       const text = msg.content || ''
       const rawSentences = text.match(
@@ -252,10 +272,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       return rawSentences.map((en) => ({ en: en.trim(), zh: null }))
     }
 
+    // C. 普通消息
     let segments: { en: string; zh: string | null }[] = []
     if (msg.enrichment?.sentence_segments) {
       segments = msg.enrichment.sentence_segments
     } else {
+      // 降级分句
       try {
         // @ts-ignore
         const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
@@ -267,6 +289,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         segments = [{ en: msg.content, zh: msg.content_cn }]
       }
     }
+    // 过滤空白气泡
     return segments.filter((s) => s.en && s.en.trim() !== '')
   }
 
@@ -275,7 +298,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     setViewingWord(word)
   }
 
-  // --- Send Logic ---
+  // 7. 发送消息逻辑 (含 AI 模拟)
   const handleSend = async () => {
     if (!inputText.trim()) return
 
@@ -358,7 +381,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }
 
-  // --- Handlers ---
+  // 8. 跳转逻辑
   const handleJumpTo = (targetId: string | null) => {
     if (!targetId) return
     const el = document.getElementById(`msg-${targetId}`)
@@ -382,6 +405,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       setReturnToId(null)
     }
   }
+
+  // 9. 背景长按 (翻译)
   const handleBgTouchStart = (e: React.TouchEvent) => {
     if ((e.target as HTMLElement).closest('input') || contextMenu) return
     if (scrollContainerRef.current?.scrollTop === 0) {
@@ -412,6 +437,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       setPullY(Math.pow(diff, 0.8))
     }
   }
+
+  // 10. 气泡长按 (菜单)
   const handleBubbleTouchStart = (e: React.TouchEvent, msg: Comment) => {
     e.stopPropagation()
     const touch = e.touches[0]
@@ -434,6 +461,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       bubblePressTimerRef.current = null
     }
   }
+
+  // 11. 菜单动作
   const toggleSingleTranslation = (msgId: string) => {
     setExpandedTranslations((prev) => ({ ...prev, [msgId]: !prev[msgId] }))
     setContextMenu(null)
@@ -454,7 +483,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-[60] flex flex-col bg-[#0B0A09] transition-transform duration-300 ease-out max-w-[100vw] overflow-x-hidden touch-action-pan-y select-none`}
+      className={`fixed inset-0 z-[60] flex flex-col bg-gray-50 dark:bg-[#0B0A09] transition-transform duration-300 ease-out max-w-[100vw] overflow-x-hidden touch-action-pan-y select-none`}
       style={{
         transform: `translateY(${pullY}px)`,
         borderRadius: pullY > 0 ? '40px' : '0px',
@@ -492,9 +521,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              className="absolute top-0 bottom-0 right-0 w-64 bg-[#1C1C1E] border-l border-white/10 z-[95] p-6 shadow-2xl"
+              className="absolute top-0 bottom-0 right-0 w-64 bg-white dark:bg-[#1C1C1E] border-l border-gray-200 dark:border-white/10 z-[95] p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-white font-bold mb-6 flex items-center gap-2">
+              <h2 className="text-gray-900 dark:text-white font-bold mb-6 flex items-center gap-2">
                 <span className="material-symbols-outlined text-orange-500">
                   psychology
                 </span>
@@ -515,7 +544,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   <button
                     key={lvl}
                     onClick={() => setDifficulty(lvl)}
-                    className={`w-full p-3 rounded-xl border text-left flex justify-between items-center ${difficulty === lvl ? 'bg-orange-500/20 border-orange-500 text-orange-500' : 'bg-white/5 border-white/5 text-white/60'}`}>
+                    className={`w-full p-3 rounded-xl border text-left flex justify-between items-center ${difficulty === lvl ? 'bg-orange-500/20 border-orange-500 text-orange-600 dark:text-orange-500' : 'bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-700 dark:text-white/60'}`}>
                     <div className="flex flex-col">
                       <span className="text-sm font-bold">
                         {lvl === 'Mixed' ? 'Dopamine Mix ⚡️' : lvl}
@@ -534,15 +563,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
       </AnimatePresence>
 
+      {/* Cultural Note Overlay */}
       <AnimatePresence>
         {viewingNote && (
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="fixed inset-x-4 bottom-24 z-[90] bg-[#1C1C1E] border border-yellow-500/30 p-5 rounded-2xl shadow-2xl"
+            className="fixed inset-x-4 bottom-24 z-[90] bg-white dark:bg-[#1C1C1E] border border-yellow-500/30 p-5 rounded-2xl shadow-2xl"
             onClick={() => setViewingNote(null)}>
-            <div className="flex items-center gap-2 mb-3 text-yellow-500">
+            <div className="flex items-center gap-2 mb-3 text-yellow-600 dark:text-yellow-500">
               <span className="material-symbols-outlined">lightbulb</span>
               <span className="font-bold text-sm uppercase tracking-widest">
                 Cultural Insight
@@ -550,10 +580,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             </div>
             {viewingNote.map((note, idx) => (
               <div key={idx} className="mb-3 last:mb-0">
-                <p className="text-white font-bold text-sm mb-1">
+                <p className="text-gray-900 dark:text-white font-bold text-sm mb-1">
                   {note.trigger_word}
                 </p>
-                <p className="text-white/70 text-sm leading-relaxed">
+                <p className="text-gray-600 dark:text-white/70 text-sm leading-relaxed">
                   {note.explanation}
                 </p>
               </div>
@@ -581,7 +611,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
             onClick={handleReturnJump}
-            className="fixed bottom-24 right-4 z-[80] bg-white/10 backdrop-blur border border-white/20 text-white p-3 rounded-full shadow-lg flex items-center gap-2">
+            className="fixed bottom-24 right-4 z-[80] bg-white/90 dark:bg-white/10 backdrop-blur border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white p-3 rounded-full shadow-lg flex items-center gap-2">
             <span className="material-symbols-outlined">u_turn_left</span>
             <span className="text-xs font-bold pr-1">Return</span>
           </motion.button>
@@ -602,7 +632,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="fixed z-[101] bg-[#1C1C1E] border border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[180px] flex flex-col"
+              className="fixed z-[101] bg-white dark:bg-[#1C1C1E] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[180px] flex flex-col"
               style={{
                 left: Math.min(contextMenu.x, window.innerWidth - 190),
                 top: Math.min(contextMenu.y, window.innerHeight - 240),
@@ -610,7 +640,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => handleQuote(contextMenu.msg)}
-                className="menu-item text-orange-400">
+                className="menu-item text-orange-500">
                 <span className="material-symbols-outlined text-[18px]">
                   format_quote
                 </span>{' '}
@@ -618,7 +648,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               </button>
               <button
                 onClick={() => toggleSingleTranslation(contextMenu.msg.id)}
-                className="menu-item text-gray-200">
+                className="menu-item text-gray-700 dark:text-gray-200">
                 <span className="material-symbols-outlined text-[18px]">
                   translate
                 </span>
@@ -628,7 +658,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               </button>
               <button
                 onClick={() => handleCopy(contextMenu.msg.content)}
-                className="menu-item text-gray-200">
+                className="menu-item text-gray-700 dark:text-gray-200">
                 <span className="material-symbols-outlined text-[18px]">
                   content_copy
                 </span>{' '}
@@ -636,7 +666,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               </button>
               <button
                 onClick={() => handleBookmark(contextMenu.msg)}
-                className="menu-item text-gray-200">
+                className="menu-item text-gray-700 dark:text-gray-200">
                 <span className="material-symbols-outlined text-[18px]">
                   bookmark
                 </span>{' '}
@@ -660,26 +690,27 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-white/5 bg-[#0B0A09]/90 backdrop-blur shrink-0 relative z-50">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-white/5 bg-white/90 dark:bg-[#0B0A09]/90 backdrop-blur shrink-0 relative z-50 transition-colors">
         <button
           onClick={(e) => {
             e.stopPropagation()
             onBack()
           }}
-          className="w-10 h-10 flex items-center justify-center text-white/60">
+          className="w-10 h-10 flex items-center justify-center text-gray-500 dark:text-white/60">
           <span className="material-symbols-outlined">keyboard_arrow_down</span>
         </button>
         <div className="flex flex-col items-center">
           {isAiLoading ? (
-            <div className="flex items-center gap-2 animate-pulse text-green-400">
-              <span className="w-2 h-2 bg-green-400 rounded-full" />
+            <div className="flex items-center gap-2 animate-pulse text-green-500 dark:text-green-400">
+              <span className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full" />
               <span className="text-sm font-bold">Replying...</span>
             </div>
           ) : (
             <>
-              <span className="text-white font-bold text-sm">Thread</span>
-              <span className="text-white/40 text-[10px]">
+              <span className="text-gray-900 dark:text-white font-bold text-sm">
+                Thread
+              </span>
+              <span className="text-gray-500 dark:text-white/40 text-[10px]">
                 {messages.length - 1} comments
               </span>
             </>
@@ -690,14 +721,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             e.stopPropagation()
             setShowSettings(true)
           }}
-          className="w-10 h-10 flex items-center justify-center text-white/60">
+          className="w-10 h-10 flex items-center justify-center text-gray-500 dark:text-white/60">
           <span className="material-symbols-outlined">tune</span>
         </button>
       </div>
 
       <main
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-[#0B0A09]">
+        className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-gray-50 dark:bg-[#0B0A09] transition-colors">
         {messages.map((msg, index) => {
           const isOP = msg.id === 'op-message'
           const isRoot = index === 1
@@ -713,30 +744,46 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             return (
               <div
                 key={msg.id}
-                className="mb-8 p-4 bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl relative select-none touch-callout-none"
+                className="mb-8 p-4 bg-gradient-to-br from-gray-200 to-gray-100 dark:from-white/10 dark:to-white/5 border border-gray-200 dark:border-white/10 rounded-2xl relative select-none touch-callout-none shadow-sm"
                 onContextMenu={(e) => e.preventDefault()}>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="bg-primary/20 text-primary text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
                     OP
                   </span>
-                  <span className="text-xs font-bold text-white/90 line-clamp-1">
+                  <span className="text-xs font-bold text-gray-800 dark:text-white/90 line-clamp-1">
                     {msg.author}
                   </span>
                 </div>
-                <div className="text-white/80 text-[15px] leading-relaxed">
-                  {sentences.map((s, i) => (
-                    <span key={i}>
-                      <InteractiveText
-                        text={s.en}
-                        contextSentence={s.en}
-                        externalOnClick={(w) => handleWordClick(w, s.en)}
-                      />
-                      <span className="inline-block w-1" />
-                    </span>
-                  ))}
+                <div className="text-gray-800 dark:text-white/80 text-[15px] leading-relaxed">
+                  {sentences.map((s, i) => {
+                    // 图片检测
+                    const isImage = s.en.match(
+                      /^https?:\/\/.*\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i,
+                    )
+                    if (isImage)
+                      return (
+                        <img
+                          key={i}
+                          src={s.en}
+                          alt=""
+                          className="rounded-lg max-w-full h-auto my-2"
+                        />
+                      )
+
+                    return (
+                      <span key={i}>
+                        <InteractiveText
+                          text={s.en}
+                          contextSentence={s.en}
+                          externalOnClick={(w) => handleWordClick(w, s.en)}
+                        />
+                        <span className="inline-block w-1" />
+                      </span>
+                    )
+                  })}
                 </div>
                 {msg.content_cn && (
-                  <div className="mt-3 pt-3 border-t border-white/5 text-white/50 text-xs italic">
+                  <div className="mt-3 pt-3 border-t border-gray-300 dark:border-white/5 text-gray-500 dark:text-white/50 text-xs italic">
                     {msg.content_cn}
                   </div>
                 )}
@@ -748,14 +795,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             <div
               id={`msg-${msg.id}`}
               key={msg.id}
-              className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''} ${isRoot || isOP ? 'mb-8' : ''} transition-all duration-500 ${isHighlighted ? 'bg-white/5 -mx-2 px-2 py-2 rounded-xl' : ''} ${isFlash ? 'animate-flash bg-white/10 rounded-xl' : ''}`}>
+              className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''} ${isRoot || isOP ? 'mb-8' : ''} transition-all duration-500 ${isHighlighted ? 'bg-orange-100 dark:bg-white/5 -mx-2 px-2 py-2 rounded-xl' : ''} ${isFlash ? 'animate-flash bg-blue-50 dark:bg-white/10 rounded-xl' : ''}`}>
               <div className="shrink-0">
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border border-white/10 ${isRoot || isOP ? 'bg-gradient-to-tr from-orange-500 to-red-500 text-white w-10 h-10 text-xs' : 'bg-[#1A1A1A] text-white/60'}`}>
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border border-gray-200 dark:border-white/10 ${isRoot || isOP ? 'bg-gradient-to-tr from-orange-500 to-red-500 text-white w-10 h-10 text-xs' : 'bg-gray-200 dark:bg-[#1A1A1A] text-gray-500 dark:text-white/60'}`}>
                   {isOP ? 'OP' : isRoot ? 'TOP' : getInitials(msg.author)}
                 </div>
                 {(isRoot || isOP) && (
-                  <div className="h-full w-[1px] bg-white/10 mx-auto my-2" />
+                  <div className="h-full w-[1px] bg-gray-200 dark:bg-white/10 mx-auto my-2" />
                 )}
               </div>
 
@@ -764,7 +811,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                 <div
                   className={`flex items-baseline gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
                   <span
-                    className={`text-xs font-bold ${isRoot || isOP ? 'text-white text-sm' : 'text-gray-400'}`}>
+                    className={`text-xs font-bold ${isRoot || isOP ? 'text-gray-900 dark:text-white text-sm' : 'text-gray-500 dark:text-gray-400'}`}>
                     {msg.author}
                   </span>
                   {isOP && (
@@ -778,7 +825,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                     </span>
                   )}
                   {msg.isLocalAi && (
-                    <span className="bg-blue-500/20 text-blue-400 text-[9px] px-1 rounded font-bold">
+                    <span className="bg-blue-500/20 text-blue-500 dark:text-blue-400 text-[9px] px-1 rounded font-bold">
                       AI
                     </span>
                   )}
@@ -789,63 +836,76 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                     onClick={() =>
                       handleJumpToWithReturn(msg.parent_id, msg.id)
                     }
-                    className={`text-[11px] text-white/40 italic border-l-2 border-white/20 pl-2 mb-1 active:bg-white/5 rounded-r cursor-pointer break-all whitespace-pre-wrap ${isUser ? 'text-right border-l-0 border-r-2 pr-2' : ''}`}>
-                    <span className="font-bold not-italic text-white/30 mr-1">
+                    className={`text-[11px] text-gray-400 dark:text-white/40 italic border-l-2 border-gray-300 dark:border-white/20 pl-2 mb-1 active:bg-black/5 dark:active:bg-white/5 rounded-r cursor-pointer break-all whitespace-pre-wrap ${isUser ? 'text-right border-l-0 border-r-2 pr-2' : ''}`}>
+                    <span className="font-bold not-italic text-gray-500 dark:text-white/30 mr-1">
                       @{msg.replyToName}
                     </span>
                     {msg.replyText}
                   </div>
                 )}
 
-                {sentences.map((s, i) => (
-                  <div
-                    key={i}
-                    onTouchStart={(e) => handleBubbleTouchStart(e, msg)}
-                    onTouchEnd={handleBubbleTouchEnd}
-                    onTouchMove={handleBubbleTouchMove}
-                    onContextMenu={(e) => e.preventDefault()}
-                    className={`
-                           relative p-3 pr-6 rounded-2xl text-[15px] leading-relaxed border transition-all duration-300 select-none touch-callout-none
-                           ${isRoot || isOP ? 'bg-white/10 border-white/10 text-white' : 'bg-[#1A1A1A] border-white/5 text-gray-200'}
-                           ${hasCulturalNote ? 'shadow-[0_0_15px_rgba(234,179,8,0.2)] border-yellow-500/40 bg-gradient-to-br from-[#1A1A1A] to-yellow-900/20' : ''}
-                         `}>
-                    {hasCulturalNote && i === 0 && (
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setViewingNote(msg.enrichment!.cultural_notes)
-                        }}
-                        className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg border-2 border-[#0B0A09] z-10 animate-pulse cursor-pointer active:scale-90">
-                        <span className="material-symbols-outlined text-[12px] text-black font-bold">
-                          lightbulb
-                        </span>
-                      </div>
-                    )}
+                {sentences.map((s, i) => {
+                  const isImage = s.en.match(
+                    /^https?:\/\/.*\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i,
+                  )
+                  return (
+                    <div
+                      key={i}
+                      onTouchStart={(e) => handleBubbleTouchStart(e, msg)}
+                      onTouchEnd={handleBubbleTouchEnd}
+                      onTouchMove={handleBubbleTouchMove}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className={`
+                             relative p-3 pr-6 rounded-2xl text-[15px] leading-relaxed border transition-all duration-300 select-none touch-callout-none
+                             ${isRoot || isOP ? 'bg-gray-100 dark:bg-white/10 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white' : 'bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-white/5 text-gray-800 dark:text-gray-200'}
+                             ${hasCulturalNote ? 'shadow-[0_0_15px_rgba(234,179,8,0.2)] border-yellow-500/40 bg-gradient-to-br from-yellow-50 to-white dark:from-[#1A1A1A] dark:to-yellow-900/20' : ''}
+                           `}>
+                      {hasCulturalNote && i === 0 && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setViewingNote(msg.enrichment!.cultural_notes)
+                          }}
+                          className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white dark:border-[#0B0A09] z-10 animate-pulse cursor-pointer active:scale-90">
+                          <span className="material-symbols-outlined text-[12px] text-black font-bold">
+                            lightbulb
+                          </span>
+                        </div>
+                      )}
 
-                    <InteractiveText
-                      text={s.en || ''}
-                      contextSentence={s.en || ''}
-                      externalOnClick={(w) => handleWordClick(w, s.en)}
-                    />
+                      {isImage ? (
+                        <img
+                          src={s.en}
+                          alt=""
+                          className="rounded-lg max-w-full h-auto"
+                        />
+                      ) : (
+                        <InteractiveText
+                          text={s.en || ''}
+                          contextSentence={s.en || ''}
+                          externalOnClick={(w) => handleWordClick(w, s.en)}
+                        />
+                      )}
 
-                    <AnimatePresence>
-                      {(showGlobalTranslation ||
-                        expandedTranslations[msg.id]) &&
-                        (s.zh ||
-                          (isOP &&
-                            i === sentences.length - 1 &&
-                            msg.content_cn)) && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="mt-2 pt-2 border-t border-white/5 text-sm text-white/50 italic overflow-hidden">
-                            {s.zh || msg.content_cn}
-                          </motion.div>
-                        )}
-                    </AnimatePresence>
-                  </div>
-                ))}
+                      <AnimatePresence>
+                        {(showGlobalTranslation ||
+                          expandedTranslations[msg.id]) &&
+                          (s.zh ||
+                            (isOP &&
+                              i === sentences.length - 1 &&
+                              msg.content_cn)) && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="mt-2 pt-2 border-t border-gray-200 dark:border-white/5 text-sm text-gray-500 dark:text-white/50 italic overflow-hidden">
+                              {s.zh || msg.content_cn}
+                            </motion.div>
+                          )}
+                      </AnimatePresence>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )
@@ -853,11 +913,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
         {isAiLoading && (
           <div className="flex justify-start px-12 py-4 animate-in slide-in-from-bottom-2 fade-in">
-            <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+            <div className="flex items-center gap-2 bg-gray-200 dark:bg-white/5 px-4 py-2 rounded-full border border-gray-300 dark:border-white/5">
               <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" />
               <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce delay-100" />
               <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce delay-200" />
-              <span className="text-[10px] text-orange-500 font-bold ml-2">
+              <span className="text-[10px] text-orange-600 dark:text-orange-500 font-bold ml-2">
                 {quotedMessage
                   ? `${quotedMessage.author} is typing...`
                   : 'AI is typing...'}
@@ -869,18 +929,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         <div className="h-32" />
       </main>
 
-      {/* Input Area */}
       <div
-        className="p-4 border-t border-white/5 bg-[#0B0A09] safe-area-bottom"
+        className="p-4 border-t border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-[#0B0A09] safe-area-bottom transition-colors"
         onClick={(e) => e.stopPropagation()}>
         {quotedMessage && (
-          <div className="flex justify-between items-center bg-white/5 rounded-t-lg p-2 mb-2 border border-white/5 border-b-0 animate-in slide-in-from-bottom">
+          <div className="flex justify-between items-center bg-gray-200 dark:bg-white/5 rounded-t-lg p-2 mb-2 border border-gray-300 dark:border-white/5 border-b-0 animate-in slide-in-from-bottom">
             <div className="flex flex-col max-w-[85%]">
               <span
-                className={`text-[9px] font-black uppercase tracking-widest ${isAiMode ? 'text-orange-500' : 'text-white/30'}`}>
+                className={`text-[9px] font-black uppercase tracking-widest ${isAiMode ? 'text-orange-500' : 'text-gray-400 dark:text-white/30'}`}>
                 {isAiMode ? `✨ Ask ${quotedMessage.author}` : 'Replying to'}
               </span>
-              <span className="text-[11px] text-white/70 truncate font-medium mt-0.5 break-all">
+              <span className="text-[11px] text-gray-600 dark:text-white/70 truncate font-medium mt-0.5 break-all">
                 "{quotedMessage.content}"
               </span>
             </div>
@@ -889,7 +948,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                 setQuotedMessage(null)
                 setIsAiMode(false)
               }}>
-              <span className="material-symbols-outlined text-sm text-white/50">
+              <span className="material-symbols-outlined text-sm text-gray-500 dark:text-white/50">
                 close
               </span>
             </button>
@@ -897,8 +956,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
         <div className="flex gap-3 items-center">
           <input
-            ref={inputRef} // 3. 绑定 Ref
-            className={`flex-1 h-10 rounded-full px-4 text-white text-sm outline-none border transition-colors ${isAiMode ? 'bg-orange-500/10 border-orange-500/50' : 'bg-white/5 border-white/5 focus:border-white/20'}`}
+            ref={inputRef}
+            className={`flex-1 h-10 rounded-full px-4 text-gray-900 dark:text-white text-sm outline-none border transition-colors ${isAiMode ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-500/50' : 'bg-white dark:bg-white/5 border-gray-200 dark:border-white/5 focus:border-gray-300 dark:focus:border-white/20'}`}
             placeholder={
               isAiMode ? `Ask ${quotedMessage?.author}...` : 'Reply...'
             }
@@ -918,7 +977,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
       <style>{`
          .menu-item {
-            @apply w-full text-left px-4 py-3.5 text-sm font-medium hover:bg-white/10 flex items-center gap-3 border-b border-white/5 active:bg-white/20 transition-colors;
+            @apply w-full text-left px-4 py-3.5 text-sm font-medium hover:bg-gray-100 dark:hover:bg-white/10 flex items-center gap-3 border-b border-gray-100 dark:border-white/5 active:bg-gray-200 dark:active:bg-white/20 transition-colors;
          }
          .touch-callout-none { -webkit-touch-callout: none; }
          @keyframes flash {

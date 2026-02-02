@@ -5,11 +5,12 @@ import React, {
   useState,
   useCallback,
 } from 'react'
-import { useAppStore, ProductionPost } from '../store/useAppStore'
+import { motion } from 'framer-motion'
+import { useAppStore } from '../store/useAppStore'
 import { useUserStore } from '../store/useUserStore'
 import { useAnalyticsStore } from '../store/useAnalyticsStore'
 import { supabase } from '../supabase'
-import { Page, Post } from '../types' // 引入 Post 类型
+import { Page, Post } from '../types'
 import { IMAGES } from '../constants'
 
 interface HomeProps {
@@ -25,7 +26,7 @@ const Home: React.FC<HomeProps> = ({
   onPostSelect,
   filteredCommunityId,
   onClearFilter,
-  initialTab = 'foryou'
+  initialTab = 'foryou',
 }) => {
   const {
     posts,
@@ -50,7 +51,6 @@ const Home: React.FC<HomeProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const touchStartRef = useRef(0)
 
-  // 构造当前的过滤器参数
   const getFilters = useCallback(() => {
     if (activeTab === 'following') {
       return { followedIds: followedCommunities }
@@ -61,12 +61,10 @@ const Home: React.FC<HomeProps> = ({
     return {}
   }, [activeTab, followedCommunities, filteredCommunityId])
 
-  // 切换标签或关注列表变化时，重新请求
   useEffect(() => {
     initFeed(getFilters())
   }, [activeTab, filteredCommunityId, followedCommunities.length])
 
-  // 同步恢复滚动位置
   useLayoutEffect(() => {
     if (
       posts.length > 0 &&
@@ -140,7 +138,6 @@ const Home: React.FC<HomeProps> = ({
     touchStartRef.current = 0
   }
 
-  // 处理从 Home 点击进入详情
   const handleOpenDiscussion = (prodPost: any) => {
     if (navigator.vibrate) navigator.vibrate(20)
 
@@ -155,31 +152,32 @@ const Home: React.FC<HomeProps> = ({
       videoUrl: prodPost.video_url || null,
       likes: prodPost.upvotes?.toString() || '0',
       stars: '0',
-      comments: 0,
+      // 修复：确保 comments 映射正确 (后端字段名可能是 comments 或 comment_count)
+      comments: prodPost.comments || prodPost.comment_count || 0,
       image_type: prodPost.image_type,
       subreddit: prodPost.subreddit,
     }
-
-    // [关键改动] 不再需要 600ms 的手动延时，直接利用 framer-motion 的 layoutId 进行转场
     onPostSelect(mappedPost)
   }
 
-  // 渲染空状态 (针对 Following 标签)
   const renderEmptyState = () => {
     if (activeTab === 'following' && followedCommunities.length === 0) {
       return (
         <div className="h-full w-full flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-500">
-          <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
-            <span className="material-symbols-outlined text-4xl text-white/20">explore</span>
+          <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-white/5 flex items-center justify-center mb-6">
+            <span className="material-symbols-outlined text-4xl text-gray-400 dark:text-white/20">
+              explore
+            </span>
           </div>
-          <h2 className="text-xl font-black text-white mb-2">Following is empty</h2>
-          <p className="text-sm text-white/40 font-medium mb-8">
-            You haven't followed any communities yet. Go to Discovery to find communities you like!
+          <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2">
+            Following is empty
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-white/40 font-medium mb-8">
+            You haven't followed any communities yet.
           </p>
           <button
             onClick={() => onNavigate(Page.Explore)}
-            className="px-8 py-3 bg-primary text-white font-black rounded-full active:scale-95 transition-transform shadow-[0_0_20px_rgba(var(--primary-rgb),0.4)]"
-          >
+            className="px-8 py-3 bg-primary text-white font-black rounded-full active:scale-95 transition-transform shadow-lg shadow-primary/30">
             Go to Discovery
           </button>
         </div>
@@ -189,12 +187,13 @@ const Home: React.FC<HomeProps> = ({
     if (posts.length === 0 && !isLoading) {
       return (
         <div className="h-full w-full flex flex-col items-center justify-center p-10 text-center">
-          <p className="text-white/20 font-bold uppercase tracking-widest text-xs">- No posts found -</p>
+          <p className="text-gray-400 dark:text-white/20 font-bold uppercase tracking-widest text-xs">
+            - No posts found -
+          </p>
           {filteredCommunityId && (
             <button
               onClick={onClearFilter}
-              className="mt-4 text-primary text-xs font-black uppercase tracking-widest"
-            >
+              className="mt-4 text-primary text-xs font-black uppercase tracking-widest">
               Clear Filter
             </button>
           )}
@@ -207,29 +206,33 @@ const Home: React.FC<HomeProps> = ({
 
   if (posts.length === 0 && isLoading && !isRefreshing) {
     return (
-      <div className="h-full w-full bg-[#0B0A09] flex flex-col items-center justify-center">
+      <div className="h-full w-full bg-gray-50 dark:bg-[#0B0A09] flex flex-col items-center justify-center transition-colors duration-300">
         <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
       </div>
     )
   }
 
   return (
-    <div className="relative h-full w-full bg-[#0B0A09] overflow-hidden">
-
-      {/* 社区过滤状态显示 */}
+    <div className="relative h-full w-full bg-gray-50 dark:bg-[#0B0A09] overflow-hidden transition-colors duration-300">
       {filteredCommunityId && activeTab === 'foryou' && (
         <div className="absolute top-[100px] left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top-4 duration-300">
           <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/20 backdrop-blur-md border border-primary/30 rounded-full">
-            <span className="text-[10px] font-black text-primary uppercase tracking-wider">r/{posts[0]?.subreddit || 'Filtered'}</span>
-            <button onClick={onClearFilter} className="flex items-center justify-center text-primary">
-              <span className="material-symbols-outlined text-[16px]">close</span>
+            <span className="text-[10px] font-black text-primary uppercase tracking-wider">
+              r/{posts[0]?.subreddit || 'Filtered'}
+            </span>
+            <button
+              onClick={onClearFilter}
+              className="flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined text-[16px]">
+                close
+              </span>
             </button>
           </div>
         </div>
       )}
 
-      <header
-        className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-5 pt-12 pb-8 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none transition-all duration-300 ease-apple">
+      {/* Header: 修复背景适配，亮色下也保持一定深色遮罩或清晰度，但遵循设计要求 */}
+      <header className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-5 pt-12 pb-8 bg-gradient-to-b from-black/60 via-black/20 to-transparent pointer-events-none transition-all duration-300">
         <button className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
           <span className="material-symbols-outlined text-[20px]">menu</span>
         </button>
@@ -265,7 +268,7 @@ const Home: React.FC<HomeProps> = ({
         className="absolute top-12 left-0 right-0 z-40 flex justify-center transition-transform duration-300 pointer-events-none"
         style={{ transform: `translateY(${pullY - 40}px)` }}>
         <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${isRefreshing ? 'bg-white opacity-100 scale-100' : 'opacity-0 scale-50'}`}>
+          className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 bg-white dark:bg-[#1C1C1E] ${isRefreshing ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`}>
           {isRefreshing && (
             <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
           )}
@@ -281,36 +284,34 @@ const Home: React.FC<HomeProps> = ({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           style={{ transform: `translateY(${pullY > 0 ? pullY / 3 : 0}px)` }}>
-          {posts.map((post, index) => {
-            const isTriggerPoint = index === posts.length - 3
-
-            return (
-              <div
-                key={`${post.id}-${index}`}
-                ref={isTriggerPoint ? lastPostElementRef : null}
-                className="h-full w-full snap-start relative"
-                style={{ scrollSnapStop: 'always' }}>
-                <FeedItem
-                  post={post}
-                  onOpenDiscussion={() => handleOpenDiscussion(post)}
-                  isExiting={false}
-                  isActive={index === currentPostIndex}
-                />
-              </div>
-            )
-          })}
+          {posts.map((post, index) => (
+            <div
+              key={`${post.id}-${index}`}
+              ref={index === posts.length - 3 ? lastPostElementRef : null}
+              className="h-full w-full snap-start relative"
+              style={{ scrollSnapStop: 'always' }}>
+              <FeedItem
+                post={post}
+                onOpenDiscussion={() => handleOpenDiscussion(post)}
+                isExiting={false}
+                isActive={index === currentPostIndex}
+              />
+            </div>
+          ))}
 
           {posts.length > 0 && (
             <div
-              className="h-20 w-full flex items-center justify-center snap-start bg-black/50"
+              className="h-20 w-full flex items-center justify-center snap-start bg-gray-50 dark:bg-black/50 transition-colors"
               style={{ scrollSnapStop: 'always' }}>
               {isLoadingMore ? (
-                <div className="flex items-center gap-2 text-white/50 text-xs font-bold uppercase tracking-widest">
-                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                <div className="flex items-center gap-2 text-gray-400 dark:text-white/50 text-xs font-bold uppercase tracking-widest">
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
                   Loading More...
                 </div>
               ) : (
-                <div className="text-white/20 text-[10px]">- End of Feed -</div>
+                <div className="text-gray-300 dark:text-white/20 text-[10px]">
+                  - End of Feed -
+                </div>
               )}
             </div>
           )}
@@ -320,9 +321,6 @@ const Home: React.FC<HomeProps> = ({
   )
 }
 
-import { motion } from 'framer-motion'
-
-// --- FeedItem 组件 (已集成 Shared Element Transition) ---
 export const FeedItem: React.FC<{
   post: any
   onOpenDiscussion: () => void
@@ -330,15 +328,18 @@ export const FeedItem: React.FC<{
   onBack?: () => void
   isActive?: boolean
 }> = ({ post, onOpenDiscussion, isExiting, onBack, isActive = true }) => {
-  const { toggleLike, isLiked: checkIsLiked, toggleFollowCommunity, isFollowing } = useUserStore()
+  const {
+    toggleLike,
+    isLiked: checkIsLiked,
+    toggleFollowCommunity,
+    isFollowing,
+  } = useUserStore()
   const { logEvent } = useAnalyticsStore()
 
   const isLiked = checkIsLiked(post.id)
-  const isSubscribed = post.community_id ? isFollowing(post.community_id) : false
-
-  // Tracking Refs
-  const entryTimeRef = useRef<number>(0)
-  const hasLoggedDwell = useRef(false)
+  const isSubscribed = post.community_id
+    ? isFollowing(post.community_id)
+    : false
 
   const handleToggleSub = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -348,68 +349,19 @@ export const FeedItem: React.FC<{
     }
   }
 
-  // [修复Bug] 兼容两种数据格式：
-  // 1. upvotes (Home页的 ProductionPost)
-  // 2. likes (Profile页传递过来的 Post，是 string)
   const initialLikes =
     typeof post.upvotes === 'number' ? post.upvotes : parseInt(post.likes) || 0
-
   const [likes, setLikes] = useState(initialLikes)
-
   const videoRef = useRef<HTMLVideoElement>(null)
   const [videoError, setVideoError] = useState(false)
 
+  const hasVideo = !!(post.videoUrl || post.video_url) && !videoError
+  const imageUrl = post.image_url || post.image || ''
   const titleEn = post.title_en || post.titleEn || ''
   const titleCn = post.title_cn || post.titleZh || ''
-  const imageUrl = post.image_url || post.image || ''
-  const videoUrl = post.videoUrl || post.video_url || ''
   const subreddit = post.subreddit || 'Community'
-  const commentCount = post.comments || 'Discuss'
-
-  const hasVideo = !!videoUrl && !videoError
-
-  // Analytics: Dwell Time & Completion Logic
-  useEffect(() => {
-    if (isActive && !isExiting) {
-      // User started viewing this post
-      entryTimeRef.current = Date.now()
-      hasLoggedDwell.current = false
-    } else {
-      // User scrolled away or component unmounting/exiting
-      if (entryTimeRef.current > 0 && !hasLoggedDwell.current) {
-        const duration = Date.now() - entryTimeRef.current
-
-        // Only log if duration is meaningful (> 500ms to avoid fast scrolls)
-        if (duration > 500) {
-          const isInterest = duration > 3000 // > 3s
-
-          let isComplete = false
-          let progress = 0
-
-          // Calculate video completion if available
-          if (hasVideo && videoRef.current && videoRef.current.duration) {
-            progress = videoRef.current.currentTime / videoRef.current.duration
-            if (progress > 0.8) isComplete = true
-          }
-
-          logEvent({
-            post_id: post.id,
-            interaction_type: 'dwell',
-            metadata: {
-              duration_ms: duration,
-              is_interest: isInterest,
-              is_complete: isComplete,
-              progress: progress
-            }
-          })
-          hasLoggedDwell.current = true
-        }
-
-        // Reset
-        entryTimeRef.current = 0
-      }
-    }
-  }, [isActive, isExiting, hasVideo, post.id, logEvent])
+  // 修复：正确显示评论数
+  const commentCount = post.comments || post.comment_count || 0
 
   useEffect(() => {
     if (hasVideo && videoRef.current && !isExiting) {
@@ -422,7 +374,7 @@ export const FeedItem: React.FC<{
             videoRef.current!.pause()
           }
         } catch (e) {
-          console.log('Playback prevented:', e)
+          console.log('Playback prevented', e)
         }
       }
       attemptPlay()
@@ -433,15 +385,8 @@ export const FeedItem: React.FC<{
     if (isExiting) return
     toggleLike(post)
     if (navigator.vibrate) navigator.vibrate(50)
-
     logEvent({ post_id: post.id, interaction_type: 'click_like' })
-
-    // 更新本地显示
-    if (isLiked) {
-      setLikes((prev) => Math.max(0, prev - 1))
-    } else {
-      setLikes((prev) => prev + 1)
-    }
+    setLikes((prev) => (isLiked ? Math.max(0, prev - 1) : prev + 1))
 
     try {
       const newCount = isLiked ? likes - 1 : likes + 1
@@ -449,42 +394,29 @@ export const FeedItem: React.FC<{
         .from('production_posts')
         .update({ upvotes: newCount })
         .eq('id', post.id)
-    } catch (error) {
-      console.error('Like update failed', error)
-    }
+    } catch (e) {}
   }
 
   const handleDiscussionClick = () => {
     logEvent({ post_id: post.id, interaction_type: 'click_discussion' })
     onOpenDiscussion()
   }
-
   const handleShare = async () => {
-    if (isExiting) return
-
     logEvent({ post_id: post.id, interaction_type: 'click_share' })
-
-    if (navigator.share) {
+    if (navigator.share)
       navigator.share({
         title: titleEn,
         text: titleCn,
         url: window.location.href,
       })
-    }
   }
 
   return (
     <div className="h-full w-full bg-[#0B0A09] relative">
       <motion.div
         layoutId={`post-card-${post.id}`}
-        transition={{
-          type: "spring",
-          stiffness: 70, // 配合镜头降落的优雅慢速
-          damping: 20,
-        }}
-        className="relative h-full w-full overflow-hidden bg-[#121212] rounded-none shadow-none z-[100] brightness-100"
-      >
-        {/* 返回按钮 (Preview模式) */}
+        transition={{ type: 'spring', stiffness: 70, damping: 20 }}
+        className="relative h-full w-full overflow-hidden bg-[#121212] z-[100]">
         {onBack && !isExiting && (
           <button
             onClick={(e) => {
@@ -501,24 +433,20 @@ export const FeedItem: React.FC<{
         <div
           className="absolute inset-0 h-full w-full overflow-hidden"
           onClick={() => {
-            if (!isExiting && hasVideo && videoRef.current) {
+            if (!isExiting && hasVideo && videoRef.current)
               videoRef.current.paused
                 ? videoRef.current.play()
                 : videoRef.current.pause()
-            }
           }}>
           {hasVideo ? (
             <video
               ref={videoRef}
-              src={videoUrl}
+              src={post.videoUrl || post.video_url}
               className="h-full w-full object-cover"
               loop
               muted
               playsInline
-              {...{ 'webkit-playsinline': 'true' }}
-              onError={() => {
-                setVideoError(true)
-              }}
+              onError={() => setVideoError(true)}
             />
           ) : (
             <>
@@ -530,18 +458,14 @@ export const FeedItem: React.FC<{
               <motion.img
                 layoutId={`post-image-${post.id}`}
                 src={imageUrl}
-                alt="Content"
-                className="absolute inset-0 w-full h-full object-contain object-center z-10 drop-shadow-2xl will-change-transform"
-                transition={{
-                  type: "spring",
-                  stiffness: 70,
-                  damping: 20,
-                }}
+                className="absolute inset-0 w-full h-full object-contain object-center z-10 drop-shadow-2xl"
+                transition={{ type: 'spring', stiffness: 70, damping: 20 }}
               />
             </>
           )}
+          {/* 修复：移除白色雾气，始终使用深色遮罩以保证白色文字可读 */}
           <div
-            className={`absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none z-20 transition-opacity duration-300 ${isExiting ? 'opacity-0' : 'opacity-100'}`}
+            className={`absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none z-20 transition-opacity duration-300 ${isExiting ? 'opacity-0' : 'opacity-100'}`}
           />
         </div>
 
@@ -576,11 +500,7 @@ export const FeedItem: React.FC<{
               </div>
               <button
                 onClick={handleToggleSub}
-                className={`backdrop-blur-md border text-[10px] font-bold px-3 py-1.5 rounded-full ml-2 transition-all active:scale-95 pointer-events-auto ${isSubscribed
-                  ? 'bg-primary/20 border-primary/30 text-primary'
-                  : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
-                  }`}
-              >
+                className={`backdrop-blur-md border text-[10px] font-bold px-3 py-1.5 rounded-full ml-2 transition-all active:scale-95 pointer-events-auto ${isSubscribed ? 'bg-primary/20 border-primary/30 text-primary' : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'}`}>
                 {isSubscribed ? 'Following' : 'Subscribe'}
               </button>
             </div>

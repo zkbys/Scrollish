@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   DictionaryResult,
@@ -58,8 +58,7 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   const getBestVoice = (targetAccent: Accent) => {
     const langCode = targetAccent === 'US' ? 'en-US' : 'en-GB'
 
-    // 优先级 1: 微软/谷歌的高级神经语音 (Edge/Chrome 特有)
-    // 优先级 2: 匹配语言代码的本地语音
+    // 优先级: 微软/谷歌的高级神经语音 > 本地匹配 > 兜底英语
     return (
       availableVoices.find(
         (v) =>
@@ -68,13 +67,12 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
       ) ||
       availableVoices.find((v) => v.lang === langCode) ||
       availableVoices.find((v) => v.lang.startsWith('en'))
-    ) // 兜底
+    )
   }
 
   const handlePlayAudio = () => {
     if (!word) return
 
-    // 这是一个防抖操作，防止连续点击导致声音堆叠
     window.speechSynthesis.cancel()
 
     const utterance = new SpeechSynthesisUtterance(word)
@@ -107,10 +105,8 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           className="w-full max-w-md bg-[#1C1C1E] border-t sm:border border-white/10 sm:rounded-2xl rounded-t-[2rem] p-6 shadow-2xl relative overflow-hidden"
           onClick={(e) => e.stopPropagation()}>
-          {/* 装饰背景 */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 blur-[50px] rounded-full pointer-events-none" />
 
-          {/* 头部区域 */}
           <div className="flex justify-between items-start mb-6 relative z-10">
             <div>
               <div className="flex items-baseline gap-3">
@@ -131,25 +127,25 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                 ) : (
                   <span className="animate-pulse">Analyzing...</span>
                 )}
-                {/* 显示当前口音标记 */}
+                {/* 显式显示当前口音，点击可切换 */}
                 <span
-                  className="text-[10px] bg-white/5 px-1.5 rounded border border-white/5 cursor-pointer hover:bg-white/10"
+                  className="text-[10px] bg-white/5 px-1.5 rounded border border-white/5 cursor-pointer hover:bg-white/10 transition-colors"
                   onClick={() => setShowVoiceSettings(!showVoiceSettings)}>
                   {accent}
                 </span>
               </div>
             </div>
 
-            <div className="flex gap-2">
-              {/* 发音设置切换面板 (简单版) */}
+            <div className="flex gap-2 relative">
+              {/* 发音设置面板 */}
               {showVoiceSettings && (
-                <div className="absolute top-0 right-14 bg-[#2C2C2E] border border-white/10 rounded-xl p-2 flex flex-col gap-1 shadow-xl animate-in fade-in zoom-in-95 duration-200 z-50">
+                <div className="absolute top-12 right-0 bg-[#2C2C2E] border border-white/10 rounded-xl p-2 flex flex-col gap-1 shadow-xl animate-in fade-in zoom-in-95 duration-200 z-50 min-w-[100px]">
                   <button
                     onClick={() => {
                       setAccent('US')
                       setShowVoiceSettings(false)
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between gap-2 ${accent === 'US' ? 'bg-green-600 text-white' : 'text-white/60 hover:bg-white/5'}`}>
+                    className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-between gap-2 ${accent === 'US' ? 'bg-green-600 text-white' : 'text-white/60 hover:bg-white/5'}`}>
                     <span>🇺🇸 US</span>
                     {accent === 'US' && (
                       <span className="material-symbols-outlined text-[10px]">
@@ -162,7 +158,7 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                       setAccent('UK')
                       setShowVoiceSettings(false)
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between gap-2 ${accent === 'UK' ? 'bg-green-600 text-white' : 'text-white/60 hover:bg-white/5'}`}>
+                    className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-between gap-2 ${accent === 'UK' ? 'bg-green-600 text-white' : 'text-white/60 hover:bg-white/5'}`}>
                     <span>🇬🇧 UK</span>
                     {accent === 'UK' && (
                       <span className="material-symbols-outlined text-[10px]">
@@ -207,6 +203,7 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
             </div>
           </div>
 
+          {/* 释义内容区域 */}
           <div className="space-y-4 relative z-10 max-h-[60vh] overflow-y-auto no-scrollbar">
             {definition ? (
               <>
