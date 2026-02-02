@@ -54,3 +54,23 @@ export interface GroupChat {
   isAi?: boolean
   previewMessages?: { text: string; isMe?: boolean }[]
 }
+
+export interface Dictionary {
+  id: string
+  name: string
+  description?: string
+  type: 'system' | 'user'
+  is_public: boolean
+  user_id?: string
+}
+
+export interface DictionaryEntry {
+  id: string
+  dictionary_id: string
+  word: string
+  definition?: string
+  detail?: {
+    phonetic?: string
+    examples?: { en: string; zh: string }[]
+  }
+}

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { ChatMessage } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
+import SmartText from '../components/SmartText'
+import WordDetailSheet from '../components/WordDetailSheet'
 
 interface ChatRoomProps {
   postId: string
@@ -27,6 +29,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const [activeAnalysis, setActiveAnalysis] = useState<
     ChatMessage['analysis'] | null
   >(null)
+
+  // --- [新增] 单词查询相关状态 ---
+  const [selectedWord, setSelectedWord] = useState<string | null>(null)
+  const [isVipWord, setIsVipWord] = useState(false)
 
   // --- [新增] 下拉返回相关状态 ---
   const [pullY, setPullY] = useState(0) // 下拉距离
@@ -139,6 +145,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         {parts[1]}
       </>
     )
+  }
+
+  const handleWordClick = (word: string, isVip: boolean) => {
+    setSelectedWord(word)
+    setIsVipWord(isVip)
   }
 
   // --- [新增] 手势处理逻辑 ---
@@ -263,6 +274,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         </div>
       )}
 
+      {/* Word Detail Sheet */}
+      <WordDetailSheet
+        word={selectedWord}
+        isVip={isVipWord}
+        onClose={() => setSelectedWord(null)}
+      />
+
       <header className="relative z-50 bg-[#0B0A09]/80 backdrop-blur-xl border-b border-white/5 h-16 flex items-center px-4 shrink-0 justify-between">
         <button
           onClick={onBack}
@@ -361,8 +379,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                           relative px-4 py-3 shadow-sm bg-[#1A1A1A]/80 backdrop-blur-md text-gray-100 border border-white/5 
                           text-[15px] leading-relaxed font-medium break-words max-w-full
                           ${bubbleIdx === 0 ? 'rounded-2xl rounded-tl-none' : 'rounded-2xl'} 
-                        `}>
-                          {renderFragmentWithGlow(bubbleText, msg.analysis)}
+                        `}
+                          onClick={(e) => {
+                            // Prevent triggering quote when clicking on words
+                            if ((e.target as HTMLElement).classList.contains('vip-word') ||
+                              (e.target as HTMLElement).classList.contains('normal-word')) {
+                              e.stopPropagation()
+                            }
+                          }}>
+                          {msg.analysis && bubbleText.includes(msg.analysis.keyword) ? (
+                            renderFragmentWithGlow(bubbleText, msg.analysis)
+                          ) : (
+                            <SmartText content={bubbleText} onWordClick={handleWordClick} />
+                          )}
                         </div>
                       ),
                     )}

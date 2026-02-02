@@ -11,6 +11,8 @@ import { useAnalyticsStore } from '../store/useAnalyticsStore'
 import { supabase } from '../supabase'
 import { Page, Post } from '../types' // 引入 Post 类型
 import { IMAGES } from '../constants'
+import SmartText from '../components/SmartText'
+import WordDetailSheet from '../components/WordDetailSheet'
 
 interface HomeProps {
   onNavigate: (page: Page) => void
@@ -340,6 +342,10 @@ export const FeedItem: React.FC<{
   const entryTimeRef = useRef<number>(0)
   const hasLoggedDwell = useRef(false)
 
+  // Word selection state
+  const [selectedWord, setSelectedWord] = useState<string | null>(null)
+  const [isVipWord, setIsVipWord] = useState(false)
+
   const handleToggleSub = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (post.community_id) {
@@ -473,6 +479,11 @@ export const FeedItem: React.FC<{
     }
   }
 
+  const handleWordClick = (word: string, isVip: boolean) => {
+    setSelectedWord(word)
+    setIsVipWord(isVip)
+  }
+
   return (
     <div className="h-full w-full bg-[#0B0A09] relative">
       <motion.div
@@ -586,10 +597,10 @@ export const FeedItem: React.FC<{
             </div>
             <div className="pointer-events-auto mb-2 space-y-1">
               <h1 className="text-white text-[18px] font-black leading-snug drop-shadow-lg pr-4">
-                {titleEn}
+                <SmartText content={titleEn} onWordClick={handleWordClick} />
               </h1>
               <p className="text-white/80 text-[15px] font-medium leading-snug drop-shadow-md line-clamp-3 pr-4">
-                {titleCn}
+                <SmartText content={titleCn} onWordClick={handleWordClick} />
               </p>
             </div>
           </div>
@@ -635,6 +646,13 @@ export const FeedItem: React.FC<{
           </div>
         </div>
       </motion.div>
+
+      {/* Word Detail Sheet */}
+      <WordDetailSheet
+        word={selectedWord}
+        isVip={isVipWord}
+        onClose={() => setSelectedWord(null)}
+      />
     </div>
   )
 }

@@ -11,6 +11,9 @@ import Study from './pages/Study'
 import Profile from './pages/Profile'
 import CommunityDetail from './pages/CommunityDetail'
 import BottomNav from './components/BottomNav'
+import { useDictionaryStore } from './store/useDictionaryStore'
+import { seedDictionaryData } from './scripts/seedDictionary'
+import { importPresets } from './scripts/importVocabulary'
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
@@ -25,6 +28,10 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true)
   // [新增] 追踪是否处于社区详情流中，用于 TopicHub 返回判断
   const [isCommunityFlow, setIsCommunityFlow] = useState(false)
+
+  // [新增] Dictionary feature
+  const { fetchDictionaries } = useDictionaryStore()
+  const [showDevTools, setShowDevTools] = useState(false)
 
   useEffect(() => {
     const fetchAllPosts = async () => {
@@ -65,6 +72,8 @@ const App: React.FC = () => {
     }
 
     fetchAllPosts()
+    // Initialize dictionaries
+    fetchDictionaries()
   }, [])
 
   // [重构] 统一导航处理，记录上一步页面 + 识别起始 Tab 页
@@ -270,6 +279,101 @@ const App: React.FC = () => {
             onNavigate={navigateTo}
           />
         )}
+
+        {/* Dev Tools - Dictionary Seeding (Remove in production) */}
+        {showDevTools && (
+          <div className="absolute top-20 right-4 z-[300] bg-black/90 backdrop-blur-xl border border-orange-500/30 rounded-2xl p-4 shadow-2xl max-h-[70vh] overflow-y-auto w-64">
+            <h3 className="text-white text-xs font-bold mb-3">🛠️ Dev Tools</h3>
+
+            <div className="space-y-2">
+              {/* Quick Test Data */}
+              <button
+                onClick={async () => {
+                  const result = await seedDictionaryData()
+                  if (result) {
+                    alert('✅ Test data seeded!')
+                    fetchDictionaries()
+                  }
+                }}
+                className="w-full bg-orange-500 text-white text-xs font-bold py-2 px-3 rounded-lg active:scale-95 transition-transform">
+                Seed Test Data (10 words)
+              </button>
+
+              <div className="border-t border-white/10 pt-2 mt-2">
+                <p className="text-white/60 text-[10px] font-bold mb-2 uppercase tracking-wider">Import Real Dictionaries</p>
+
+                {/* College Student */}
+                <button
+                  onClick={async () => {
+                    if (confirm('Import CET-4 & CET-6? (~4500 words)\nThis may take 1-2 minutes.')) {
+                      console.log('Starting college preset import...')
+                      const result = await importPresets.college()
+                      alert(`✅ Imported ${result.totalWords} words!\n${result.success.join(', ')}`)
+                      fetchDictionaries()
+                    }
+                  }}
+                  className="w-full bg-blue-500 text-white text-xs font-bold py-2 px-3 rounded-lg active:scale-95 transition-transform mb-2">
+                  📚 College (CET-4/6)
+                </button>
+
+                {/* Postgraduate */}
+                <button
+                  onClick={async () => {
+                    if (confirm('Import CET-4, CET-6 & Postgraduate? (~10000 words)\nThis may take 2-3 minutes.')) {
+                      console.log('Starting postgraduate preset import...')
+                      const result = await importPresets.postgraduate()
+                      alert(`✅ Imported ${result.totalWords} words!\n${result.success.join(', ')}`)
+                      fetchDictionaries()
+                    }
+                  }}
+                  className="w-full bg-purple-500 text-white text-xs font-bold py-2 px-3 rounded-lg active:scale-95 transition-transform mb-2">
+                  🎓 Postgraduate
+                </button>
+
+                {/* Study Abroad */}
+                <button
+                  onClick={async () => {
+                    if (confirm('Import TOEFL, IELTS & SAT?\nThis may take 2-3 minutes.')) {
+                      console.log('Starting abroad preset import...')
+                      const result = await importPresets.abroad()
+                      alert(`✅ Imported ${result.totalWords} words!\n${result.success.join(', ')}`)
+                      fetchDictionaries()
+                    }
+                  }}
+                  className="w-full bg-green-500 text-white text-xs font-bold py-2 px-3 rounded-lg active:scale-95 transition-transform mb-2">
+                  ✈️ Study Abroad
+                </button>
+
+                {/* Import All */}
+                <button
+                  onClick={async () => {
+                    if (confirm('Import ALL dictionaries?\nThis will take 3-5 minutes and import 15000+ words.')) {
+                      console.log('Starting full import...')
+                      const result = await importPresets.all()
+                      alert(`✅ Imported ${result.totalWords} words!\n${result.success.join(', ')}`)
+                      fetchDictionaries()
+                    }
+                  }}
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold py-2 px-3 rounded-lg active:scale-95 transition-transform">
+                  🚀 Import All
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowDevTools(false)}
+                className="w-full mt-3 bg-white/10 text-white text-xs font-bold py-2 px-3 rounded-lg active:scale-95 transition-transform">
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Dev Tools Toggle (Triple tap top-left corner) */}
+        <div
+          onClick={() => setShowDevTools(!showDevTools)}
+          className="absolute top-0 left-0 w-16 h-16 z-[299]"
+          style={{ opacity: 0 }}
+        />
       </div>
     </div>
   )
