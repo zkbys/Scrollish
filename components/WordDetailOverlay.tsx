@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   DictionaryResult,
@@ -12,6 +12,8 @@ interface WordDetailOverlayProps {
   onSave?: (word: string) => void
 }
 
+type Accent = 'US' | 'UK'
+
 const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   word,
   definition,
@@ -21,6 +23,30 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   const [isSaved, setIsSaved] = useState(false)
   const { forgetWord } = useDictionaryStore()
 
+  // TTS 状态
+  const [availableVoices, setAvailableVoices] = useState<
+    SpeechSynthesisVoice[]
+  >([])
+  const [accent, setAccent] = useState<Accent>('US')
+  const [showVoiceSettings, setShowVoiceSettings] = useState(false)
+
+  // 1. 修复电脑端 TTS：异步加载声音列表
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices()
+      if (voices.length > 0) {
+        setAvailableVoices(voices)
+      }
+    }
+
+    loadVoices()
+
+    // Chrome/Edge 需要监听此事件才能获取到声音列表
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices
+    }
+  }, [])
+
   if (!word) return null
 
   const handleSave = () => {
@@ -29,19 +55,44 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
     if (onSave && !isSaved) onSave(word)
   }
 
+  const getBestVoice = (targetAccent: Accent) => {
+    const langCode = targetAccent === 'US' ? 'en-US' : 'en-GB'
+
+    // 优先级 1: 微软/谷歌的高级神经语音 (Edge/Chrome 特有)
+    // 优先级 2: 匹配语言代码的本地语音
+    return (
+      availableVoices.find(
+        (v) =>
+          v.lang === langCode &&
+          (v.name.includes('Natural') || v.name.includes('Google')),
+      ) ||
+      availableVoices.find((v) => v.lang === langCode) ||
+      availableVoices.find((v) => v.lang.startsWith('en'))
+    ) // 兜底
+  }
+
   const handlePlayAudio = () => {
-    // 关键修复：先取消之前的，防止阻塞
+    if (!word) return
+
+    // 这是一个防抖操作，防止连续点击导致声音堆叠
     window.speechSynthesis.cancel()
+
     const utterance = new SpeechSynthesisUtterance(word)
-    utterance.lang = 'en-US'
-    utterance.rate = 0.8
+    const voice = getBestVoice(accent)
+
+    if (voice) {
+      utterance.voice = voice
+      // 电脑端某些声音语速较快，稍微调慢一点更像字典发音
+      utterance.rate = 0.85
+    }
+
     window.speechSynthesis.speak(utterance)
   }
 
   const handleForget = () => {
     if (navigator.vibrate) navigator.vibrate(20)
     forgetWord(word)
-    onClose() // 移除后直接关闭弹窗
+    onClose()
   }
 
   return (
@@ -68,7 +119,7 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                 </h2>
                 <button
                   onClick={handlePlayAudio}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-green-500 active:text-white transition-colors">
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white/80 active:bg-green-500 active:text-white transition-colors hover:bg-white/20">
                   <span className="material-symbols-outlined text-[20px]">
                     volume_up
                   </span>
@@ -80,15 +131,60 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                 ) : (
                   <span className="animate-pulse">Analyzing...</span>
                 )}
+                {/* 显示当前口音标记 */}
+                <span
+                  className="text-[10px] bg-white/5 px-1.5 rounded border border-white/5 cursor-pointer hover:bg-white/10"
+                  onClick={() => setShowVoiceSettings(!showVoiceSettings)}>
+                  {accent}
+                </span>
               </div>
             </div>
 
             <div className="flex gap-2">
-              {/* 新增：移除高亮按钮 */}
+              {/* 发音设置切换面板 (简单版) */}
+              {showVoiceSettings && (
+                <div className="absolute top-0 right-14 bg-[#2C2C2E] border border-white/10 rounded-xl p-2 flex flex-col gap-1 shadow-xl animate-in fade-in zoom-in-95 duration-200 z-50">
+                  <button
+                    onClick={() => {
+                      setAccent('US')
+                      setShowVoiceSettings(false)
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between gap-2 ${accent === 'US' ? 'bg-green-600 text-white' : 'text-white/60 hover:bg-white/5'}`}>
+                    <span>🇺🇸 US</span>
+                    {accent === 'US' && (
+                      <span className="material-symbols-outlined text-[10px]">
+                        check
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAccent('UK')
+                      setShowVoiceSettings(false)
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between gap-2 ${accent === 'UK' ? 'bg-green-600 text-white' : 'text-white/60 hover:bg-white/5'}`}>
+                    <span>🇬🇧 UK</span>
+                    {accent === 'UK' && (
+                      <span className="material-symbols-outlined text-[10px]">
+                        check
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* 设置按钮 */}
+              <button
+                onClick={() => setShowVoiceSettings(!showVoiceSettings)}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 border ${showVoiceSettings ? 'bg-white/20 border-white/20 text-white' : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10'}`}>
+                <span className="material-symbols-outlined text-[20px]">
+                  settings_voice
+                </span>
+              </button>
+
               <button
                 onClick={handleForget}
-                className="w-12 h-12 rounded-full flex items-center justify-center bg-white/5 text-white/40 border border-white/5 hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition-all active:scale-90"
-                title="Remove Highlight">
+                className="w-12 h-12 rounded-full flex items-center justify-center bg-white/5 text-white/40 border border-white/5 hover:bg-red-500/20 hover:text-red-500 hover:border-red-500/30 transition-all active:scale-90">
                 <span className="material-symbols-outlined text-[22px]">
                   visibility_off
                 </span>
@@ -111,7 +207,6 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
             </div>
           </div>
 
-          {/* 内容区域 */}
           <div className="space-y-4 relative z-10 max-h-[60vh] overflow-y-auto no-scrollbar">
             {definition ? (
               <>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../supabase' // 引入 supabase
+import { supabase } from '../supabase'
 import { Page } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
 import { useDictionaryStore } from '../store/useDictionaryStore'
@@ -27,7 +27,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const [videoError, setVideoError] = useState(false)
   const [viewingWord, setViewingWord] = useState<string | null>(null)
 
-  // 新增：存储完整的 OP 内容
+  // 独立状态存储 OP 内容，防止 props 中缺失
   const [opContent, setOpContent] = useState<{ en: string; cn: string } | null>(
     null,
   )
@@ -40,46 +40,58 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const { fetchComments, getComments, isLoading } = useCommentStore()
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
 
+  // 1. 获取 OP 正文 (修复 Loading content 问题)
   useEffect(() => {
     if (post?.id) {
       fetchComments(post.id)
-      // 1. 单独拉取 OP 正文，解决 Card 0 为空的问题
-      const fetchOp = async () => {
-        const { data } = await supabase
-          .from('production_posts')
-          .select('content_en, content_cn')
-          .eq('id', post.id)
-          .single()
-        if (data) {
-          setOpContent({ en: data.content_en || '', cn: data.content_cn || '' })
+
+      // 优先使用 props 里的内容，如果缺失则去数据库查
+      if (post.content_en && post.content_en.length > 20) {
+        setOpContent({ en: post.content_en, cn: post.content_cn })
+      } else {
+        const fetchOp = async () => {
+          const { data } = await supabase
+            .from('production_posts')
+            .select('content_en, content_cn, title_en, title_cn')
+            .eq('id', post.id)
+            .single()
+          if (data) {
+            setOpContent({
+              en: data.content_en || data.title_en || '',
+              cn: data.content_cn || data.title_cn || '',
+            })
+          }
         }
+        fetchOp()
       }
-      fetchOp()
     }
-  }, [post.id, fetchComments])
+  }, [post, fetchComments])
 
   const allComments = getComments(post.id)
 
   const comments = useMemo(() => {
-    // 2. 使用拉取到的 opContent (优先) 或 post 里的 fallback
-    const contentEn =
+    // 2. 构造第0张卡片 (OP)
+    // 优先级: state -> props -> fallback
+    const finalContentEn =
       opContent?.en || post.content_en || post.title_en || 'Loading content...'
-    const contentCn = opContent?.cn || post.content_cn || post.title_cn || ''
+    const finalContentCn =
+      opContent?.cn || post.content_cn || post.title_cn || ''
 
     const opCard = {
       id: 'op-card-0',
       isOpCard: true,
       author: post.author || post.subreddit || 'OP',
-      content: contentEn,
-      content_cn: contentCn,
+      content: finalContentEn,
+      content_cn: finalContentCn,
       upvotes: post.upvotes || 0,
       depth: -1,
-      enrichment: { sentence_segments: null },
+      enrichment: null, // OP 卡片通常没有 enrichment 分句数据
     }
 
     const topLevel = allComments.filter((c) => c.depth === 0)
     const sortedComments = topLevel.sort((a, b) => b.upvotes - a.upvotes)
 
+    // 即使评论没加载完，也要先显示 OP 卡片
     if (topLevel.length === 0 && isLoading[post.id]) {
       return [opCard]
     }
@@ -141,10 +153,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
       ? replyCounts[activeComment.id] || 0
       : 0
 
+  // --- 核心修复：TopicHub 分句逻辑 ---
   const displaySegments = useMemo(() => {
     if (!activeComment) return []
 
-    // OP Card 走正则分句，且不携带 zh (防止重复)
+    // OP Card: 走正则分句 + 底部整段翻译
     if (activeComment.isOpCard) {
       const text = activeComment.content || ''
       const rawSentences = text.match(
@@ -153,15 +166,22 @@ const TopicHub: React.FC<TopicHubProps> = ({
       return rawSentences.map((en) => ({ en: en.trim(), zh: null }))
     }
 
-    if (activeComment.enrichment?.sentence_segments) {
+    // Comment Card: 优先使用 enrichment 数据
+    // 注意：Store 中已经处理了 enrichment 为数组的情况，这里直接判断
+    if (
+      activeComment.enrichment?.sentence_segments &&
+      Array.isArray(activeComment.enrichment.sentence_segments)
+    ) {
       return activeComment.enrichment.sentence_segments
     }
+
+    // 降级：正则分句，zh 为 null (显示在底部)
     const rawSentences = activeComment.content.match(
       /[^.!?。！？\n]+[.!?。！？\n]+|[^.!?。！？\n]+$/g,
     ) || [activeComment.content]
     return rawSentences.map((en) => ({
       en: en.trim(),
-      zh: null, // 降级模式，统一在底部显示
+      zh: null,
     }))
   }, [activeComment])
 
@@ -383,7 +403,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
                   {displaySegments.map((seg, i) => (
                     <div
                       key={i}
-                      // 3. 解决长按冲突
                       className="bg-white/5 border border-white/5 p-4 rounded-xl rounded-tl-none border-l-2 border-l-orange-500/50 select-none touch-callout-none"
                       onContextMenu={(e) => e.preventDefault()}>
                       <span onClick={() => {}}>
@@ -394,6 +413,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
                           externalOnClick={(w) => handleWordClick(w, seg.en)}
                         />
                       </span>
+                      {/* 只有在 enrichment 数据存在时，才按句显示中文 */}
                       {seg.zh && (
                         <div className="mt-3 pt-2 border-t border-white/10">
                           <p className="text-white/60 text-sm leading-relaxed italic">
@@ -404,9 +424,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
                     </div>
                   ))}
 
-                  {/* 底部完整翻译： OP卡片 OR 没有精准分句的评论 */}
-                  {(activeComment?.isOpCard ||
-                    !activeComment?.enrichment?.sentence_segments) &&
+                  {/* 如果没有分句中文，显示底部整段翻译 */}
+                  {(!activeComment?.enrichment?.sentence_segments ||
+                    activeComment?.isOpCard) &&
                     activeComment?.content_cn && (
                       <div
                         className="px-2 mt-4 select-none touch-callout-none"
@@ -414,11 +434,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
                         <div className="flex items-center gap-2 mb-2 opacity-50">
                           <div className="h-[1px] flex-1 bg-white/20" />
                           <span className="text-[9px] uppercase tracking-widest text-white">
-                            Full Translation
+                            Translation
                           </span>
                           <div className="h-[1px] flex-1 bg-white/20" />
                         </div>
-                        <p className="text-white/60 text-sm leading-relaxed italic">
+                        <p className="text-white/60 text-sm leading-relaxed italic px-2">
                           {activeComment.content_cn}
                         </p>
                       </div>

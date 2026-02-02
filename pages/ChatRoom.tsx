@@ -16,6 +16,17 @@ interface ChatRoomProps {
   onBack: () => void
 }
 
+// ... Type definitions ...
+type DifficultyLevel =
+  | 'Original'
+  | 'Mixed'
+  | 'IELTS'
+  | 'CET6'
+  | 'CET4'
+  | 'HighSchool'
+  | 'MiddleSchool'
+  | 'PrimarySchool'
+
 const ChatRoom: React.FC<ChatRoomProps> = ({
   postId,
   focusCommentId,
@@ -47,6 +58,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     Record<string, boolean>
   >({})
   const [isAiLoading, setIsAiLoading] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>('Original')
 
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [returnToId, setReturnToId] = useState<string | null>(null)
@@ -56,10 +69,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const [isDragging, setIsDragging] = useState(false)
   const touchStartRef = useRef(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // 1. 新增：输入框 Ref，用于自动聚焦
+  const inputRef = useRef<HTMLInputElement>(null)
+
   const bgPressTimerRef = useRef<NodeJS.Timeout | null>(null)
   const bubblePressTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // 1. 全局抑制浏览器默认菜单
+  // 全局抑制菜单
   useEffect(() => {
     const handleContextMenu = (e: Event) => {
       e.preventDefault()
@@ -73,7 +90,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       })
   }, [])
 
-  // 2. Fetch Data
+  // 2. 自动聚焦 Effect：当进入引用模式时，自动拉起键盘
+  useEffect(() => {
+    if (quotedMessage && inputRef.current) {
+      // 稍微延迟一点点，确保 UI 渲染完成（特别是移动端键盘动画）
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 100)
+    }
+  }, [quotedMessage])
+
   useEffect(() => {
     const fetchOp = async () => {
       const { data } = await supabase
@@ -95,11 +121,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
   const allComments = getComments(postId)
 
-  // 3. 构建消息树 (包含 OP -> OP追问 -> TopComment -> Children)
+  // 构建消息树逻辑保持不变 ... (为节省篇幅省略，逻辑与上一版完全一致)
   const messages = useMemo(() => {
     if (!opPostData || !allComments.length || !focusCommentId) return []
 
-    // A. 构造 OP 消息
     const opMessage: Comment = {
       id: 'op-message',
       post_id: postId,
@@ -116,9 +141,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     const rootComment = allComments.find((c) => c.id === focusCommentId)
     if (!rootComment) return [opMessage]
 
-    // B. 建立索引
     const childrenMap = new Map<string, Comment[]>()
-    // 特殊处理：找出所有回复给 'op-message' 的本地消息
     const opChildren: Comment[] = []
 
     allComments.forEach((c) => {
@@ -131,12 +154,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     })
 
     const result: Comment[] = []
-
-    // C. 压入 OP
     result.push(opMessage)
 
-    // D. 压入 OP 的追问 (修复：之前这些消息因为没有遍历入口而丢失)
-    // 同样需要递归遍历 OP 的子孙（如果有 AI 回复用户追问）
     const traverseOpChildren = (nodes: Comment[]) => {
       nodes.sort(
         (a, b) =>
@@ -148,23 +167,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           replyToName: 'OP',
           replyText: opMessage.content,
         })
-        // 检查该追问是否有 AI 回复
         if (childrenMap.has(child.id)) {
-          traverse(child.id) // 复用通用遍历逻辑
+          traverse(child.id)
         }
       })
     }
     traverseOpChildren(opChildren)
 
-    // E. 压入 Top Comment (Sub-OP)
     result.push({ ...rootComment, replyToName: 'OP' })
 
-    // F. 遍历 Top Comment 的子树
     const traverse = (parentId: string) => {
       const children = childrenMap.get(parentId) || []
-
       children.sort((a, b) => {
-        // 本地消息 (用户追问/AI回复) 永远排在最前 (紧贴父节点)
         if (a.isLocal && !b.isLocal) return -1
         if (!a.isLocal && b.isLocal) return 1
         if (a.isLocal && b.isLocal) {
@@ -188,11 +202,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       })
     }
     traverse(focusCommentId)
-
     return result
   }, [allComments, focusCommentId, opPostData])
 
-  // Scroll to bottom on new AI message
   useEffect(() => {
     const lastMsg = messages[messages.length - 1]
     if (lastMsg && lastMsg.isLocalAi && lastMsg.id !== flashMessageId) {
@@ -211,26 +223,33 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const getInitials = (name: string) =>
     name ? name.substring(0, 2).toUpperCase() : '??'
 
-  // --- 分句逻辑 ---
   const getDisplaySentences = (msg: Comment) => {
-    let text = msg.content || ''
-
-    // 如果是 OP 消息，我们手动分句
-    if (msg.id === 'op-message') {
-      try {
-        // @ts-ignore
-        const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
-        // OP 的中文统一放在最后一个气泡或者作为单独的逻辑，这里我们简单处理：
-        // 英文分句显示，中文不显示在气泡内（用底部兜底逻辑），或者
-        // 让每个英文分句都带个 null 中文，然后在最后一个气泡带上完整中文？
-        // 方案：OP 消息不带中文对照，整段翻译显示在气泡组的最下方（通过 isOp 判断）
-        return [...segmenter.segment(text)].map((s: any) => ({
-          en: s.segment.trim(),
-          zh: null,
-        }))
-      } catch {
-        return [{ en: text, zh: null }]
+    if (difficulty !== 'Original' && msg.enrichment?.difficulty_variants) {
+      const variant = msg.enrichment.difficulty_variants[difficulty]
+      if (variant && variant.content) {
+        try {
+          // @ts-ignore
+          const segmenter = new Intl.Segmenter('en', {
+            granularity: 'sentence',
+          })
+          return [...segmenter.segment(variant.content)]
+            .map((s: any) => ({
+              en: s.segment.trim(),
+              zh: msg.content_cn,
+            }))
+            .filter((s) => s.en.length > 0)
+        } catch {
+          return [{ en: variant.content, zh: msg.content_cn }]
+        }
       }
+    }
+
+    if (msg.id === 'op-message') {
+      const text = msg.content || ''
+      const rawSentences = text.match(
+        /[^.!?。！？\n]+[.!?。！？\n]+|[^.!?。！？\n]+$/g,
+      ) || [text]
+      return rawSentences.map((en) => ({ en: en.trim(), zh: null }))
     }
 
     let segments: { en: string; zh: string | null }[] = []
@@ -240,12 +259,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       try {
         // @ts-ignore
         const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
-        segments = [...segmenter.segment(text)].map((s: any) => ({
+        segments = [...segmenter.segment(msg.content)].map((s: any) => ({
           en: s.segment.trim(),
           zh: msg.content_cn,
         }))
       } catch {
-        segments = [{ en: text, zh: msg.content_cn }]
+        segments = [{ en: msg.content, zh: msg.content_cn }]
       }
     }
     return segments.filter((s) => s.en && s.en.trim() !== '')
@@ -256,6 +275,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     setViewingWord(word)
   }
 
+  // --- Send Logic ---
   const handleSend = async () => {
     if (!inputText.trim()) return
 
@@ -300,10 +320,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             messages: [
               {
                 role: 'system',
-                content: `You are simulating the persona of a Reddit user named "${quotedMessage.author}".
-                Context: "${quotedMessage.content}"
-                User asks: "${questionContent}"
-                Reply as "${quotedMessage.author}". Keep it short.`,
+                content: `Simulate Reddit user "${quotedMessage.author}". Context: "${quotedMessage.content}". Q: "${questionContent}". Reply as "${quotedMessage.author}" concisely.`,
               },
               { role: 'user', content: questionContent },
             ],
@@ -329,7 +346,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           replyToName: 'You',
           replyText: questionContent,
         }
-
         addLocalComment(postId, aiAnswerMsg)
       } catch (error) {
         console.error('AI API Error:', error)
@@ -342,7 +358,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }
 
-  // --- 跳转 ---
+  // --- Handlers ---
   const handleJumpTo = (targetId: string | null) => {
     if (!targetId) return
     const el = document.getElementById(`msg-${targetId}`)
@@ -366,8 +382,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       setReturnToId(null)
     }
   }
-
-  // --- 交互 ---
   const handleBgTouchStart = (e: React.TouchEvent) => {
     if ((e.target as HTMLElement).closest('input') || contextMenu) return
     if (scrollContainerRef.current?.scrollTop === 0) {
@@ -451,8 +465,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       onContextMenu={(e) => {
         e.preventDefault()
         return false
-      }} // 组件级兜底
-    >
+      }}>
       {viewingWord && (
         <WordDetailOverlay
           word={viewingWord}
@@ -460,6 +473,66 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           onClose={() => setViewingWord(null)}
         />
       )}
+
+      {/* Difficulty Settings (Toggle) */}
+      <AnimatePresence>
+        {showSettings && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 z-[90] backdrop-blur-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowSettings(false)
+              }}
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              className="absolute top-0 bottom-0 right-0 w-64 bg-[#1C1C1E] border-l border-white/10 z-[95] p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-white font-bold mb-6 flex items-center gap-2">
+                <span className="material-symbols-outlined text-orange-500">
+                  psychology
+                </span>
+                Difficulty
+              </h2>
+              <div className="space-y-2 max-h-[80vh] overflow-y-auto">
+                {(
+                  [
+                    'Original',
+                    'Mixed',
+                    'IELTS',
+                    'CET6',
+                    'CET4',
+                    'HighSchool',
+                    'PrimarySchool',
+                  ] as DifficultyLevel[]
+                ).map((lvl) => (
+                  <button
+                    key={lvl}
+                    onClick={() => setDifficulty(lvl)}
+                    className={`w-full p-3 rounded-xl border text-left flex justify-between items-center ${difficulty === lvl ? 'bg-orange-500/20 border-orange-500 text-orange-500' : 'bg-white/5 border-white/5 text-white/60'}`}>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold">
+                        {lvl === 'Mixed' ? 'Dopamine Mix ⚡️' : lvl}
+                      </span>
+                    </div>
+                    {difficulty === lvl && (
+                      <span className="material-symbols-outlined text-sm">
+                        check
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {viewingNote && (
@@ -587,6 +660,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
       </AnimatePresence>
 
+      {/* Header */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-white/5 bg-[#0B0A09]/90 backdrop-blur shrink-0 relative z-50">
         <button
           onClick={(e) => {
@@ -597,12 +671,28 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           <span className="material-symbols-outlined">keyboard_arrow_down</span>
         </button>
         <div className="flex flex-col items-center">
-          <span className="text-white font-bold text-sm">Thread</span>
-          <span className="text-white/40 text-[10px]">
-            {messages.length - 1} comments
-          </span>
+          {isAiLoading ? (
+            <div className="flex items-center gap-2 animate-pulse text-green-400">
+              <span className="w-2 h-2 bg-green-400 rounded-full" />
+              <span className="text-sm font-bold">Replying...</span>
+            </div>
+          ) : (
+            <>
+              <span className="text-white font-bold text-sm">Thread</span>
+              <span className="text-white/40 text-[10px]">
+                {messages.length - 1} comments
+              </span>
+            </>
+          )}
         </div>
-        <div className="w-10" />
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowSettings(true)
+          }}
+          className="w-10 h-10 flex items-center justify-center text-white/60">
+          <span className="material-symbols-outlined">tune</span>
+        </button>
       </div>
 
       <main
@@ -619,6 +709,41 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           const isUser = msg.isLocal && !msg.isLocalAi
           const isFlash = flashMessageId === msg.id
 
+          if (isOP) {
+            return (
+              <div
+                key={msg.id}
+                className="mb-8 p-4 bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-2xl relative select-none touch-callout-none"
+                onContextMenu={(e) => e.preventDefault()}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="bg-primary/20 text-primary text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
+                    OP
+                  </span>
+                  <span className="text-xs font-bold text-white/90 line-clamp-1">
+                    {msg.author}
+                  </span>
+                </div>
+                <div className="text-white/80 text-[15px] leading-relaxed">
+                  {sentences.map((s, i) => (
+                    <span key={i}>
+                      <InteractiveText
+                        text={s.en}
+                        contextSentence={s.en}
+                        externalOnClick={(w) => handleWordClick(w, s.en)}
+                      />
+                      <span className="inline-block w-1" />
+                    </span>
+                  ))}
+                </div>
+                {msg.content_cn && (
+                  <div className="mt-3 pt-3 border-t border-white/5 text-white/50 text-xs italic">
+                    {msg.content_cn}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
           return (
             <div
               id={`msg-${msg.id}`}
@@ -627,7 +752,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               <div className="shrink-0">
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border border-white/10 ${isRoot || isOP ? 'bg-gradient-to-tr from-orange-500 to-red-500 text-white w-10 h-10 text-xs' : 'bg-[#1A1A1A] text-white/60'}`}>
-                  {getInitials(msg.author)}
+                  {isOP ? 'OP' : isRoot ? 'TOP' : getInitials(msg.author)}
                 </div>
                 {(isRoot || isOP) && (
                   <div className="h-full w-[1px] bg-white/10 mx-auto my-2" />
@@ -642,9 +767,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                     className={`text-xs font-bold ${isRoot || isOP ? 'text-white text-sm' : 'text-gray-400'}`}>
                     {msg.author}
                   </span>
-                  {(isRoot || isOP) && (
+                  {isOP && (
                     <span className="bg-orange-500/20 text-orange-500 text-[9px] px-1 rounded font-bold">
                       OP
+                    </span>
+                  )}
+                  {isRoot && (
+                    <span className="bg-orange-500/20 text-orange-500 text-[9px] px-1 rounded font-bold">
+                      Top Comment
                     </span>
                   )}
                   {msg.isLocalAi && (
@@ -701,7 +831,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                     <AnimatePresence>
                       {(showGlobalTranslation ||
                         expandedTranslations[msg.id]) &&
-                        // 如果有分句中文则显示，否则如果是OP且是最后一句，显示全文
                         (s.zh ||
                           (isOP &&
                             i === sentences.length - 1 &&
@@ -740,6 +869,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         <div className="h-32" />
       </main>
 
+      {/* Input Area */}
       <div
         className="p-4 border-t border-white/5 bg-[#0B0A09] safe-area-bottom"
         onClick={(e) => e.stopPropagation()}>
@@ -767,6 +897,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
         <div className="flex gap-3 items-center">
           <input
+            ref={inputRef} // 3. 绑定 Ref
             className={`flex-1 h-10 rounded-full px-4 text-white text-sm outline-none border transition-colors ${isAiMode ? 'bg-orange-500/10 border-orange-500/50' : 'bg-white/5 border-white/5 focus:border-white/20'}`}
             placeholder={
               isAiMode ? `Ask ${quotedMessage?.author}...` : 'Reply...'
