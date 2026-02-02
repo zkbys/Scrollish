@@ -8,10 +8,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#FF5500', // 你的主色调
+        primary: '#FF5500', // 你的多巴胺主色
         background: {
-          light: '#F9FAFB',
-          dark: '#0B0A09',
+          // 👇 把这里的 light 改成你想要的暖色
+          light: '#FFFBF2', // 暖纸张色 (Warm Paper)
+          dark: '#0B0A09',  // 深邃黑
+        },
+        // 建议增加一个表面色，用于卡片，比背景稍白一点或稍深一点
+        surface: {
+          light: '#FFFFFF',
+          dark: '#1C1C1E'
         }
       },
       fontFamily: {

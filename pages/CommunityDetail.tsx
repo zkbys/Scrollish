@@ -83,11 +83,11 @@ const CommunityDetail: React.FC<CommunityDetailProps> = ({
   }
 
   return (
-    <div className="h-full w-full bg-gray-50 dark:bg-[#0B0A09] flex flex-col relative overflow-hidden transition-colors duration-300">
+    <div className="h-full w-full bg-background-light dark:bg-[#0B0A09] flex flex-col relative overflow-hidden transition-colors duration-300">
       {/* Header */}
       <header
         ref={headerRef}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrollPos > 100 ? 'bg-white/90 dark:bg-[#0B0A09]/90 backdrop-blur-md shadow-sm border-b border-gray-100 dark:border-white/5 py-3' : 'bg-transparent py-4'}`}>
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrollPos > 100 ? 'bg-background-light/90 dark:bg-[#0B0A09]/90 backdrop-blur-md shadow-sm border-b border-gray-100 dark:border-white/5 py-3' : 'bg-transparent py-4'}`}>
         <div className="px-5 flex items-center justify-between">
           <button
             onClick={onBack}
@@ -136,7 +136,7 @@ const CommunityDetail: React.FC<CommunityDetailProps> = ({
         </div>
 
         {/* Info Section */}
-        <div className="pt-14 px-6 pb-6 bg-gray-50 dark:bg-[#0B0A09]">
+        <div className="pt-14 px-6 pb-6 bg-background-light dark:bg-[#0B0A09]">
           <div className="flex justify-between items-start mb-4">
             <div>
               <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">

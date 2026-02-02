@@ -483,7 +483,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-[60] flex flex-col bg-gray-50 dark:bg-[#0B0A09] transition-transform duration-300 ease-out max-w-[100vw] overflow-x-hidden touch-action-pan-y select-none`}
+      className={`fixed inset-0 z-[60] flex flex-col bg-background-light dark:bg-background-dark transition-transform duration-300 ease-out max-w-[100vw] overflow-x-hidden touch-action-pan-y select-none`}
       style={{
         transform: `translateY(${pullY}px)`,
         borderRadius: pullY > 0 ? '40px' : '0px',
@@ -544,7 +544,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   <button
                     key={lvl}
                     onClick={() => setDifficulty(lvl)}
-                    className={`w-full p-3 rounded-xl border text-left flex justify-between items-center ${difficulty === lvl ? 'bg-orange-500/20 border-orange-500 text-orange-600 dark:text-orange-500' : 'bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-700 dark:text-white/60'}`}>
+                    className={`w-full p-3 rounded-xl border text-left flex justify-between items-center ${difficulty === lvl ? 'bg-orange-500/20 border-orange-500 text-orange-600 dark:text-orange-500' : 'bg-background-light dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-700 dark:text-white/60'}`}>
                     <div className="flex flex-col">
                       <span className="text-sm font-bold">
                         {lvl === 'Mixed' ? 'Dopamine Mix ⚡️' : lvl}
@@ -611,7 +611,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
             onClick={handleReturnJump}
-            className="fixed bottom-24 right-4 z-[80] bg-white/90 dark:bg-white/10 backdrop-blur border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white p-3 rounded-full shadow-lg flex items-center gap-2">
+            className="fixed bottom-24 right-4 z-[80] bg-background-light dark:bg-white/10 backdrop-blur border border-gray-200 dark:border-white/20 text-gray-900 dark:text-white p-3 rounded-full shadow-lg flex items-center gap-2">
             <span className="material-symbols-outlined">u_turn_left</span>
             <span className="text-xs font-bold pr-1">Return</span>
           </motion.button>
@@ -690,7 +690,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         )}
       </AnimatePresence>
 
-      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-white/5 bg-white/90 dark:bg-[#0B0A09]/90 backdrop-blur shrink-0 relative z-50 transition-colors">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-white/5 bg-background-light dark:bg-[#0B0A09]/90 backdrop-blur shrink-0 relative z-50 transition-colors">
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -728,7 +728,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
       <main
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-gray-50 dark:bg-[#0B0A09] transition-colors">
+        className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-background-light dark:bg-[#0B0A09] transition-colors">
         {messages.map((msg, index) => {
           const isOP = msg.id === 'op-message'
           const isRoot = index === 1
@@ -930,7 +930,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       </main>
 
       <div
-        className="p-4 border-t border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-[#0B0A09] safe-area-bottom transition-colors"
+        className="p-4 border-t border-gray-200 dark:border-white/5 bg-background-light dark:bg-[#0B0A09] safe-area-bottom transition-colors"
         onClick={(e) => e.stopPropagation()}>
         {quotedMessage && (
           <div className="flex justify-between items-center bg-gray-200 dark:bg-white/5 rounded-t-lg p-2 mb-2 border border-gray-300 dark:border-white/5 border-b-0 animate-in slide-in-from-bottom">

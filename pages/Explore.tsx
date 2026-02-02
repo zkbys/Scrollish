@@ -334,9 +334,9 @@ const Explore: React.FC<ExploreProps> = ({
     <div
       ref={containerRef}
       onScroll={handleMainScroll}
-      className="h-full flex flex-col bg-gray-50 dark:bg-[#0B0A09] text-gray-900 dark:text-white overflow-y-auto no-scrollbar select-none relative transition-colors duration-300">
+      className="h-full flex flex-col bg-background-light dark:bg-background-dark text-gray-900 dark:text-white overflow-y-auto no-scrollbar select-none relative transition-colors duration-300">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-black/60 backdrop-blur-md border-b border-gray-100 dark:border-white/5 transition-colors">
+      <header className="sticky top-0 z-50 bg-background-light/80 dark:bg-black/60 backdrop-blur-md border-b border-gray-100 dark:border-white/5 transition-colors">
         <div className="flex items-center px-5 pt-12 pb-4 justify-between">
           <button className="h-9 w-9 flex items-center justify-center bg-gray-100 dark:bg-white/10 rounded-full active:scale-90 transition-transform border border-gray-200 dark:border-white/5">
             <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/90">

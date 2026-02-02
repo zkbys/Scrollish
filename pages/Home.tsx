@@ -212,7 +212,7 @@ const Home: React.FC<HomeProps> = ({
   }
 
   return (
-    <div className="relative h-full w-full bg-gray-50 dark:bg-[#0B0A09] overflow-hidden transition-colors duration-300">
+    <div className="relative h-full w-full bg-background-light dark:bg-background-dark overflow-hidden transition-colors duration-300">
       {filteredCommunityId && activeTab === 'foryou' && (
         <div className="absolute top-[100px] left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top-4 duration-300">
           <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/20 backdrop-blur-md border border-primary/30 rounded-full">

@@ -61,7 +61,8 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
 
   return (
     // 根容器：添加 transition-colors 实现丝滑切换
-    <div className="h-full w-full flex flex-col overflow-hidden select-none transition-colors duration-300 bg-gray-50 dark:bg-[#0B0A09] text-gray-900 dark:text-white">
+    // 找到 return 下面的最外层 div
+    <div className="h-full w-full flex flex-col overflow-hidden select-none transition-colors duration-300 bg-background-light dark:bg-background-dark text-gray-900 dark:text-white">
       {/* Settings Overlay */}
       <AnimatePresence>
         {showSettings && (
@@ -146,7 +147,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
       </AnimatePresence>
 
       {/* Header Area */}
-      <div className="pt-14 pb-6 px-6 relative z-10 flex items-end justify-between border-b border-gray-100 dark:border-white/5 bg-gray-50/80 dark:bg-[#0B0A09]/80 backdrop-blur-xl">
+      <div className="pt-14 pb-6 px-6 relative z-10 flex items-end justify-between border-b border-gray-100 dark:border-white/5 bg-background-light/80 dark:bg-[#0B0A09]/80 backdrop-blur-xl">
         <div>
           <div className="text-[10px] font-black tracking-[0.2em] text-orange-500 mb-1 uppercase">
             Scrollish

@@ -259,7 +259,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   return (
     <div
-      className={`h-full flex flex-col bg-gray-50 dark:bg-[#0B0A09] overflow-hidden select-none relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
+      className={`h-full flex flex-col bg-background-light dark:bg-background-dark overflow-hidden select-none relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
       <AnalysisNotification onView={setViewingWord} />
       {viewingWord && (
         <WordDetailOverlay
