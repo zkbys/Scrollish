@@ -1,4 +1,4 @@
-import React, { useRef, useLayoutEffect, useState } from 'react'
+import React, { useRef, useLayoutEffect, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Page, Post } from '../types'
 import { useUserStore } from '../store/useUserStore'
@@ -12,9 +12,19 @@ interface ProfileProps {
 }
 
 const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
-  const { likedPosts } = useUserStore()
+  const { likedPosts, profile, fetchProfile } = useUserStore()
   const { scrollPos, setScrollPos } = useProfileStore()
   const { theme, toggleTheme } = useThemeStore()
+
+  useEffect(() => {
+    fetchProfile()
+  }, [])
+
+  const userLevel = profile ? Math.floor(Math.sqrt((profile.total_xp || 0) / 100)) + 1 : 1
+  const currentXP = profile?.total_xp || 0
+  const nextLevelXP = Math.pow(userLevel, 2) * 100
+  const prevLevelXP = Math.pow(userLevel - 1, 2) * 100
+  const progressPercent = Math.min(100, Math.max(0, ((currentXP - prevLevelXP) / (nextLevelXP - prevLevelXP)) * 100))
 
   const [showSettings, setShowSettings] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -146,12 +156,12 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
               </div>
             </div>
             <div className="absolute -bottom-1 -right-1 bg-orange-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full border-2 border-white dark:border-[#1C1C1E] shadow-lg">
-              LVL 42
+              LVL {userLevel}
             </div>
           </div>
           <div className="flex flex-col items-center mt-5 gap-1.5">
             <div className="flex items-center gap-2">
-              <p className="text-gray-900 dark:text-white text-2xl font-black tracking-tight">My Space</p>
+              <p className="text-gray-900 dark:text-white text-2xl font-black tracking-tight">{profile?.display_name || 'My Space'}</p>
               <span className="material-symbols-outlined text-orange-500 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
             </div>
             <div className="flex items-center gap-1.5 glass-card-premium px-3 py-1 border-white/80 dark:border-white/10">
@@ -174,8 +184,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
           </div>
           <div className="glass-card-premium p-4 flex items-center justify-between">
             <div>
-              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Words</p>
-              <p className="text-gray-900 dark:text-white text-2xl font-black">2.4k</p>
+              <p className="text-gray-900 dark:text-white text-2xl font-black">{profile?.words_count || 0}</p>
             </div>
             <div className="size-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-purple-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>forum</span>
@@ -184,7 +193,9 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
           <div className="glass-card-premium p-4 flex items-center justify-between">
             <div>
               <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">XP</p>
-              <p className="text-gray-900 dark:text-white text-2xl font-black">15.2k</p>
+              <p className="text-gray-900 dark:text-white text-2xl font-black">
+                {currentXP > 1000 ? `${(currentXP / 1000).toFixed(1)}k` : currentXP}
+              </p>
             </div>
             <div className="size-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-orange-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
@@ -192,11 +203,11 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
           </div>
           <div className="glass-card-premium p-4 flex items-center justify-between">
             <div>
-              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Awards</p>
-              <p className="text-gray-900 dark:text-white text-2xl font-black">12</p>
+              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Streak</p>
+              <p className="text-gray-900 dark:text-white text-2xl font-black">{profile?.current_streak || 0}</p>
             </div>
             <div className="size-10 rounded-xl bg-yellow-500/10 flex items-center justify-center">
-              <span className="material-symbols-outlined text-yellow-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>emoji_events</span>
+              <span className="material-symbols-outlined text-yellow-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
             </div>
           </div>
         </div>
@@ -205,13 +216,13 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         <div className="mx-4 mb-6 p-5 glass-card-premium">
           <div className="flex justify-between items-end mb-3">
             <div className="flex flex-col">
-              <p className="text-gray-900 dark:text-white text-sm font-black">Progress to Level 43</p>
-              <p className="text-gray-500 dark:text-white/40 text-[11px] font-medium">Keep it up! You\'re almost there.</p>
+              <p className="text-gray-900 dark:text-white text-sm font-black">Progress to Level {userLevel + 1}</p>
+              <p className="text-gray-500 dark:text-white/40 text-[11px] font-medium">Keep it up! {nextLevelXP - currentXP} XP to go.</p>
             </div>
-            <p className="text-orange-600 dark:text-orange-400 text-xs font-black">15,200 / 20,000 XP</p>
+            <p className="text-orange-600 dark:text-orange-400 text-xs font-black">{currentXP.toLocaleString()} / {nextLevelXP.toLocaleString()} XP</p>
           </div>
           <div className="h-3.5 rounded-full bg-gray-100/50 dark:bg-black/20 inner-glow overflow-hidden p-0.5 border border-white/50 dark:border-white/5">
-            <div className="h-full rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 shadow-sm transition-all" style={{ width: '75%' }}></div>
+            <div className="h-full rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 shadow-sm transition-all" style={{ width: `${progressPercent}%` }}></div>
           </div>
         </div>
 

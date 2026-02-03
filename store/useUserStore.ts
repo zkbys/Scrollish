@@ -8,6 +8,7 @@ interface UserState {
   followedCommunities: string[] // 存储关注的社区 ID
 
   currentUser: any | null
+  profile: any | null
   isLoading: boolean
   // Actions
   toggleLike: (post: ProductionPost) => void
@@ -17,6 +18,8 @@ interface UserState {
   login: (user: any) => void
   logout: () => void
   setLoading: (loading: boolean) => void
+  fetchProfile: () => Promise<void>
+  updateXP: (amount: number) => Promise<void>
 }
 
 export const useUserStore = create<UserState>()(
@@ -25,6 +28,7 @@ export const useUserStore = create<UserState>()(
       likedPosts: [],
       followedCommunities: [],
       currentUser: null,
+      profile: null,
       isLoading: true,
 
       toggleLike: (post: ProductionPost) => {
@@ -69,6 +73,44 @@ export const useUserStore = create<UserState>()(
 
       setLoading: (loading: boolean) => {
         set({ isLoading: loading })
+      },
+
+      fetchProfile: async () => {
+        const user = get().currentUser
+        if (!user) return
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+
+        if (data) {
+          set({ profile: data })
+        }
+      },
+
+      updateXP: async (amount: number) => {
+        const user = get().currentUser
+        const currentProfile = get().profile
+        if (!user || !currentProfile) return
+
+        const newXP = (currentProfile.total_xp || 0) + amount
+
+        // 简单等级计算：LV = floor(sqrt(XP / 100)) + 1
+        const newLevel = Math.floor(Math.sqrt(newXP / 100)) + 1
+
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            total_xp: newXP,
+            study_days: currentProfile.study_days + (amount > 0 ? 1 : 0) // 临时演示：加 XP 就视为打卡
+          })
+          .eq('id', user.id)
+
+        if (!error) {
+          set({ profile: { ...currentProfile, total_xp: newXP } })
+        }
       },
     }),
     {
