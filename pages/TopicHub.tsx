@@ -143,7 +143,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   useEffect(() => {
     if (hasVideo && videoRef.current) {
       videoRef.current.muted = true
-      videoRef.current.play().catch(() => {})
+      videoRef.current.play().catch(() => { })
     }
   }, [hasVideo])
 
@@ -278,28 +278,50 @@ const TopicHub: React.FC<TopicHubProps> = ({
       </div>
 
       <div className="mx-4 mt-12 h-56 relative z-50">
+        {/* 透明镜头框容器：作为移动的显示窗口 */}
         <motion.div
-          initial={{ y: -200, opacity: 0 }}
+          initial={{ y: -300, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="absolute inset-0 rounded-[2.5rem] overflow-hidden border-2 border-white/40 dark:border-white/20 shadow-2xl bg-gray-200 dark:bg-[#1C1C1E]">
-          {hasVideo ? (
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              className="w-full h-full object-cover"
-              loop
-              muted
-              playsInline
-              autoPlay
-            />
-          ) : (
-            <img
-              src={imageUrl}
-              className="w-full h-full object-contain bg-black/10 dark:bg-black/50"
-              alt=""
-            />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/60 dark:to-black/80" />
+          transition={{
+            type: 'spring',
+            stiffness: 100,
+            damping: 22,
+            mass: 0.8,
+          }}
+          className="absolute inset-0 rounded-[2.5rem] border-2 border-white/40 dark:border-white/20 shadow-2xl overflow-hidden transform-gpu z-10 bg-gray-200 dark:bg-[#1C1C1E]">
+
+          {/* 内部图片/视频：执行反向位移以在屏幕上保持视觉静止 */}
+          <motion.div
+            initial={{ y: 300 }}
+            animate={{ y: 0 }}
+            transition={{
+              type: 'spring',
+              stiffness: 100,
+              damping: 22,
+              mass: 0.8,
+            }}
+            className="absolute inset-0 w-full h-full">
+            {hasVideo ? (
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                className="w-full h-full object-cover"
+                loop
+                muted
+                playsInline
+                autoPlay
+              />
+            ) : (
+              <img
+                src={imageUrl}
+                className="w-full h-full object-contain bg-black/10 dark:bg-black/50"
+                alt=""
+              />
+            )}
+          </motion.div>
+
+          {/* 渐变遮罩放在镜头框内，跟随下落 */}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/60 dark:to-black/80 rounded-[2.5rem] z-20 pointer-events-none" />
         </motion.div>
 
         <div className="absolute inset-x-0 bottom-0 p-6 z-[70]">
@@ -340,7 +362,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}>
           <div
-            className={`absolute inset-x-4 top-0 bottom-0 bg-white/90 dark:bg-[#121212]/80 backdrop-blur-2xl rounded-[2.5rem] border border-gray-200 dark:border-white/10 flex flex-col overflow-hidden transition-all duration-300 shadow-2xl dark:shadow-[0_20px_50px_-10px_rgba(0,0,0,0.5)] ${animationClass}`}>
+            className={`absolute inset-x-4 top-0 bottom-0 bg-white/90 dark:bg-[#121212]/80 backdrop-blur-2xl rounded-[2.5rem] border border-gray-200 dark:border-white/10 flex flex-col overflow-hidden transition-all duration-300 shadow-2xl dark:shadow-[0_20px_50px_-10px_rgba(0,0,0,0.5)] ${animationClass} transform-gpu`}>
             <div
               className="h-16 border-b border-gray-100 dark:border-white/5 flex items-center justify-between px-6 shrink-0"
               onClick={goToChatRoom}>
@@ -405,7 +427,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
                       key={i}
                       className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 p-4 rounded-xl rounded-tl-none border-l-2 border-l-orange-500/50 select-none touch-callout-none"
                       onContextMenu={(e) => e.preventDefault()}>
-                      <span onClick={() => {}}>
+                      <span onClick={() => { }}>
                         <InteractiveText
                           text={seg.en}
                           contextSentence={seg.en}
@@ -471,7 +493,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
             </div>
           </div>
         </div>
-      </main>
+      </main >
 
       <style>{`
         .slide-out-left { animation: slideOutLeft 0.3s forwards ease-in; }
@@ -484,7 +506,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
         @keyframes slideInLeft { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .touch-callout-none { -webkit-touch-callout: none; }
       `}</style>
-    </div>
+    </div >
   )
 }
 
