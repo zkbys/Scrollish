@@ -3,10 +3,6 @@ import { motion } from 'framer-motion'
 import { supabase } from '../supabase'
 import { Page } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
-import { useDictionaryStore } from '../store/useDictionaryStore'
-import InteractiveText from '../components/InteractiveText'
-import WordDetailOverlay from '../components/WordDetailOverlay'
-import AnalysisNotification from '../components/AnalysisNotification'
 
 interface TopicHubProps {
   onNavigate: (page: Page) => void
@@ -25,7 +21,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const [animationClass, setAnimationClass] = useState('')
   const [isExiting, setIsExiting] = useState(false)
   const [videoError, setVideoError] = useState(false)
-  const [viewingWord, setViewingWord] = useState<string | null>(null)
 
   // 独立状态存储 OP 内容，防止 props 中缺失
   const [opContent, setOpContent] = useState<{ en: string; cn: string } | null>(
@@ -38,7 +33,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const { fetchComments, getComments, isLoading } = useCommentStore()
-  const { getDefinition, triggerAnalysis } = useDictionaryStore()
 
   // 1. 获取 OP 正文 (修复 Loading content 问题)
   useEffect(() => {
@@ -202,11 +196,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
     setTimeout(() => onNavigate(Page.Home), 50)
   }
 
-  const handleWordClick = async (word: string, context: string) => {
-    if (navigator.vibrate) navigator.vibrate(10)
-    const cachedResult = await triggerAnalysis(word, context)
-    if (cachedResult) setViewingWord(word)
-  }
 
   const handleTouchStart = (e: React.TouchEvent) => {
     startPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
@@ -260,14 +249,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
   return (
     <div
       className={`h-full flex flex-col bg-background-light dark:bg-background-dark overflow-hidden select-none relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
-      <AnalysisNotification onView={setViewingWord} />
-      {viewingWord && (
-        <WordDetailOverlay
-          word={viewingWord}
-          definition={getDefinition(viewingWord)}
-          onClose={() => setViewingWord(null)}
-        />
-      )}
 
       <div className="absolute inset-0 pointer-events-none">
         <div
@@ -427,13 +408,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
                       key={i}
                       className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 p-4 rounded-xl rounded-tl-none border-l-2 border-l-orange-500/50 select-none touch-callout-none"
                       onContextMenu={(e) => e.preventDefault()}>
-                      <span onClick={() => { }}>
-                        <InteractiveText
-                          text={seg.en}
-                          contextSentence={seg.en}
-                          className="text-gray-800 dark:text-gray-100 text-[15px] font-medium"
-                          externalOnClick={(w) => handleWordClick(w, seg.en)}
-                        />
+                      <span className="text-gray-800 dark:text-gray-100 text-[15px] font-medium">
+                        {seg.en}
                       </span>
                       {/* 只有在 enrichment 数据存在时，才按句显示中文 */}
                       {seg.zh && (
