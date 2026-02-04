@@ -14,6 +14,7 @@ import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
 import BottomNav from './components/BottomNav'
 import { useUserStore } from './store/useUserStore'
+import { useExploreStore } from './store/useExploreStore'
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
@@ -27,11 +28,16 @@ const App: React.FC = () => {
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [isCommunityFlow, setIsCommunityFlow] = useState(false)
+
+  // 修复合并冲突：合并两个版本的解构
   const { currentUser, profile, login, logout, setLoading: setAuthLoading, isLoading: isAuthLoading } = useUserStore()
+  const { initializeExplore } = useExploreStore()
 
   // [修改] 仅在初始化时确认加载完成
   useEffect(() => {
     setAuthLoading(false)
+    // 预加载 Explore 页面数据
+    initializeExplore()
   }, [])
 
   // [新增] 未登录拦截
