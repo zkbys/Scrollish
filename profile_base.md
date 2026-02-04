@@ -6,7 +6,15 @@
 schema.sql
 。核心业务表如下：
 
-public.profiles：用户业务主表。包含等级 (level)、总经验 (total_xp)、掌握单词数 (words_count)、连击天数 (current_streak)、打卡时间 (last_streak_at) 等。通过 id 与 Supabase 内置的 auth.users 关联。
+public.profiles：用户业务主表。
+- **基础信息**：id (关联 auth.users), username, display_name, avatar_url, email。
+- **学习设置**：learning_reason (学习动机), target_level (目标水平), native_language, daily_goal_mins。
+- **成长数据**：level, total_xp, words_count, study_days, coins。
+- **社交/状态**：is_premium, is_verified。
+- **连击系统**：current_streak, longest_streak, last_streak_at。
+- **自动逻辑**：由 updated_at（它是一个时间截字段（比如 2026-02-04 12:30:00，每当数据被修改时（比如用户改了头像、加了经验值、或者修改了学习动机），这个字段会自动跳到当前最新的时间。
+） 和 handle_new_user 触发器自动维护。（自动逻辑：每当一个新用户点击“注册”成功时，这个触发器就会“监听到”注册事件，并瞬时自动在 profiles 表里塞进一条对应的记录。）
+
 public.user_learning_logs：打卡流水表。记录用户每天的学习时长、获取的 XP 等。
 public.user_vocabulary：生词本系统。支持艾宾浩斯复习算法所需的 next_review_at 和 mastery_level 字段。
 2. ⚡ 前端 Store 扩展 (
