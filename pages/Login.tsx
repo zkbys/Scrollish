@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Page } from '../types';
 
 import { supabase } from '../supabase';
+import { IMAGES } from '../constants';
 
 interface LoginProps {
     onNavigate: (page: Page) => void;
@@ -14,6 +15,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
     const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -23,20 +25,41 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
         setError(null);
 
         try {
-            // 简易内测登录逻辑：直接查询 user_profiles 表
-            const { data, error: fetchError } = await supabase
-                .from('user_profiles')
-                .select('*')
-                .eq('email', email)
-                .eq('password', password)
-                .maybeSingle();
+            if (isLogin) {
+                // 使用官方 Supabase Auth 登录
+                const { data: { user }, error: authError } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
 
-            if (fetchError) throw fetchError;
+                if (authError) throw authError;
 
-            if (data) {
-                onLoginSuccess(data);
+                if (user) {
+                    onLoginSuccess(user);
+                }
             } else {
-                setError('Invalid credentials or not an authorized beta user');
+                // 使用官方 Supabase Auth 注册
+                const { data: { user }, error: authError } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            username: username || email.split('@')[0],
+                        }
+                    }
+                });
+
+                if (authError) throw authError;
+
+                if (user) {
+                    onLoginSuccess(user);
+                    // 提示用户：如果开启了邮箱验证，可能需要去邮箱点击确认
+                    if (!user.identities || user.identities.length === 0) {
+                        setError('Account exists but needs confirmation. Please check your email.');
+                    }
+                } else {
+                    setError('Please check your email for confirmation');
+                }
             }
         } catch (err: any) {
             setError(err.message || 'An error occurred during authentication');
@@ -46,58 +69,65 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
     };
 
     return (
-        <div className="h-full w-full bg-white dark:bg-[#0B0A09] flex flex-col items-center justify-center p-6 overflow-y-auto">
+        <div className="h-full w-full bg-[#0B0A09] flex flex-col items-center justify-center p-6 overflow-hidden relative font-sans">
+            {/* --- Premium Background Layer --- */}
+            <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/20 blur-[120px] rounded-full animate-pulse-slow"></div>
+                <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-orange-600/10 blur-[120px] rounded-full"></div>
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay"></div>
+            </div>
+
             <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-sm"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="w-full max-w-sm z-10"
             >
-                {/* Header */}
+                {/* Brand Header */}
                 <div className="mb-10 text-center">
                     <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-2xl mb-4"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="inline-flex items-center justify-center w-16 h-16 bg-transparent rounded-[1.25rem] mb-4 shadow-xl border border-white/5 overflow-hidden"
                     >
-                        <span className="material-symbols-outlined text-primary text-4xl font-black">
-                            scrollable
-                        </span>
+                        <img
+                            src="/汽橙.jpg"
+                            alt="Logo"
+                            className="w-full h-full object-cover scale-150"
+                        />
                     </motion.div>
-                    <h1 className="text-3xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
+                    <h1 className="text-3xl font-black text-white mb-1 tracking-tighter italic">
                         Scrollish
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                        Learning English by Scrolling
+                    <p className="text-xs text-white/40 font-medium tracking-widest uppercase">
+                        Insight Through <span className="text-primary">Scrolling</span>
                     </p>
                 </div>
 
-                {/* Form Container */}
-                <div className="bg-gray-50 dark:bg-white/5 p-8 rounded-[40px] shadow-sm border border-gray-100 dark:border-white/5">
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <AnimatePresence mode="wait">
-                            {!isLogin && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: 'auto' }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    key="username"
-                                >
-                                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5 ml-2">
-                                        Username
-                                    </label>
+                {/* Main Glass Card */}
+                <div className="bg-white/[0.03] backdrop-blur-2xl p-7 pt-9 rounded-[2.5rem] border border-white/[0.08] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary/40 to-transparent"></div>
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {!isLogin && (
+                            <div key="username">
+                                <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
+                                    Username
+                                </label>
+                                <div className="group relative">
                                     <input
                                         type="text"
                                         required
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
-                                        className="w-full h-14 px-6 bg-white dark:bg-black/20 border border-transparent focus:border-primary/30 rounded-2xl outline-none transition-all dark:text-white font-medium shadow-sm"
-                                        placeholder="Your name"
+                                        className="w-full h-14 px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 shadow-inner"
+                                        placeholder="What should we call you?"
                                     />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                                </div>
+                            </div>
+                        )}
 
                         <div>
-                            <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5 ml-2">
+                            <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
                                 Email Address
                             </label>
                             <input
@@ -105,85 +135,120 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full h-14 px-6 bg-white dark:bg-black/20 border border-transparent focus:border-primary/30 rounded-2xl outline-none transition-all dark:text-white font-medium shadow-sm"
+                                className="w-full h-15 px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none transition-all text-white font-medium placeholder:text-white/10 shadow-inner"
                                 placeholder="name@example.com"
                             />
                         </div>
 
-                        <div className="relative">
-                            <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5 ml-2">
+                        <div>
+                            <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
                                 Password
                             </label>
-                            <input
-                                type="password"
-                                required
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full h-14 px-6 bg-white dark:bg-black/20 border border-transparent focus:border-primary/30 rounded-2xl outline-none transition-all dark:text-white font-medium shadow-sm"
-                                placeholder="••••••••"
-                            />
-                            <button type="button" className="absolute right-4 bottom-4 text-gray-400 active:text-primary">
-                                <span className="material-symbols-outlined text-[20px]">
-                                    visibility
-                                </span>
-                            </button>
+                            <div className="relative group">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full h-15 px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 pr-14 shadow-inner"
+                                    placeholder="••••••••"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 hover:text-primary transition-colors p-2"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">
+                                        {showPassword ? 'visibility_off' : 'visibility'}
+                                    </span>
+                                </button>
+                            </div>
                         </div>
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full h-14 bg-primary text-white font-black rounded-2xl hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-primary/30 mt-4 flex items-center justify-center gap-2"
+                            className="w-full h-16 bg-primary text-white font-black rounded-[1.25rem] hover:brightness-110 active:scale-[0.97] shadow-[0_10px_30px_-5px_rgba(255,107,0,0.4)] mt-4 flex items-center justify-center gap-3 group overflow-hidden relative"
                         >
+                            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/15 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                             {loading ? (
-                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
                             ) : (
-                                'Sign In'
+                                <>
+                                    <span className="text-lg tracking-tight uppercase">
+                                        {isLogin ? 'Enter Laboratory' : 'Create Identity'}
+                                    </span>
+                                    <span className="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">
+                                        arrow_forward
+                                    </span>
+                                </>
                             )}
                         </button>
                     </form>
 
-                    {/* Social Login */}
-                    <div className="relative py-6">
+                    {/* Social Login Separator */}
+                    <div className="relative py-8">
                         <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-100 dark:border-white/10"></div>
+                            <div className="w-full border-t border-white/[0.05]"></div>
                         </div>
-                        <div className="relative flex justify-center text-[10px] font-black uppercase text-gray-400">
-                            <span className="bg-gray-50 dark:bg-[#1C1C1E] px-4 rounded-full">Or continue with</span>
+                        <div className="relative flex justify-center text-[9px] font-black uppercase text-white/20 tracking-[0.3em]">
+                            <span className="bg-[#121214] px-4 rounded-full">Secure Verification</span>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <button className="h-12 border border-gray-100 dark:border-white/10 bg-white dark:bg-transparent rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 transition-all active:scale-95">
-                            <span className="material-symbols-outlined text-[18px] text-[#07C160]">chat</span>
-                            <span className="text-xs font-bold dark:text-white">WeChat</span>
+                        <button className="h-14 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.05] rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 group">
+                            <span className="material-symbols-outlined text-[20px] text-[#07C160]/70 group-hover:text-[#07C160]">chat</span>
+                            <span className="text-[10px] font-black text-white/30 group-hover:text-white/60 uppercase tracking-wider">WeChat</span>
                         </button>
-                        <button className="h-12 border border-gray-100 dark:border-white/10 bg-white dark:bg-transparent rounded-2xl flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 transition-all active:scale-95">
-                            <span className="material-symbols-outlined text-[18px] text-[#12B7F5]">chat_bubble</span>
-                            <span className="text-xs font-bold dark:text-white">QQ</span>
+                        <button className="h-14 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.05] rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 group">
+                            <span className="material-symbols-outlined text-[20px] text-[#12B7F5]/70 group-hover:text-[#12B7F5]">chat_bubble</span>
+                            <span className="text-[10px] font-black text-white/30 group-hover:text-white/60 uppercase tracking-wider">Connect QQ</span>
                         </button>
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="mt-8 text-center pb-6">
-                    <p className="text-xs text-gray-500 font-medium">
-                        Don't have an account?
+                {/* Aesthetic Footer */}
+                <div className="mt-10 text-center">
+                    <p className="text-xs text-white/30 font-bold uppercase tracking-widest">
+                        {isLogin ? "New Subect?" : "Known Participant?"}
                         <button
                             type="button"
-                            onClick={() => { }} // 设为无反应
-                            className="text-primary font-black hover:underline underline-offset-4 ml-1 cursor-default"
+                            onClick={() => {
+                                setIsLogin(!isLogin);
+                                setError(null);
+                            }}
+                            className="text-primary font-black hover:text-orange-400 hover:underline underline-offset-8 ml-2"
                         >
-                            Create Account
+                            {isLogin ? "INITIALIZE" : "IDENTIFY"}
                         </button>
                     </p>
                 </div>
 
-                {error && (
-                    <div className="text-red-500 text-xs font-bold px-2 animate-pulse mt-4 text-center">
-                        {error}
-                    </div>
-                )}
+                {/* Error Banner */}
+                <AnimatePresence>
+                    {error && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            className="mt-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-black text-center tracking-tight"
+                        >
+                            <div className="flex items-center justify-center gap-2">
+                                <span className="material-symbols-outlined text-sm">error</span>
+                                {error}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </motion.div>
+
+            <style>{`
+                .drop-shadow-glow {
+                    filter: drop-shadow(0 0 10px rgba(255, 107, 0, 0.4));
+                }
+                .h-15 { height: 3.75rem; }
+            `}</style>
         </div>
     );
 };

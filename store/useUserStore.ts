@@ -20,6 +20,7 @@ interface UserState {
   setLoading: (loading: boolean) => void
   fetchProfile: () => Promise<void>
   updateXP: (amount: number) => Promise<void>
+  updateProfile: (updates: any) => Promise<void>
 }
 
 export const useUserStore = create<UserState>()(
@@ -110,6 +111,23 @@ export const useUserStore = create<UserState>()(
 
         if (!error) {
           set({ profile: { ...currentProfile, total_xp: newXP } })
+        }
+      },
+
+      updateProfile: async (updates: any) => {
+        const user = get().currentUser
+        const currentProfile = get().profile
+        if (!user) return
+
+        const { error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', user.id)
+
+        if (!error) {
+          set({ profile: { ...(currentProfile || {}), ...updates } })
+        } else {
+          throw error
         }
       },
     }),

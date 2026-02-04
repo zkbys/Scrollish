@@ -12,7 +12,7 @@ interface ProfileProps {
 }
 
 const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
-  const { likedPosts, profile, fetchProfile } = useUserStore()
+  const { likedPosts, profile, fetchProfile, updateProfile } = useUserStore()
   const { scrollPos, setScrollPos } = useProfileStore()
   const { theme, toggleTheme } = useThemeStore()
 
@@ -117,6 +117,21 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                     <div className={`w-12 h-7 rounded-full p-1 transition-colors duration-300 ${theme === 'dark' ? 'bg-green-500' : 'bg-gray-300'}`}>
                       <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-300 ${theme === 'dark' ? 'translate-x-5' : 'translate-x-0'}`} />
                     </div>
+                  </button>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">Debug Tools</h3>
+                  <button
+                    onClick={async () => {
+                      if (confirm('Reset onboarding status for this account?')) {
+                        await updateProfile({ learning_reason: null, target_level: null });
+                        window.location.reload();
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 active:scale-95 transition-all text-red-500">
+                    <span className="material-symbols-outlined text-[20px]">restart_alt</span>
+                    <span className="font-bold text-sm">Reset Onboarding</span>
                   </button>
                 </div>
               </div>

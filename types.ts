@@ -10,6 +10,7 @@ export enum Page {
   CommunityDetail = 'CommunityDetail',
   Login = 'Login',
   Preview = 'Preview',
+  Onboarding = 'Onboarding',
 }
 
 // 补全 Post 类型定义
