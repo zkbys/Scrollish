@@ -11,6 +11,7 @@ import Study from './pages/Study'
 import Profile from './pages/Profile'
 import CommunityDetail from './pages/CommunityDetail'
 import Login from './pages/Login'
+import Onboarding from './pages/Onboarding'
 import BottomNav from './components/BottomNav'
 import { useUserStore } from './store/useUserStore'
 
@@ -26,7 +27,7 @@ const App: React.FC = () => {
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [isCommunityFlow, setIsCommunityFlow] = useState(false)
-  const { currentUser, login, logout, setLoading: setAuthLoading, isLoading: isAuthLoading } = useUserStore()
+  const { currentUser, profile, login, logout, setLoading: setAuthLoading, isLoading: isAuthLoading } = useUserStore()
 
   // [修改] 仅在初始化时确认加载完成
   useEffect(() => {
@@ -38,7 +39,11 @@ const App: React.FC = () => {
     if (!isAuthLoading && !currentUser && currentPage !== Page.Login) {
       setCurrentPage(Page.Login)
     }
-  }, [currentUser, currentPage, isAuthLoading])
+    // [新增] 如果已登录但未完成引导设置，强制进入 Onboarding
+    if (!isAuthLoading && currentUser && !profile?.learning_reason && currentPage !== Page.Onboarding) {
+      setCurrentPage(Page.Onboarding)
+    }
+  }, [currentUser, currentPage, isAuthLoading, profile])
 
   useEffect(() => {
     const fetchAllPosts = async () => {
@@ -226,6 +231,15 @@ const App: React.FC = () => {
             }}
           />
         )
+      case Page.Onboarding:
+        return (
+          <Onboarding
+            onComplete={() => {
+              // 引导完成，确保 profile 同步后进入首页
+              navigateTo(Page.Home)
+            }}
+          />
+        )
       default:
         return (
           <Home onNavigate={navigateTo} onPostSelect={handlePostClick} />
@@ -238,6 +252,7 @@ const App: React.FC = () => {
     currentPage === Page.ChatRoom ||
     currentPage === Page.Preview ||
     currentPage === Page.CommunityDetail ||
+    currentPage === Page.Onboarding ||
     currentPage === Page.Login
 
   // [新增] 定义页面顺序，用于决定滑动方向
