@@ -12,6 +12,7 @@ import { useAnalyticsStore } from '../store/useAnalyticsStore'
 import { supabase } from '../supabase'
 import { Page, Post } from '../types'
 import { IMAGES } from '../constants'
+import { STAGGER_CONTAINER, STAGGER_ITEM, BUTTON_SPRING, SPRING_GENTLE } from '../motion'
 
 interface HomeProps {
   onNavigate: (page: Page) => void
@@ -294,6 +295,7 @@ const Home: React.FC<HomeProps> = ({
                 onOpenDiscussion={() => handleOpenDiscussion(post)}
                 isExiting={false}
                 isActive={index === currentPostIndex}
+                isReady={isReady}
               />
             </div>
           ))}
@@ -325,236 +327,255 @@ export const FeedItem: React.FC<{
   onOpenDiscussion: () => void
   isExiting: boolean
   onBack?: () => void
-  isActive?: boolean
-}> = ({ post, onOpenDiscussion, isExiting, onBack, isActive = true }) => {
-  const {
-    toggleLike,
-    isLiked: checkIsLiked,
-    toggleFollowCommunity,
-    isFollowing,
-  } = useUserStore()
-  const { logEvent } = useAnalyticsStore()
+  isActive: boolean
+  isReady?: boolean
+}> = ({
+  post,
+  onOpenDiscussion,
+  isExiting,
+  onBack,
+  isActive,
+  isReady = true,
+}) => {
+    const {
+      toggleLike,
+      isLiked: checkIsLiked,
+      toggleFollowCommunity,
+      isFollowing,
+    } = useUserStore()
+    const { logEvent } = useAnalyticsStore()
 
-  const isLiked = checkIsLiked(post.id)
-  const isSubscribed = post.community_id
-    ? isFollowing(post.community_id)
-    : false
-  const initialLikes =
-    typeof post.upvotes === 'number' ? post.upvotes : parseInt(post.likes) || 0
-  const [likes, setLikes] = useState(initialLikes)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const [videoError, setVideoError] = useState(false)
+    const isLiked = checkIsLiked(post.id)
+    const isSubscribed = post.community_id
+      ? isFollowing(post.community_id)
+      : false
+    const initialLikes =
+      typeof post.upvotes === 'number' ? post.upvotes : parseInt(post.likes) || 0
+    const [likes, setLikes] = useState(initialLikes)
+    const videoRef = useRef<HTMLVideoElement>(null)
+    const [videoError, setVideoError] = useState(false)
 
-  const hasVideo = !!(post.videoUrl || post.video_url) && !videoError
-  const imageUrl = post.image_url || post.image || ''
-  const titleEn = post.title_en || post.titleEn || ''
-  const titleCn = post.title_cn || post.titleZh || ''
-  const subreddit = post.subreddit || 'Community'
-  const commentCount = post.comments || post.comment_count || 0
+    const hasVideo = !!(post.videoUrl || post.video_url) && !videoError
+    const imageUrl = post.image_url || post.image || ''
+    const titleEn = post.title_en || post.titleEn || ''
+    const titleCn = post.title_cn || post.titleZh || ''
+    const subreddit = post.subreddit || 'Community'
+    const commentCount = post.comments || post.comment_count || 0
 
-  const handleToggleSub = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (post.community_id) {
-      toggleFollowCommunity(post.community_id)
-      if (navigator.vibrate) navigator.vibrate(50)
-    }
-  }
-
-  useEffect(() => {
-    if (hasVideo && videoRef.current && !isExiting) {
-      const attemptPlay = async () => {
-        try {
-          if (isActive) {
-            videoRef.current!.muted = true
-            await videoRef.current!.play()
-          } else {
-            videoRef.current!.pause()
-          }
-        } catch (e) {
-          console.log('Playback prevented', e)
-        }
+    const handleToggleSub = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (post.community_id) {
+        toggleFollowCommunity(post.community_id)
+        if (navigator.vibrate) navigator.vibrate(50)
       }
-      attemptPlay()
     }
-  }, [hasVideo, isExiting, isActive])
 
-  const handleLike = async () => {
-    if (isExiting) return
-    toggleLike(post)
-    if (navigator.vibrate) navigator.vibrate(50)
-    logEvent({ post_id: post.id, interaction_type: 'click_like' })
-    setLikes((prev) => (isLiked ? Math.max(0, prev - 1) : prev + 1))
+    useEffect(() => {
+      if (hasVideo && videoRef.current && !isExiting) {
+        const attemptPlay = async () => {
+          try {
+            if (isActive) {
+              videoRef.current!.muted = true
+              await videoRef.current!.play()
+            } else {
+              videoRef.current!.pause()
+            }
+          } catch (e) {
+            console.log('Playback prevented', e)
+          }
+        }
+        attemptPlay()
+      }
+    }, [hasVideo, isExiting, isActive])
 
-    try {
-      const newCount = isLiked ? likes - 1 : likes + 1
-      await supabase
-        .from('production_posts')
-        .update({ upvotes: newCount })
-        .eq('id', post.id)
-    } catch (e) {}
-  }
+    const handleLike = async () => {
+      if (isExiting) return
+      toggleLike(post)
+      if (navigator.vibrate) navigator.vibrate(50)
+      logEvent({ post_id: post.id, interaction_type: 'click_like' })
+      setLikes((prev) => (isLiked ? Math.max(0, prev - 1) : prev + 1))
 
-  const handleDiscussionClick = () => {
-    logEvent({ post_id: post.id, interaction_type: 'click_discussion' })
-    onOpenDiscussion()
-  }
-  const handleShare = async () => {
-    logEvent({ post_id: post.id, interaction_type: 'click_share' })
-    if (navigator.share)
-      navigator.share({
-        title: titleEn,
-        text: titleCn,
-        url: window.location.href,
-      })
-  }
+      try {
+        const newCount = isLiked ? likes - 1 : likes + 1
+        await supabase
+          .from('production_posts')
+          .update({ upvotes: newCount })
+          .eq('id', post.id)
+      } catch (e) { }
+    }
 
-  return (
-    <div className="h-full w-full bg-[#0B0A09] relative">
-      <motion.div
-        layoutId={`post-card-${post.id}`}
-        transition={{ type: 'spring', stiffness: 70, damping: 20 }}
-        className="relative h-full w-full overflow-hidden bg-[#121212] z-[100]">
-        {onBack && !isExiting && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onBack()
-            }}
-            className="absolute top-12 left-5 z-[60] w-10 h-10 flex items-center justify-center bg-black/20 backdrop-blur-md rounded-full border border-white/10 text-white">
-            <span className="material-symbols-outlined text-[24px]">
-              arrow_back
-            </span>
-          </button>
-        )}
+    const handleDiscussionClick = () => {
+      logEvent({ post_id: post.id, interaction_type: 'click_discussion' })
+      onOpenDiscussion()
+    }
+    const handleShare = async () => {
+      logEvent({ post_id: post.id, interaction_type: 'click_share' })
+      if (navigator.share)
+        navigator.share({
+          title: titleEn,
+          text: titleCn,
+          url: window.location.href,
+        })
+    }
 
-        <div
-          className="absolute inset-0 h-full w-full overflow-hidden"
-          onClick={() => {
-            if (!isExiting && hasVideo && videoRef.current)
-              videoRef.current.paused
-                ? videoRef.current.play()
-                : videoRef.current.pause()
-          }}>
-          {hasVideo ? (
-            <video
-              ref={videoRef}
-              src={post.videoUrl || post.video_url}
-              className="h-full w-full object-cover"
-              loop
-              muted
-              playsInline
-              onError={() => setVideoError(true)}
-            />
-          ) : (
-            <>
-              <div
-                className="absolute inset-0 bg-cover bg-center blur-3xl scale-125 opacity-80"
-                style={{ backgroundImage: `url("${imageUrl}")` }}
-              />
-              <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
-              <motion.img
-                layoutId={`post-image-${post.id}`}
-                src={imageUrl}
-                className="absolute inset-0 w-full h-full object-contain object-center z-10 drop-shadow-2xl"
-                transition={{ type: 'spring', stiffness: 70, damping: 20 }}
-              />
-            </>
+    return (
+      <div className="h-full w-full bg-[#0B0A09] relative">
+        <motion.div
+          layoutId={`post-card-${post.id}`}
+          transition={{ type: 'spring', stiffness: 70, damping: 20 }}
+          className="relative h-full w-full overflow-hidden bg-[#121212] z-[100]">
+          {onBack && !isExiting && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onBack()
+              }}
+              className="absolute top-12 left-5 z-[60] w-10 h-10 flex items-center justify-center bg-black/20 backdrop-blur-md rounded-full border border-white/10 text-white">
+              <span className="material-symbols-outlined text-[24px]">
+                arrow_back
+              </span>
+            </button>
           )}
-          {/* 始终保持深色渐变，保障文字可读性，同时为透明 BottomNav 提供背景 */}
+
           <div
-            className={`absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none z-20 transition-opacity duration-300 ${isExiting ? 'opacity-0' : 'opacity-100'}`}
+            className="absolute inset-0 h-full w-full overflow-hidden"
+            onClick={() => {
+              if (!isExiting && hasVideo && videoRef.current)
+                videoRef.current.paused
+                  ? videoRef.current.play()
+                  : videoRef.current.pause()
+            }}>
+            {hasVideo ? (
+              <video
+                ref={videoRef}
+                src={post.videoUrl || post.video_url}
+                className="h-full w-full object-cover"
+                style={{ objectPosition: 'center 35%' }}
+                loop
+                muted
+                playsInline
+                onError={() => setVideoError(true)}
+              />
+            ) : (
+              <>
+                <div
+                  className="absolute inset-0 bg-cover bg-center blur-3xl scale-125 opacity-80"
+                  style={{ backgroundImage: `url("${imageUrl}")` }}
+                />
+                <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
+                <motion.img
+                  layoutId={`post-image-${post.id}`}
+                  src={imageUrl}
+                  className="absolute inset-0 w-full h-full object-contain z-10 drop-shadow-2xl"
+                  style={{ objectPosition: 'center 35%' }}
+                  transition={{ type: 'spring', stiffness: 70, damping: 20 }}
+                />
+              </>
+            )}
+            {/* 始终保持深色渐变，保障文字可读性，同时为透明 BottomNav 提供背景 */}
+            <div
+              className={`absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none z-20 transition-opacity duration-300 ${isExiting ? 'opacity-0' : 'opacity-100'}`}
+            />
+          </div>
+
+          <div
+            className={`absolute inset-0 z-30 transition-all ${isExiting ? 'pointer-events-none' : ''}`}
+            onDoubleClick={handleLike}
           />
-        </div>
 
-        <div
-          className={`absolute inset-0 z-30 transition-all ${isExiting ? 'pointer-events-none' : ''}`}
-          onDoubleClick={handleLike}
-        />
+          <motion.div
+            variants={STAGGER_CONTAINER}
+            initial="initial"
+            animate={isActive ? "animate" : "initial"}
+            exit="exit"
+            inherit={false}
+            className="absolute inset-0 z-[120] pointer-events-none">
+            <div className="absolute bottom-0 left-0 w-[82%] p-5 pb-24">
+              <motion.div variants={STAGGER_ITEM} className="flex items-center gap-2 mb-3 pointer-events-auto">
+                <div className="w-10 h-10 rounded-full border border-white/20 bg-black/40 backdrop-blur-md flex items-center justify-center overflow-hidden">
+                  <span className="text-white font-black text-sm">
+                    {subreddit.substring(0, 2).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex flex-col drop-shadow-md">
+                  <span className="text-white font-bold text-[15px] leading-tight">
+                    r/{subreddit}
+                  </span>
+                  {post.image_type === 'generated' && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="material-symbols-outlined text-[10px] text-primary">
+                        auto_awesome
+                      </span>
+                      <span className="text-primary text-[10px] font-bold">
+                        AI Illustration
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <motion.button
+                  {...BUTTON_SPRING}
+                  onClick={handleToggleSub}
+                  className={`backdrop-blur-md border text-[10px] font-bold px-3 py-1.5 rounded-full ml-2 transition-all pointer-events-auto ${isSubscribed ? 'bg-primary/20 border-primary/30 text-primary' : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'}`}>
+                  {isSubscribed ? 'Following' : 'Subscribe'}
+                </motion.button>
+              </motion.div>
+              <motion.div variants={STAGGER_ITEM} className="pointer-events-auto mb-2 space-y-1">
+                <h1 className="text-white text-[18px] font-black leading-snug drop-shadow-lg pr-4">
+                  {titleEn}
+                </h1>
+                <p className="text-white/80 text-[15px] font-medium leading-snug drop-shadow-md line-clamp-3 pr-4">
+                  {titleCn}
+                </p>
+              </motion.div>
+            </div>
 
-        <div
-          className={`absolute inset-0 z-40 pointer-events-none transition-all duration-200 ease-out ${isExiting ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'}`}>
-          <div className="absolute bottom-0 left-0 w-[82%] p-5 pb-24">
-            <div className="flex items-center gap-2 mb-3 pointer-events-auto">
-              <div className="w-10 h-10 rounded-full border border-white/20 bg-black/40 backdrop-blur-md flex items-center justify-center overflow-hidden">
-                <span className="text-white font-black text-sm">
-                  {subreddit.substring(0, 2).toUpperCase()}
+            <motion.div variants={STAGGER_ITEM} className="absolute bottom-24 right-2 flex flex-col-reverse items-center gap-6 pointer-events-auto w-14">
+              <div className="flex flex-col items-center gap-1">
+                <motion.button
+                  {...BUTTON_SPRING}
+                  onClick={handleShare}
+                  className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all hover:bg-white/20">
+                  <span className="material-symbols-outlined text-[28px] text-white transform -rotate-12">
+                    reply
+                  </span>
+                </motion.button>
+                <span className="text-white text-[12px] font-bold drop-shadow-md">
+                  Share
                 </span>
               </div>
-              <div className="flex flex-col drop-shadow-md">
-                <span className="text-white font-bold text-[15px] leading-tight">
-                  r/{subreddit}
+              <div className="flex flex-col items-center gap-1">
+                <motion.button
+                  {...BUTTON_SPRING}
+                  onClick={handleDiscussionClick}
+                  className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all hover:bg-white/20">
+                  <span className="material-symbols-outlined text-[28px] text-white fill-[1]">
+                    mode_comment
+                  </span>
+                </motion.button>
+                {/* 修复：0 评论时显示 Discuss */}
+                <span className="text-white text-[12px] font-bold drop-shadow-md">
+                  {parseInt(commentCount) > 0 ? commentCount : 'Discuss'}
                 </span>
-                {post.image_type === 'generated' && (
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="material-symbols-outlined text-[10px] text-primary">
-                      auto_awesome
-                    </span>
-                    <span className="text-primary text-[10px] font-bold">
-                      AI Illustration
-                    </span>
-                  </div>
-                )}
               </div>
-              <button
-                onClick={handleToggleSub}
-                className={`backdrop-blur-md border text-[10px] font-bold px-3 py-1.5 rounded-full ml-2 transition-all active:scale-95 pointer-events-auto ${isSubscribed ? 'bg-primary/20 border-primary/30 text-primary' : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'}`}>
-                {isSubscribed ? 'Following' : 'Subscribe'}
-              </button>
-            </div>
-            <div className="pointer-events-auto mb-2 space-y-1">
-              <h1 className="text-white text-[18px] font-black leading-snug drop-shadow-lg pr-4">
-                {titleEn}
-              </h1>
-              <p className="text-white/80 text-[15px] font-medium leading-snug drop-shadow-md line-clamp-3 pr-4">
-                {titleCn}
-              </p>
-            </div>
-          </div>
-
-          <div className="absolute bottom-24 right-2 flex flex-col items-center gap-6 pointer-events-auto w-14">
-            <div className="flex flex-col items-center gap-1">
-              <button
-                onClick={handleLike}
-                className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all active:scale-90">
-                <span
-                  className={`material-symbols-outlined text-[30px] transition-colors ${isLiked ? 'text-[#ff2d55] fill-[1]' : 'text-white'}`}>
-                  favorite
+              <div className="flex flex-col items-center gap-1">
+                <motion.button
+                  {...BUTTON_SPRING}
+                  onClick={handleLike}
+                  className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all">
+                  <span
+                    className={`material-symbols-outlined text-[30px] transition-colors ${isLiked ? 'text-[#ff2d55] fill-[1]' : 'text-white'}`}>
+                    favorite
+                  </span>
+                </motion.button>
+                <span className="text-white text-[12px] font-bold drop-shadow-md">
+                  {likes}
                 </span>
-              </button>
-              <span className="text-white text-[12px] font-bold drop-shadow-md">
-                {likes}
-              </span>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <button
-                onClick={handleDiscussionClick}
-                className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all active:scale-90 hover:bg-white/20">
-                <span className="material-symbols-outlined text-[28px] text-white fill-[1]">
-                  mode_comment
-                </span>
-              </button>
-              {/* 修复：0 评论时显示 Discuss */}
-              <span className="text-white text-[12px] font-bold drop-shadow-md">
-                {parseInt(commentCount) > 0 ? commentCount : 'Discuss'}
-              </span>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <button
-                onClick={handleShare}
-                className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all active:scale-90 hover:bg-white/20">
-                <span className="material-symbols-outlined text-[28px] text-white transform -rotate-12">
-                  reply
-                </span>
-              </button>
-              <span className="text-white text-[12px] font-bold drop-shadow-md">
-                Share
-              </span>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    </div>
-  )
-}
+              </div>
+            </motion.div>
+          </motion.div>
+        </motion.div>
+      </div>
+    )
+  }
 
 export default Home
