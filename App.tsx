@@ -14,12 +14,27 @@ import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
 import BottomNav from './components/BottomNav'
 import { useUserStore } from './store/useUserStore'
+import { PAGE_VARIANTS } from './motion'
+
+// [新增] 定义页面顺序，用于决定滑动方向
+const getPageRank = (page: Page) => {
+  switch (page) {
+    case Page.Home: return 0
+    case Page.Explore: return 1
+    case Page.Study: return 2
+    case Page.Profile: return 3
+    case Page.CommunityDetail: return 4
+    case Page.Login: return -1
+    default: return 0
+  }
+}
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
   const [lastPage, setLastPage] = useState<Page>(Page.Home)
   // [新增] 记录用户进入详情流的起始 Tab 页（Explore/Home/Profile）
   const [originPage, setOriginPage] = useState<Page>(Page.Home)
+  const [transitionDirection, setTransitionDirection] = useState(1)
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
   const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
   const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
@@ -88,6 +103,10 @@ const App: React.FC = () => {
 
   // [重构] 统一导航处理，记录上一步页面 + 识别起始 Tab 页
   const navigateTo = (nextPage: Page) => {
+    const oldRank = getPageRank(currentPage)
+    const newRank = getPageRank(nextPage)
+    setTransitionDirection(newRank >= oldRank ? 1 : -1)
+
     setLastPage(currentPage)
 
     // 如果目标是主要的 Tab 页（可以从底部导航访问），更新起始页
@@ -255,20 +274,8 @@ const App: React.FC = () => {
     currentPage === Page.Onboarding ||
     currentPage === Page.Login
 
-  // [新增] 定义页面顺序，用于决定滑动方向
-  const getPageRank = (page: Page) => {
-    switch (page) {
-      case Page.Home: return 0
-      case Page.Explore: return 1
-      case Page.Study: return 2
-      case Page.Profile: return 3
-      case Page.CommunityDetail: return 4
-      case Page.Login: return -1
-      default: return 0
-    }
-  }
-
-  const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
+  // [移除] 不再在渲染期间实时派生方向，改为使用 navigateTo 显式更新的状态
+  // const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
 
   if (isAuthLoading) {
     return (
@@ -282,28 +289,25 @@ const App: React.FC = () => {
     <div className="flex justify-center bg-black min-h-screen">
       <div className="relative w-full max-w-md h-screen overflow-hidden bg-[#0B0A09] shadow-2xl flex flex-col">
         <main className="flex-1 overflow-hidden relative">
-          <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+          <AnimatePresence mode="popLayout" initial={false} custom={transitionDirection}>
             <motion.div
               key={currentPage}
-              custom={direction}
+              custom={transitionDirection}
+              variants={PAGE_VARIANTS}
               // 当涉及到 TopicHub 时，强制仅使用淡入淡出（opacity），完全禁止位移和缩放，防止干扰 Shared Element
               initial={
                 currentPage === Page.TopicHub || lastPage === Page.TopicHub
                   ? { opacity: 0 }
-                  : { opacity: 0, x: direction * 50, scale: 0.98 }
+                  : "initial"
               }
-              animate={{ opacity: 1, x: 0, scale: 1 }}
+              animate="animate"
               exit={
                 (currentPage === Page.Home && lastPage === Page.TopicHub) || currentPage === Page.TopicHub
                   ? { opacity: 0 }
                   : currentPage === Page.CommunityDetail // [新增] 返回社区详情时，立即销毁当前页，避免双重动画
                     ? { opacity: 0, transition: { duration: 0 } }
-                    : { opacity: 0, x: direction * -50, scale: 0.98 }
+                    : "exit"
               }
-              transition={{
-                duration: (currentPage === Page.Home && lastPage === Page.TopicHub) || currentPage === Page.TopicHub ? 0.2 : 0.4,
-                ease: [0.22, 1, 0.36, 1]
-              }}
               className="absolute inset-0 h-full w-full will-change-transform"
             >
               {renderPage()}

@@ -4,6 +4,7 @@ import { Page } from '../types';
 
 import { supabase } from '../supabase';
 import { IMAGES } from '../constants';
+import { SPRING_GENTLE, BUTTON_SPRING } from '../motion';
 
 interface LoginProps {
     onNavigate: (page: Page) => void;
@@ -78,15 +79,15 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
             </div>
 
             <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={SPRING_GENTLE}
                 className="w-full max-w-sm z-10"
             >
                 {/* Brand Header */}
                 <div className="mb-10 text-center">
                     <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
+                        {...BUTTON_SPRING}
                         className="inline-flex items-center justify-center w-16 h-16 bg-transparent rounded-[1.25rem] mb-4 shadow-xl border border-white/5 overflow-hidden"
                     >
                         <img
@@ -165,10 +166,11 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             </div>
                         </div>
 
-                        <button
+                        <motion.button
+                            {...BUTTON_SPRING}
                             type="submit"
                             disabled={loading}
-                            className="w-full h-16 bg-primary text-white font-black rounded-[1.25rem] hover:brightness-110 active:scale-[0.97] shadow-[0_10px_30px_-5px_rgba(255,107,0,0.4)] mt-4 flex items-center justify-center gap-3 group overflow-hidden relative"
+                            className="w-full h-16 bg-primary text-white font-black rounded-[1.25rem] shadow-[0_10px_30px_-5px_rgba(255,107,0,0.4)] mt-4 flex items-center justify-center gap-3 group overflow-hidden relative"
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/15 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                             {loading ? (
@@ -183,7 +185,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                     </span>
                                 </>
                             )}
-                        </button>
+                        </motion.button>
                     </form>
 
                     {/* Social Login Separator */}
@@ -197,14 +199,14 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <button className="h-14 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.05] rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 group">
+                        <motion.button {...BUTTON_SPRING} className="h-14 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.05] rounded-2xl flex items-center justify-center gap-2 group">
                             <span className="material-symbols-outlined text-[20px] text-[#07C160]/70 group-hover:text-[#07C160]">chat</span>
                             <span className="text-[10px] font-black text-white/30 group-hover:text-white/60 uppercase tracking-wider">WeChat</span>
-                        </button>
-                        <button className="h-14 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.05] rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 group">
+                        </motion.button>
+                        <motion.button {...BUTTON_SPRING} className="h-14 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.05] rounded-2xl flex items-center justify-center gap-2 group">
                             <span className="material-symbols-outlined text-[20px] text-[#12B7F5]/70 group-hover:text-[#12B7F5]">chat_bubble</span>
                             <span className="text-[10px] font-black text-white/30 group-hover:text-white/60 uppercase tracking-wider">Connect QQ</span>
-                        </button>
+                        </motion.button>
                     </div>
                 </div>
 

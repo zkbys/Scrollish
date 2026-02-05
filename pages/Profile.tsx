@@ -5,6 +5,7 @@ import { useUserStore } from '../store/useUserStore'
 import { useProfileStore } from '../store/useProfileStore'
 import { useThemeStore } from '../store/useThemeStore'
 import { IMAGES } from '../constants'
+import { STAGGER_CONTAINER, STAGGER_ITEM, SPRING_GENTLE } from '../motion'
 
 interface ProfileProps {
   onNavigate?: (page: Page) => void
@@ -159,10 +160,13 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
       <main
         ref={scrollContainerRef}
         onScroll={handleScroll}
+        variants={STAGGER_CONTAINER}
+        initial="initial"
+        animate="animate"
         className="relative z-10 flex-1 overflow-y-auto no-scrollbar scroll-smooth">
 
         {/* Profile Info */}
-        <div className="flex p-4 flex-col items-center mt-2">
+        <motion.div variants={STAGGER_ITEM} className="flex p-4 flex-col items-center mt-2">
           <div className="relative">
             <div className="p-1 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-red-600 shadow-xl ring-4 ring-white/30 dark:ring-white/5">
               <div
@@ -184,10 +188,10 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
               <p className="text-orange-600 dark:text-orange-400 text-[10px] font-extrabold uppercase tracking-widest">Premium Member</p>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Stats Matrix */}
-        <div className="grid grid-cols-2 gap-3.5 p-4">
+        <motion.div variants={STAGGER_ITEM} className="grid grid-cols-2 gap-3.5 p-4">
           <div className="glass-card-premium p-4 flex items-center justify-between transition-transform active:scale-[0.98]">
             <div>
               <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Saved</p>
@@ -225,10 +229,10 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
               <span className="material-symbols-outlined text-yellow-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Level Progress */}
-        <div className="mx-4 mb-6 p-5 glass-card-premium">
+        <motion.div variants={STAGGER_ITEM} className="mx-4 mb-6 p-5 glass-card-premium">
           <div className="flex justify-between items-end mb-3">
             <div className="flex flex-col">
               <p className="text-gray-900 dark:text-white text-sm font-black">Progress to Level {userLevel + 1}</p>
@@ -239,7 +243,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
           <div className="h-3.5 rounded-full bg-gray-100/50 dark:bg-black/20 inner-glow overflow-hidden p-0.5 border border-white/50 dark:border-white/5">
             <div className="h-full rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 shadow-sm transition-all" style={{ width: `${progressPercent}%` }}></div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Sticky Tabs */}
         <div className="sticky top-0 z-20 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5">
@@ -266,8 +270,9 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
           ) : (
             <div className="grid grid-cols-2 gap-4">
               {likedPosts.map((post) => (
-                <div
+                <motion.div
                   key={post.id}
+                  variants={STAGGER_ITEM}
                   onClick={() => handlePostClick(post)}
                   className="group glass-card-premium overflow-hidden flex flex-col transition-all duration-300 active:scale-95 shadow-sm hover:shadow-lg cursor-pointer">
                   <div className="aspect-square w-full bg-gray-100 dark:bg-black overflow-hidden relative">
@@ -297,7 +302,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                       Saved recently
                     </p>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
