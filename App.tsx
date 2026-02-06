@@ -38,6 +38,7 @@ const App: React.FC = () => {
   // [新增] 记录用户进入详情流的起始 Tab 页（Explore/Home/Profile）
   const [originPage, setOriginPage] = useState<Page>(Page.Home)
   const [transitionDirection, setTransitionDirection] = useState(1)
+  const [transitionDirection, setTransitionDirection] = useState(1)
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
   const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
   const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
@@ -280,6 +281,8 @@ const App: React.FC = () => {
     currentPage === Page.Onboarding ||
     currentPage === Page.Login
 
+  // [移除] 不再在渲染期间实时派生方向，改为使用 navigateTo 显式更新的状态
+  // const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
   // [移除] 不再在渲染期间实时派生方向，改为使用 navigateTo 显式更新的状态
   // const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
 
