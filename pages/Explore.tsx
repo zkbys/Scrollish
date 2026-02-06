@@ -18,6 +18,39 @@ interface ExploreProps {
   onCommunitySelect?: (community: any) => void
 }
 
+/**
+ * [新增] 局部图片加载器组件
+ * 用于解决图片白块问题，在未加载完成前显示柑橘圆环
+ */
+const SafeImage: React.FC<{ src: string; className?: string; alt?: string; layoutId?: string }> = ({ src, className, alt, layoutId }) => {
+  const [isLoaded, setIsLoaded] = useState(false)
+  return (
+    <div className={`relative ${className} overflow-hidden`}>
+      <motion.img
+        layoutId={layoutId}
+        src={src}
+        alt={alt}
+        onLoad={() => setIsLoaded(true)}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: isLoaded ? 1 : 0 }}
+        transition={{ duration: 0.3 }}
+        className="w-full h-full object-cover"
+      />
+      <AnimatePresence>
+        {!isLoaded && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center bg-white/5 dark:bg-white/5">
+            <div className="w-5 h-5 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 const Explore: React.FC<ExploreProps> = ({
   onNavigate,
   onPostSelect,
@@ -464,13 +497,11 @@ const Explore: React.FC<ExploreProps> = ({
                             whileTap={{ backgroundColor: 'rgba(0,0,0,0.05)' }}
                             onClick={() => handlePostClick(post)}
                             className="flex gap-3 p-2 rounded-xl transition-colors cursor-pointer group">
-                            <div className="w-12 h-16 rounded-lg bg-cover bg-center shrink-0 border border-white/40 dark:border-white/10 shadow-md relative overflow-hidden">
-                              <motion.img
-                                layoutId={`post-image-${post.id}`}
+                            <div className="w-12 h-16 rounded-lg shrink-0 border border-white/40 dark:border-white/10 shadow-md relative overflow-hidden">
+                              <SafeImage
                                 src={post.image_url}
-                                loading="lazy"
-                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                alt=""
+                                layoutId={`post-image-${post.id}`}
+                                className="absolute inset-0 w-full h-full"
                               />
                             </div>
                             <div className="flex flex-col justify-center gap-1 min-w-0">
@@ -546,10 +577,10 @@ const Explore: React.FC<ExploreProps> = ({
                           autoPlay
                         />
                       ) : (
-                        <img
+                        <SafeImage
                           src={post.image_url}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                          loading="lazy"
+                          layoutId={`post-image-${post.id}`}
+                          className="w-full h-full"
                           alt=""
                         />
                       )}

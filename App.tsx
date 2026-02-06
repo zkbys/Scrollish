@@ -14,7 +14,10 @@ import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
 import BottomNav from './components/BottomNav'
 import { useUserStore } from './store/useUserStore'
+import { useAppStore } from './store/useAppStore'
+import { useExploreStore } from './store/useExploreStore'
 import { PAGE_VARIANTS } from './motion'
+import { preloadImage, preloadImages } from './utils/media'
 
 // [新增] 定义页面顺序，用于决定滑动方向
 const getPageRank = (page: Page) => {
@@ -101,15 +104,18 @@ const App: React.FC = () => {
     fetchAllPosts()
   }, [])
 
-  // [重构] 统一导航处理，记录上一步页面 + 识别起始 Tab 页
+  // [重构] 恢复瞬间导航：移除延迟和遮罩，优先响应速度
   const navigateTo = (nextPage: Page) => {
+    if (currentPage === nextPage) return
+    performNavigation(nextPage)
+  }
+
+  const performNavigation = (nextPage: Page) => {
     const oldRank = getPageRank(currentPage)
     const newRank = getPageRank(nextPage)
     setTransitionDirection(newRank >= oldRank ? 1 : -1)
-
     setLastPage(currentPage)
 
-    // 如果目标是主要的 Tab 页（可以从底部导航访问），更新起始页
     const mainTabPages = [Page.Home, Page.Explore, Page.Study, Page.Profile]
     if (mainTabPages.includes(nextPage)) {
       setOriginPage(nextPage)
@@ -289,26 +295,14 @@ const App: React.FC = () => {
     <div className="flex justify-center bg-black min-h-screen">
       <div className="relative w-full max-w-md h-screen overflow-hidden bg-[#0B0A09] shadow-2xl flex flex-col">
         <main className="flex-1 overflow-hidden relative">
-          <AnimatePresence mode="popLayout" initial={false} custom={transitionDirection}>
+          <AnimatePresence mode="wait">
             <motion.div
               key={currentPage}
-              custom={transitionDirection}
-              variants={PAGE_VARIANTS}
-              // 当涉及到 TopicHub 时，强制仅使用淡入淡出（opacity），完全禁止位移和缩放，防止干扰 Shared Element
-              initial={
-                currentPage === Page.TopicHub || lastPage === Page.TopicHub
-                  ? { opacity: 0 }
-                  : "initial"
-              }
-              animate="animate"
-              exit={
-                (currentPage === Page.Home && lastPage === Page.TopicHub) || currentPage === Page.TopicHub
-                  ? { opacity: 0 }
-                  : currentPage === Page.CommunityDetail // [新增] 返回社区详情时，立即销毁当前页，避免双重动画
-                    ? { opacity: 0, transition: { duration: 0 } }
-                    : "exit"
-              }
-              className="absolute inset-0 h-full w-full will-change-transform"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="absolute inset-0 h-full w-full"
             >
               {renderPage()}
             </motion.div>

@@ -26,30 +26,23 @@ export const SPRING_BOUNCY: Transition = {
  * 全局页面转场变体
  */
 export const PAGE_VARIANTS: Variants = {
-    initial: (direction: number) => ({
+    initial: {
         opacity: 0,
-        x: direction > 0 ? 60 : -60,
-        scale: 0.98,
-    }),
+    },
     animate: {
         opacity: 1,
-        x: 0,
-        scale: 1,
         transition: {
-            x: SPRING_GENTLE,
-            opacity: { duration: 0.3 },
-            scale: SPRING_GENTLE,
+            duration: 0.2,
+            ease: "easeOut"
         },
     },
-    exit: (direction: number) => ({
+    exit: {
         opacity: 0,
-        x: direction > 0 ? -60 : 60,
-        scale: 0.98,
         transition: {
-            x: { ...SPRING_GENTLE, stiffness: 300 },
-            opacity: { duration: 0.2 },
+            duration: 0.15,
+            ease: "easeIn"
         },
-    }),
+    },
 };
 
 /**

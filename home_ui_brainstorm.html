@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scrollish Q-Style Icons Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0b0a09;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: sans-serif;
+        }
+
+        .icon-container {
+            display: flex;
+            gap: 40px;
+        }
+
+        .btn-q {
+            width: 60px;
+            height: 60px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+
+        .btn-q:active {
+            transform: scale(0.8) translateY(5px);
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-q i {
+            font-size: 30px;
+            transition: transform 0.3s;
+        }
+
+        .btn-q:hover i {
+            transform: scale(1.2) rotate(5deg);
+        }
+
+        /* Specific Q-Styles */
+        .btn-like {
+            border-color: #ff2d55;
+            color: #ff2d55;
+        }
+
+        .btn-like.active {
+            background: #ff2d55;
+            color: white;
+            box-shadow: 0 10px 20px rgba(255, 45, 85, 0.3);
+        }
+
+        .btn-comment {
+            border-color: #34c759;
+            color: #34c759;
+        }
+
+        .btn-share {
+            border-color: #5856d6;
+            color: #5856d6;
+        }
+
+        .label {
+            font-size: 10px;
+            font-weight: 900;
+            margin-top: 4px;
+            opacity: 0.6;
+        }
+
+        /* Floating animation for Q feel */
+        @keyframes squish {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05, 0.95);
+            }
+        }
+
+        .animate-q {
+            animation: squish 2s infinite ease-in-out;
+        }
+    </style>
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+</head>
+
+<body>
+
+    <div class="icon-container">
+        <!-- Like -->
+        <div class="flex flex-col items-center gap-2">
+            <div class="btn-q btn-like active animate-q" onclick="this.classList.toggle('active')">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">favorite</span>
+            </div>
+            <span class="label">1.2K</span>
+        </div>
+
+        <!-- Comment -->
+        <div class="flex flex-col items-center gap-2">
+            <div class="btn-q btn-comment">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">chat_bubble</span>
+            </div>
+            <span class="label">85</span>
+        </div>
+
+        <!-- Share -->
+        <div class="flex flex-col items-center gap-2">
+            <div class="btn-q btn-share">
+                <span class="material-symbols-outlined">ios_share</span>
+            </div>
+            <span class="label">SHARE</span>
+        </div>
+    </div>
+
+</body>
+
+</html>
