@@ -7,7 +7,6 @@ import { Comment, CulturalNote } from '../types'
 import InteractiveText from '../components/InteractiveText'
 import WordDetailOverlay from '../components/WordDetailOverlay'
 
-const SILICONFLOW_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'
 const AI_MODEL = 'deepseek-ai/DeepSeek-V2.5'
 
 interface ChatRoomProps {
@@ -329,16 +328,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       setIsAiMode(false)
 
       try {
-        const apiKey = import.meta.env.VITE_SILICONFLOW_API_KEY
-        if (!apiKey) throw new Error('Missing API Key')
-
-        const response = await fetch(SILICONFLOW_API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
+        const { data, error } = await supabase.functions.invoke('chat', {
+          body: {
             model: AI_MODEL,
             messages: [
               {
@@ -347,11 +338,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               },
               { role: 'user', content: questionContent },
             ],
-            stream: false,
-          }),
+          },
         })
 
-        const data = await response.json()
+        if (error) throw error
+
         const aiReply = data.choices?.[0]?.message?.content || '...'
 
         const aiAnswerMsg: Comment = {
@@ -370,6 +361,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           replyText: questionContent,
         }
         addLocalComment(postId, aiAnswerMsg)
+
       } catch (error) {
         console.error('AI API Error:', error)
       } finally {

@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-const SILICONFLOW_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'
 const AI_MODEL = 'Qwen/Qwen2.5-7B-Instruct'
+
+import { supabase } from '../supabase'
 
 export interface DictionaryResult {
   word: string
@@ -46,44 +47,16 @@ export const useDictionaryStore = create<DictionaryState>()(
         set({ analyzingWords: [...analyzingWords, word] })
 
         try {
-          const apiKey = import.meta.env.VITE_SILICONFLOW_API_KEY
-          if (!apiKey) throw new Error('No API Key')
-
-          const response = await fetch(SILICONFLOW_API_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
+          const { data, error } = await supabase.functions.invoke('dictionary', {
+            body: {
+              word,
+              context,
+              model: AI_MODEL, // 可选，后端有默认值
             },
-            body: JSON.stringify({
-              model: AI_MODEL,
-              messages: [
-                {
-                  role: 'system',
-                  content: `You are a linguistic expert API. 
-                  Analyze the target word in the given context.
-                  Output strictly valid JSON with this structure:
-                  {
-                    "ipa": "pronunciation",
-                    "context_meaning_cn": "Meaning in this specific sentence (Chinese)",
-                    "context_meaning_en": "Meaning in this specific sentence (English)",
-                    "definition_cn": "General dictionary definition (Chinese)",
-                    "definition_en": "General dictionary definition (English)",
-                    "roots": "Etymology/Roots breakdown (e.g., 're-(again) + act(do)')"
-                  }
-                  Do not output markdown code blocks, just the raw JSON string.`,
-                },
-                {
-                  role: 'user',
-                  content: `Word: "${word}"\nContext: "${context}"`,
-                },
-              ],
-              stream: false,
-              temperature: 0.3,
-            }),
           })
 
-          const data = await response.json()
+          if (error) throw error
+
           const content = data.choices?.[0]?.message?.content || '{}'
           const jsonStr = content.replace(/```json|```/g, '').trim()
 
@@ -119,6 +92,7 @@ export const useDictionaryStore = create<DictionaryState>()(
           return null
         }
       },
+
 
       forgetWord: (word) => {
         set((state) => {

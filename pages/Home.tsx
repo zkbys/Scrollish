@@ -13,6 +13,8 @@ import { supabase } from '../supabase'
 import { Page, Post } from '../types'
 import { IMAGES } from '../constants'
 import { STAGGER_CONTAINER, STAGGER_ITEM, BUTTON_SPRING, SPRING_GENTLE } from '../motion'
+import JellyLikeButton from '../components/JellyLikeButton'
+import JellyCommentButton from '../components/JellyCommentButton'
 
 interface HomeProps {
   onNavigate: (page: Page) => void
@@ -570,7 +572,7 @@ export const FeedItem: React.FC<{
                   whileTap={{ scale: 0.9 }}
                   transition={CITRUS_SQUISH}
                   onClick={handleShare}
-                  className="w-12 h-12 bg-white/10 backdrop-blur-xl border-2 border-white/5 flex items-center justify-center shadow-xl hover:bg-white/20 transition-colors relative transition-all overflow-hidden"
+                  className="w-12 h-12 bg-transparent flex items-center justify-center transition-colors relative transition-all overflow-hidden"
                   style={{ borderRadius: DROPLET_SHAPE, width: '46px', height: '46px' }}>
                   <span className="material-symbols-outlined text-[24px] text-white">
                     sunny
@@ -580,41 +582,17 @@ export const FeedItem: React.FC<{
               </div>
 
               {/* 评论 */}
-              <div className="flex flex-col items-center gap-1.5">
-                <motion.button
-                  whileHover={{ scale: 1.1, y: -2 }}
-                  whileTap={{ scale: 0.9 }}
-                  transition={CITRUS_SQUISH}
-                  onClick={handleDiscussionClick}
-                  className="w-12 h-12 bg-white/10 backdrop-blur-xl border-2 border-white/5 flex items-center justify-center shadow-xl hover:bg-white/20 transition-colors relative overflow-hidden"
-                  style={{ borderRadius: DROPLET_SHAPE, width: '46px', height: '46px' }}>
-                  <span className="material-symbols-outlined text-[26px] text-white">
-                    chat_bubble
-                  </span>
-                </motion.button>
-                <span className="text-white/50 text-[10px] font-black drop-shadow-md">
-                  Discuss
-                </span>
-              </div>
+              <JellyCommentButton
+                onClick={handleDiscussionClick}
+                label="Discuss"
+              />
 
-              {/* 点赞 (小橘子版) */}
-              <div className="flex flex-col items-center gap-1.5">
-                <motion.button
-                  whileHover={{ scale: 1.2 }}
-                  whileTap={{ scale: 0.85 }}
-                  transition={CITRUS_SQUISH}
-                  onClick={handleLike}
-                  className={`flex items-center justify-center shadow-2xl transition-all duration-300 relative overflow-hidden ${isLiked ? 'bg-gradient-to-br from-orange-400 to-orange-600 shadow-orange-500/40 border-transparent' : 'bg-white/10 backdrop-blur-xl border-2 border-white/5'}`}
-                  style={{ borderRadius: DROPLET_SHAPE, width: '54px', height: '54px' }}>
-                  <span
-                    className={`material-symbols-outlined text-[32px] transition-colors ${isLiked ? 'text-white fill-[1]' : 'text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.5)]'}`}>
-                    favorite
-                  </span>
-                </motion.button>
-                <span className={`text-[12px] font-black drop-shadow-md transition-colors ${isLiked ? 'text-orange-400' : 'text-white/50'}`}>
-                  {likes}
-                </span>
-              </div>
+              {/* 点赞 (果冻爆炸版) */}
+              <JellyLikeButton
+                isLiked={isLiked}
+                onClick={handleLike}
+                count={likes}
+              />
             </motion.div>
           </motion.div>
         </motion.div>

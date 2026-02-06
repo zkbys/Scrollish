@@ -44,36 +44,41 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-[60] pb-8 pt-6 px-6 pointer-events-none flex justify-center transition-all duration-300"
+      className="fixed bottom-0 left-0 right-0 z-[60] pb-4 pt-6 px-6 pointer-events-none flex justify-center transition-all duration-300"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={() => setIsHovered(true)}
       onTouchEnd={() => setIsHovered(false)}
     >
+      {/* 底部主题色渐变光晕 (颜色加深) */}
+      <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-orange-500/30 via-orange-500/5 to-transparent -z-10 pointer-events-none" />
+
       <motion.nav
         ref={navRef}
         onPan={handlePan}
         animate={{
           backgroundColor: isHovered
-            ? (isLightPage ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.15)')
+            ? 'rgba(255, 85, 0, 0.15)'
             : 'rgba(255, 255, 255, 0)',
           borderColor: isHovered
-            ? (isLightPage ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.15)')
+            ? 'rgba(255, 85, 0, 0.3)'
             : 'rgba(255, 255, 255, 0)',
-          backdropFilter: isHovered ? 'blur(25px)' : 'blur(0px)',
+          backdropFilter: isHovered ? 'blur(16px)' : 'blur(0px)',
           boxShadow: isHovered
-            ? (isLightPage ? '0 10px 40px rgba(0,0,0,0.05)' : '0 10px 40px rgba(0,0,0,0.3)')
+            ? '0 8px 32px 0 rgba(255, 85, 0, 0.2)'
             : '0 0px 0px rgba(0,0,0,0)',
+          scale: isHovered ? 1.02 : 1,
+          translateY: isHovered ? 2 : 0,
         }}
         style={{ width: CONTAINER_WIDTH, touchAction: 'none' }}
-        transition={SPRING_SNAPPY}
-        className="pointer-events-auto border rounded-[2.5rem] px-2 py-2 flex justify-start items-center transition-all duration-300 overflow-visible relative cursor-grab active:cursor-grabbing"
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        className="pointer-events-auto border rounded-[2.5rem] px-2 py-2 flex justify-start items-center overflow-visible relative cursor-grab active:cursor-grabbing"
       >
-        {/* 透明背景滑块 (Pill) - 现在它是隐形的，仅用于物理动效参考 */}
+        {/* 透明背景滑块 (Pill) */}
         <motion.div
           animate={{
             x: currentIndex * ITEM_WIDTH,
-            opacity: 0, // 隐身，但保留在 DOM 中
+            opacity: 0,
           }}
           transition={SPRING_SNAPPY}
           className="absolute h-11 w-[calc(25%-4px)] rounded-full z-10 pointer-events-none"
@@ -124,7 +129,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
           )
         })}
       </motion.nav>
-    </div>
+    </div >
   )
 }
 
