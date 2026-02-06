@@ -13,7 +13,6 @@ import { supabase } from '../supabase'
 import { Page, Post } from '../types'
 import { IMAGES } from '../constants'
 import { STAGGER_CONTAINER, STAGGER_ITEM, BUTTON_SPRING, SPRING_GENTLE } from '../motion'
-import { STAGGER_CONTAINER, STAGGER_ITEM, BUTTON_SPRING, SPRING_GENTLE } from '../motion'
 
 interface HomeProps {
   onNavigate: (page: Page) => void
@@ -316,7 +315,6 @@ const Home: React.FC<HomeProps> = ({
                 isExiting={false}
                 isActive={index === currentPostIndex}
                 isReady={isReady}
-                isReady={isReady}
               />
             </div>
           ))}
@@ -365,33 +363,7 @@ export const FeedItem: React.FC<{
       isFollowing,
     } = useUserStore()
     const { logEvent } = useAnalyticsStore()
-    isActive: boolean
-    isReady ?: boolean
-  }> = ({
-    post,
-    onOpenDiscussion,
-    isExiting,
-    onBack,
-    isActive,
-    isReady = true,
-  }) => {
-    const {
-      toggleLike,
-      isLiked: checkIsLiked,
-      toggleFollowCommunity,
-      isFollowing,
-    } = useUserStore()
-    const { logEvent } = useAnalyticsStore()
 
-    const isLiked = checkIsLiked(post.id)
-    const isSubscribed = post.community_id
-      ? isFollowing(post.community_id)
-      : false
-    const initialLikes =
-      typeof post.upvotes === 'number' ? post.upvotes : parseInt(post.likes) || 0
-    const [likes, setLikes] = useState(initialLikes)
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const [videoError, setVideoError] = useState(false)
     const isLiked = checkIsLiked(post.id)
     const isSubscribed = post.community_id
       ? isFollowing(post.community_id)
@@ -408,12 +380,6 @@ export const FeedItem: React.FC<{
     const titleCn = post.title_cn || post.titleZh || ''
     const subreddit = post.subreddit || 'Community'
     const commentCount = post.comments || post.comment_count || 0
-    const hasVideo = !!(post.videoUrl || post.video_url) && !videoError
-    const imageUrl = post.image_url || post.image || ''
-    const titleEn = post.title_en || post.titleEn || ''
-    const titleCn = post.title_cn || post.titleZh || ''
-    const subreddit = post.subreddit || 'Community'
-    const commentCount = post.comments || post.comment_count || 0
 
     const handleToggleSub = (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -422,31 +388,7 @@ export const FeedItem: React.FC<{
         if (navigator.vibrate) navigator.vibrate(50)
       }
     }
-    const handleToggleSub = (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (post.community_id) {
-        toggleFollowCommunity(post.community_id)
-        if (navigator.vibrate) navigator.vibrate(50)
-      }
-    }
 
-    useEffect(() => {
-      if (hasVideo && videoRef.current && !isExiting) {
-        const attemptPlay = async () => {
-          try {
-            if (isActive) {
-              videoRef.current!.muted = true
-              await videoRef.current!.play()
-            } else {
-              videoRef.current!.pause()
-            }
-          } catch (e) {
-            console.log('Playback prevented', e)
-          }
-        }
-        attemptPlay()
-      }
-    }, [hasVideo, isExiting, isActive])
     useEffect(() => {
       if (hasVideo && videoRef.current && !isExiting) {
         const attemptPlay = async () => {
@@ -471,23 +413,9 @@ export const FeedItem: React.FC<{
       if (navigator.vibrate) navigator.vibrate(50)
       logEvent({ post_id: post.id, interaction_type: 'click_like' })
       setLikes((prev) => (isLiked ? Math.max(0, prev - 1) : prev + 1))
-      const handleLike = async () => {
-        if (isExiting) return
-        toggleLike(post)
-        if (navigator.vibrate) navigator.vibrate(50)
-        logEvent({ post_id: post.id, interaction_type: 'click_like' })
-        setLikes((prev) => (isLiked ? Math.max(0, prev - 1) : prev + 1))
 
-        try {
-          const newCount = isLiked ? likes - 1 : likes + 1
-          await supabase
-            .from('production_posts')
-            .update({ upvotes: newCount })
-            .eq('id', post.id)
-        } catch (e) { }
-      }
       try {
-        const newCount = isLiked ? likes - 1 : likes + 1
+        const newCount = isLiked ? (initialLikes > 0 ? initialLikes - 1 : 0) : initialLikes + 1
         await supabase
           .from('production_posts')
           .update({ upvotes: newCount })
@@ -577,10 +505,6 @@ export const FeedItem: React.FC<{
             />
           </div>
 
-          <div
-            className={`absolute inset-0 z-30 transition-all ${isExiting ? 'pointer-events-none' : ''}`}
-            onDoubleClick={handleLike}
-          />
           <div
             className={`absolute inset-0 z-30 transition-all ${isExiting ? 'pointer-events-none' : ''}`}
             onDoubleClick={handleLike}
@@ -695,13 +619,6 @@ export const FeedItem: React.FC<{
           </motion.div>
         </motion.div>
       </div>
-    )
-  }
-              </div >
-            </motion.div >
-          </motion.div >
-        </motion.div >
-      </div >
     )
   }
 

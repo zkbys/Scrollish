@@ -38,7 +38,6 @@ const App: React.FC = () => {
   // [新增] 记录用户进入详情流的起始 Tab 页（Explore/Home/Profile）
   const [originPage, setOriginPage] = useState<Page>(Page.Home)
   const [transitionDirection, setTransitionDirection] = useState(1)
-  const [transitionDirection, setTransitionDirection] = useState(1)
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
   const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
   const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
@@ -156,6 +155,7 @@ const App: React.FC = () => {
             <FeedItem
               post={activePost}
               isExiting={false}
+              isActive={true}
               onOpenDiscussion={() => navigateTo(Page.TopicHub)}
               onBack={() => {
                 // [修复] 使用 originPage 确保返回到正确的起始页（通常是 Profile）

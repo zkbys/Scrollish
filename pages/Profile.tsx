@@ -141,20 +141,20 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         )}
       </AnimatePresence>
 
-      <header className="relative z-20 flex items-center p-4 pt-6 justify-between shrink-0">
-        <div
+      <header className="relative z-50 flex items-center justify-between px-5 pt-12 pb-6 shrink-0 transition-all duration-500">
+        <button
           onClick={() => onNavigate?.(Page.Home)}
-          className="flex size-10 items-center justify-center rounded-full glass-card-premium cursor-pointer active:scale-95 transition-all"
-        >
-          <span className="material-symbols-outlined text-gray-800 dark:text-gray-200 text-lg">arrow_back_ios_new</span>
-        </div>
-        <h2 className="text-gray-900 dark:text-white text-lg font-extrabold tracking-tight">Profile</h2>
-        <div
+          className="h-11 w-11 flex items-center justify-center bg-gray-100 dark:bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
+          <span className="material-symbols-outlined text-[22px] text-gray-800 dark:text-white/90 group-hover:text-orange-400">arrow_back</span>
+        </button>
+
+        <h2 className="text-gray-900 dark:text-white text-[18px] font-black tracking-tight">Profile</h2>
+
+        <button
           onClick={() => setShowSettings(true)}
-          className="flex size-10 items-center justify-center rounded-full glass-card-premium cursor-pointer active:scale-95 transition-all"
-        >
-          <span className="material-symbols-outlined text-gray-800 dark:text-gray-200 text-xl">settings</span>
-        </div>
+          className="h-11 w-11 flex items-center justify-center bg-gray-100 dark:bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
+          <span className="material-symbols-outlined text-[22px] text-gray-800 dark:text-white/90 group-hover:text-orange-400">settings</span>
+        </button>
       </header>
 
       <main
