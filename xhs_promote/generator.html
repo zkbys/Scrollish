@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scrollish 宣发物料生成器 Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Inter:wght@800&display=swap"
+    rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans SC', sans-serif;
+      background-color: #111;
+      padding: 40px;
+      color: white;
+    }
+
+    /* 卡片容器：3:4 比例，适合小红书 */
+    .canvas-wrapper {
+      position: relative;
+      margin-bottom: 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .xhs-card {
+      width: 540px;
+      height: 720px;
+      position: relative;
+      overflow: hidden;
+      background-color: #050505;
+      box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      /* 这是一个技巧，防止截图时产生白边 */
+      transform: translateZ(0);
+    }
+
+    /* 手机外壳模拟 */
+    .phone-frame {
+      width: 340px;
+      height: 700px;
+      /* 稍微加长以延伸到边缘 */
+      background: #000;
+      border-radius: 45px;
+      border: 10px solid #2d2d30;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9), inset 0 0 15px rgba(255, 255, 255, 0.1);
+      z-index: 10;
+    }
+
+    .notch {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100px;
+      height: 28px;
+      background: #000;
+      border-bottom-left-radius: 18px;
+      border-bottom-right-radius: 18px;
+      z-index: 20;
+    }
+
+    .screen-content {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* 氛围光 */
+    .glow-bg {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      z-index: 0;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    /* 按钮样式 */
+    .download-btn {
+      margin-top: 15px;
+      padding: 10px 24px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      color: white;
+      font-weight: bold;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+    }
+
+    .download-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+    }
+
+    .download-btn:active {
+      transform: translateY(0);
+    }
+
+    /* 编辑提示 */
+    [contenteditable="true"] {
+      cursor: text;
+    }
+
+    [contenteditable="true"]:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+
+    [contenteditable="true"]:focus {
+      outline: 2px solid #3b82f6;
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+  </style>
+</head>
+
+<body class="flex flex-wrap gap-8 justify-center">
+
+  <div class="canvas-wrapper">
+    <div class="xhs-card rounded-3xl pt-12" id="card-1">
+      <div class="glow-bg bg-orange-600 w-[500px] h-[500px] top-[-250px] left-[-100px]"></div>
+      <div class="glow-bg bg-purple-900 w-[400px] h-[400px] bottom-[-100px] right-[-100px]"></div>
+
+      <div class="z-20 text-center mb-6 px-6 relative">
+        <div
+          class="inline-block px-3 py-1 border border-orange-500/50 text-orange-400 bg-orange-900/20 rounded-full text-xs font-bold tracking-wider mb-4 uppercase"
+          contenteditable="true">MVP 内测招募</div>
+        <h1 class="text-5xl font-black text-white leading-[1.1] mb-2" contenteditable="true"
+          style="font-family: 'Inter', sans-serif;">
+          刷 Reddit <br>
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-pink-600">能学好英语？</span>
+        </h1>
+        <p class="text-gray-400 text-sm mt-4 font-medium" contenteditable="true">像刷 TikTok 一样刷英文语料<br>多巴胺学习法，根本停不下来</p>
+      </div>
+
+      <div class="phone-frame mt-4 transform rotate-[-3deg] border-zinc-800 shadow-2xl">
+        <div class="notch"></div>
+        <img src="./hook.jpg" class="screen-content" onerror="this.src='./hook.png'" alt="Feed Page">
+
+        <div
+          class="absolute bottom-24 right-4 bg-white/10 backdrop-blur-md border border-white/20 text-white px-4 py-3 rounded-2xl text-xs font-bold shadow-xl animate-bounce z-30">
+          👇 无限滑动 Feed 流
+        </div>
+      </div>
+
+      <div class="absolute bottom-4 text-zinc-600 text-xs font-bold tracking-[0.2em] opacity-50">SCROLLISH</div>
+    </div>
+    <button class="download-btn" onclick="downloadCard('card-1', 'scrollish_cover')">
+      <span>⬇️ 下载封面图</span>
+    </button>
+  </div>
+
+  <div class="canvas-wrapper">
+    <div class="xhs-card rounded-3xl pt-10 bg-[#0a0a0a]" id="card-2">
+      <div class="glow-bg bg-red-900/60 w-[600px] h-[600px] top-[-200px] right-[-200px]"></div>
+
+      <div class="z-20 text-center px-8 w-full mb-8">
+        <h2 class="text-4xl font-black text-white mb-3" contenteditable="true">别在评论区 <span
+            class="text-red-500">迷路</span></h2>
+        <p class="text-gray-400 text-sm" contenteditable="true">原生 Reddit 树状楼层劝退？<br>我们把评论区变成了「唠嗑群」</p>
+      </div>
+
+      <div class="relative w-full flex-1 flex flex-col items-center">
+        <div
+          class="w-[320px] h-[200px] overflow-hidden rounded-xl border border-zinc-700 opacity-60 grayscale transform rotate-2 mb-[-20px] relative z-0">
+          <img src="./reddit_comment_tree.png" class="w-full h-full object-cover object-left-top">
+          <div class="absolute inset-0 bg-black/40 flex items-center justify-center">
+            <span class="border border-white/50 text-white/80 px-2 py-1 text-xs rounded">❌ 难读</span>
+          </div>
+        </div>
+
+        <div
+          class="z-10 bg-white text-black font-black text-xl rounded-full w-12 h-12 flex items-center justify-center border-4 border-[#0a0a0a] shadow-lg my-2">
+          VS</div>
+
+        <div
+          class="w-[340px] h-[300px] overflow-hidden rounded-t-[40px] border-x-4 border-t-4 border-green-500/50 shadow-[0_-10px_40px_rgba(34,197,94,0.2)] transform z-20 bg-black relative top-[-10px]">
+          <img src="./chat.png" class="w-full h-full object-cover object-top">
+          <div class="absolute top-4 right-4 bg-green-500 text-black px-2 py-1 rounded text-xs font-bold">✅ 像聊天一样</div>
+        </div>
+      </div>
+    </div>
+    <button class="download-btn" onclick="downloadCard('card-2', 'scrollish_contrast')">
+      <span>⬇️ 下载对比图</span>
+    </button>
+  </div>
+
+  <div class="canvas-wrapper">
+    <div class="xhs-card rounded-3xl pt-10 bg-zinc-900" id="card-3">
+      <div class="glow-bg bg-blue-900 w-[600px] h-[600px] top-[-300px] right-[-100px]"></div>
+
+      <div class="z-20 text-center mb-8 px-8 w-full">
+        <h2 class="text-4xl font-black text-white mb-2" contenteditable="true">原生语料 <span
+            class="text-blue-400">无痛阅读</span></h2>
+        <div class="flex justify-center gap-2 mt-4">
+          <span class="bg-zinc-800/80 border border-zinc-700 text-gray-300 px-3 py-1 rounded-lg text-xs"
+            contenteditable="true">💡 难点解析</span>
+          <span class="bg-zinc-800/80 border border-zinc-700 text-gray-300 px-3 py-1 rounded-lg text-xs"
+            contenteditable="true">🔄 双语对照</span>
+        </div>
+      </div>
+
+      <div class="phone-frame border-blue-500/20">
+        <div class="notch"></div>
+        <img src="./op_content.jpg" class="screen-content object-cover object-top" onerror="this.src='./op_content.png'"
+          alt="Content Page">
+
+        <div
+          class="absolute top-[40%] left-4 right-4 bg-zinc-900/90 backdrop-blur-xl p-5 rounded-2xl border border-white/10 z-30 shadow-2xl">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+            <p class="text-blue-400 text-[10px] font-bold tracking-wider">FULL TRANSLATION</p>
+          </div>
+          <p class="text-white text-sm leading-relaxed font-medium">《被判为英雄》新官方插图发布...</p>
+        </div>
+      </div>
+    </div>
+    <button class="download-btn" onclick="downloadCard('card-3', 'scrollish_feature_1')">
+      <span>⬇️ 下载功能图1</span>
+    </button>
+  </div>
+
+  <div class="canvas-wrapper">
+    <div class="xhs-card rounded-3xl pt-10 bg-zinc-950 flex flex-col" id="card-4">
+      <div
+        class="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-emerald-900/40 to-black">
+      </div>
+
+      <div class="z-20 px-8 mb-4 text-left w-full">
+        <h2 class="text-4xl font-black text-white italic" contenteditable="true">看不懂？</h2>
+        <h2
+          class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-600 italic"
+          contenteditable="true">往下一滑 👇</h2>
+        <p class="text-gray-500 mt-4 text-sm w-4/5" contenteditable="true">独特的交互设计，下滑卡片即刻获取评论翻译与解析。</p>
+      </div>
+
+      <div class="relative w-full flex-1 mt-8">
+        <div
+          class="absolute top-0 left-[60px] w-[260px] h-[300px] rounded-2xl overflow-hidden border border-zinc-700 shadow-2xl transform rotate-6 z-10 opacity-40">
+          <img src="./comment1_1.jpg" onerror="this.src='./comment1_1.png'" class="w-full h-full object-cover">
+        </div>
+
+        <div
+          class="absolute top-[40px] left-[40px] w-[300px] h-[450px] rounded-[32px] overflow-hidden border-[6px] border-emerald-500/30 shadow-[0_0_50px_rgba(16,185,129,0.2)] z-20 bg-black">
+          <img src="./comment1_2.jpg" onerror="this.src='./comment1_2.png'"
+            class="w-full h-full object-cover object-top" alt="Translation Reveal">
+
+          <div
+            class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-emerald-900/80 flex flex-col justify-end items-center pb-8">
+            <div class="text-3xl animate-bounce drop-shadow-lg mb-2">👆</div>
+            <div class="text-emerald-300 text-xs font-bold tracking-widest uppercase">Release to Translate</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button class="download-btn" onclick="downloadCard('card-4', 'scrollish_feature_2')">
+      <span>⬇️ 下载功能图2</span>
+    </button>
+  </div>
+
+  <div class="canvas-wrapper">
+    <div class="xhs-card rounded-3xl pt-12 bg-black" id="card-5">
+      <div class="glow-bg bg-pink-900 w-[600px] h-[600px] bottom-[-200px] left-[-200px]"></div>
+
+      <div class="z-20 text-center px-6 mb-2">
+        <h2 class="text-4xl font-black text-white mb-3" contenteditable="true">评论区变<span
+            class="text-pink-500">「唠嗑群」</span></h2>
+        <p class="text-gray-400 text-sm mb-6" contenteditable="true">这是 Reddit 还是微信？<br>像看群聊一样轻松看懂老外玩梗</p>
+      </div>
+
+      <div class="phone-frame border-pink-500/20 shadow-[0_0_60px_rgba(236,72,153,0.3)]">
+        <div class="notch"></div>
+        <img src="./chat.png" class="screen-content object-cover" alt="Chat UI">
+
+        <div
+          class="absolute bottom-32 left-4 bg-pink-600/90 backdrop-blur-md text-white px-4 py-3 rounded-tr-2xl rounded-tl-2xl rounded-br-2xl text-xs font-bold shadow-lg border border-pink-400/30">
+          💬 Scrollish 独家功能！✨
+        </div>
+      </div>
+    </div>
+    <button class="download-btn" onclick="downloadCard('card-5', 'scrollish_chat')">
+      <span>⬇️ 下载功能图3</span>
+    </button>
+  </div>
+
+  <script>
+    // 下载功能的逻辑
+    function downloadCard (cardId, fileName) {
+      const cardElement = document.getElementById(cardId)
+
+      // 临时给按钮添加 loading 状态
+      const btn = event.currentTarget
+      const originalText = btn.innerHTML
+      btn.innerHTML = '⏳ 生成中...'
+
+      html2canvas(cardElement, {
+        scale: 2, // 2倍清晰度
+        useCORS: true, // 允许跨域图片（如果是本地通常不需要，但以防万一）
+        backgroundColor: null, // 透明背景
+        logging: false
+      }).then(canvas => {
+        // 创建下载链接
+        const link = document.createElement('a')
+        link.download = `${fileName}.png`
+        link.href = canvas.toDataURL('image/png')
+        link.click()
+
+        // 恢复按钮文字
+        btn.innerHTML = originalText
+      }).catch(err => {
+        console.error('Screenshot failed:', err)
+        alert('生成图片失败，请检查浏览器控制台')
+        btn.innerHTML = originalText
+      })
+    }
+  </script>
+</body>
+
+</html>

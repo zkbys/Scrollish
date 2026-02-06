@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scrollish 宣发生成器 (布局完美修复版)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Inter:wght@800&display=swap"
+    rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans SC', sans-serif;
+      background-color: #111;
+      padding: 40px;
+      color: white;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 50px;
+    }
+
+    .canvas-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* === 核心卡片容器 === 
+       Fix: 使用 flex 布局替代 transform 定位，解决截图偏移
+    */
+    .xhs-card {
+      width: 540px;
+      height: 720px;
+      position: relative;
+      overflow: hidden;
+      background-color: #050505;
+      /* 边框辅助线，截图时会被包含，为了美观设置为黑色或深灰 */
+      border: 1px solid #222;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* === 手机外壳 (通用) === */
+    .phone-frame {
+      position: relative;
+      background: #000;
+      /* Fix: 使用固定边框宽度，避免 sub-pixel 渲染问题 */
+      border: 10px solid #2d2d30;
+      border-radius: 40px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.9);
+      z-index: 10;
+      /* 确保内部图片堆叠无缝隙 */
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* === 灵动岛 === 
+       Fix: 使用 margin: 0 auto 替代 left: 50% transform
+    */
+    .notch {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      margin: 0 auto;
+      /* 绝对居中修复 */
+      width: 100px;
+      height: 25px;
+      background: #2d2d30;
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+      z-index: 50;
+    }
+
+    /* === 屏幕内容 === */
+    .screen-content {
+      width: 100%;
+      display: block;
+      /* 消除 img 底部间隙 */
+      object-fit: cover;
+    }
+
+    /* === 氛围光 === */
+    .glow-bg {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      z-index: 0;
+      opacity: 0.5;
+    }
+
+    /* === 下载按钮 === */
+    .download-btn {
+      margin-top: 20px;
+      padding: 12px 30px;
+      background: #eee;
+      color: #000;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      border: none;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .download-btn:hover {
+      background: #fff;
+    }
+
+    /* === 文字排版修复 === */
+    .card-text-container {
+      z-index: 20;
+      text-align: center;
+      width: 100%;
+      padding: 0 24px;
+      margin-bottom: 20px;
+    }
+
+    h1,
+    h2 {
+      line-height: 1.2;
+    }
+
+    /* 强制颜色，避免 canvas 渲染渐变失败 */
+    .highlight-orange {
+      color: #f97316;
+    }
+
+    .highlight-red {
+      color: #ef4444;
+    }
+
+    .highlight-blue {
+      color: #3b82f6;
+    }
+
+    .highlight-green {
+      color: #10b981;
+    }
+
+    .highlight-pink {
+      color: #ec4899;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="canvas-container">
+    <div class="xhs-card rounded-3xl" id="card-1">
+      <div class="glow-bg bg-orange-600 w-[500px] h-[500px] top-[-300px] left-[-100px]"></div>
+
+      <div class="card-text-container mt-8">
+        <div
+          class="inline-block px-3 py-1 border border-orange-500/50 text-orange-400 bg-black/50 rounded-full text-[10px] font-bold tracking-wider mb-2">
+          MVP 内测招募
+        </div>
+        <h1 class="text-3xl font-black text-white">
+          刷 Reddit <span class="highlight-orange">学英语</span>
+        </h1>
+        <p class="text-gray-400 text-xs mt-2">把刷 TikTok 的瘾变成生产力</p>
+      </div>
+
+      <div class="phone-frame w-[310px] h-[600px] border-zinc-800 mb-[-20px]">
+        <div class="notch"></div>
+        <img src="./hook.png" class="screen-content h-full object-top" onerror="this.src='./hook.png'" alt="Hook Feed">
+
+        <div
+          class="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-black to-transparent pointer-events-none z-20">
+        </div>
+        <div class="absolute bottom-10 left-0 right-0 text-center text-white/80 text-[10px] font-bold z-30">
+          👇 无限 Feed 流
+        </div>
+      </div>
+    </div>
+    <button class="download-btn" onclick="downloadCard('card-1', '01_hook')">下载封面图</button>
+  </div>
+
+
+  <div class="canvas-container">
+    <div class="xhs-card rounded-3xl bg-[#0a0a0a]" id="card-2" style="padding-top: 40px;">
+
+      <div class="card-text-container">
+        <h2 class="text-3xl font-black text-white mb-2">别在评论区 <span class="highlight-red">迷路</span></h2>
+        <p class="text-gray-400 text-xs">Reddit 树状楼层 vs Scrollish 唠嗑模式</p>
+      </div>
+
+      <div class="w-full flex-1 flex flex-row border-t border-zinc-800 relative">
+
+        <div class="w-1/2 h-full bg-zinc-900 relative overflow-hidden flex flex-col">
+          <div class="w-full text-center pt-4 pb-2 z-10 bg-zinc-900/80">
+            <span class="text-zinc-400 text-[10px] font-bold border border-zinc-600 px-2 py-1 rounded">原生 Reddit</span>
+          </div>
+          <img src="./reddit_comment_tree.png"
+            class="w-full flex-1 object-cover opacity-60 grayscale object-top scale-125">
+          <div class="absolute bottom-12 w-full text-center">
+            <span class="bg-red-900/90 text-red-100 text-[10px] px-3 py-1 rounded-full font-bold">❌ 结构复杂</span>
+          </div>
+        </div>
+
+        <div class="absolute top-0 bottom-0 left-0 right-0 flex items-center justify-center pointer-events-none z-40">
+          <div
+            class="bg-black border border-zinc-500 text-white font-black text-xs w-8 h-8 flex items-center justify-center rounded-full shadow-lg">
+            VS</div>
+        </div>
+
+        <div class="w-1/2 h-full bg-black relative overflow-hidden flex flex-col">
+          <div class="glow-bg bg-green-900/30 w-[200px] h-[10px] top-[10px] right-[-50px]"></div>
+
+          <div class="w-full text-center pt-4 pb-2 z-2 bg-black/80">
+            <span
+              class="text-green-400 text-[10px] font-bold border border-green-800 px-2 py-1 rounded">Scrollish</span>
+          </div>
+
+          <img src="./chat.png" class="w-full flex-1 object-contain object-top p-2">
+
+          <div class="absolute bottom-12 w-full text-center">
+            <span class="bg-green-600 text-white text-[10px] px-3 py-1 rounded-full font-bold shadow-lg">✅ 轻松对话</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="text-gray-500 text-xs mt-4">请使用 Python 脚本生成高清图</div>
+  </div>
+
+
+  <div class="canvas-container">
+    <div class="xhs-card rounded-3xl pt-10 bg-zinc-900" id="card-3">
+      <div class="glow-bg bg-blue-900 w-[600px] h-[600px] top-[-300px] right-[-100px]"></div>
+
+      <div class="card-text-container">
+        <h2 class="text-3xl font-black text-white mb-2">原生语料 <span class="highlight-blue">无痛阅读</span></h2>
+        <div class="flex justify-center gap-2 mt-3">
+          <span class="bg-black/40 border border-white/10 text-gray-300 px-2 py-1 rounded text-[10px]">双语对照</span>
+          <span class="bg-black/40 border border-white/10 text-gray-300 px-2 py-1 rounded text-[10px]">难点解析</span>
+        </div>
+      </div>
+
+      <div class="phone-frame w-[300px] h-[550px]">
+        <div class="notch"></div>
+        <img src="./op_content.png" class="screen-content h-full" onerror="this.src='./op_content.png'" alt="Content">
+
+        <!-- <div
+          class="absolute top-[42%] left-4 right-4 bg-zinc-900/95 p-4 rounded-xl border border-white/10 z-30 shadow-2xl">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+            <p class="text-blue-400 text-[10px] font-bold tracking-wider">FULL TRANSLATION</p>
+          </div>
+          <p class="text-white text-xs leading-relaxed font-medium">《被判为英雄》新官方插图发布...</p>
+        </div> -->
+      </div>
+    </div>
+    <button class="download-btn" onclick="downloadCard('card-3', '03_content')">下载功能图1</button>
+  </div>
+
+
+  <div class="canvas-container">
+    <div class="xhs-card rounded-3xl bg-[#050505] relative overflow-hidden" id="card-4">
+      <div class="glow-bg bg-blue-900/30 w-[300px] h-[300px] top-[-50px] left-[-100px] z-0"></div>
+      <div class="glow-bg bg-emerald-900/20 w-[400px] h-[400px] top-[100px] left-[50px] z-0"></div>
+      <div class="glow-bg bg-pink-900/30 w-[350px] h-[350px] bottom-[-100px] right-[-100px] z-0"></div>
+
+      <div class="card-text-container relative z-40 mt-6 mb-2 px-4">
+        <h2 class="text-3xl font-black text-white italic leading-tight">
+          从阅读到唠嗑<br>
+          <span
+            class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-emerald-400 to-pink-500">行云流水</span>般的体验
+        </h2>
+        <p
+          class="text-gray-400 mt-2 text-xs bg-black/50 inline-block px-3 py-1 rounded-full border border-white/10 backdrop-blur-sm">
+          👉 右滑评论 · 👇 下滑翻译 · 👆 到底上拉进群
+        </p>
+      </div>
+
+      <div class="relative w-full h-full z-20 mt-2">
+
+        <div class="absolute left-[20px] top-[40px] z-20 transform -rotate-3">
+          <div class="phone-frame w-[150px] h-[260px] border-blue-500/30 shadow-lg bg-black">
+            <div class="notch scale-75"></div>
+            <img src="./op_content.jpg" onerror="this.src='./op_content.png'" class="screen-content h-full object-top">
+            <div class="absolute top-5 left-2 bg-blue-600/90 text-white text-[8px] px-2 py-0.5 rounded-full shadow-md">
+              1. 起点</div>
+          </div>
+        </div>
+
+        <div class="absolute left-[175px] top-[120px] z-30 flex flex-col items-center justify-center">
+          <div class="text-2xl text-pink-400 drop-shadow-md animate-pulse">👉</div>
+        </div>
+
+
+        <div class="absolute left-[210px] top-[60px] z-30 flex flex-col items-center group">
+
+          <div class="phone-frame w-[240px] h-[220px] border-emerald-500/40 shadow-2xl z-20 relative bg-black"
+            style="border-bottom: none; border-bottom-left-radius: 0; border-bottom-right-radius: 0;">
+            <div class="notch"></div>
+            <img src="./com_head.png" onerror="this.src='./com_head.png'" class="screen-content h-full object-top"
+              style="clip-path: inset(0 0 10px 0);">
+            <div
+              class="absolute top-6 right-3 bg-emerald-600/90 text-white text-[9px] px-2 py-0.5 rounded-full shadow-md">
+              2. 原文</div>
+
+            <div class="absolute bottom-[-16px] left-0 right-0 flex justify-center z-30">
+              <div
+                class="bg-emerald-600 text-white text-[14px] w-8 h-8 flex items-center justify-center rounded-full border-2 border-zinc-800 shadow-lg">
+                👇</div>
+            </div>
+          </div>
+
+          <div class="phone-frame w-[240px] h-[240px] border-emerald-500/40 shadow-2xl z-10 relative mt-[-2px] bg-black"
+            style="border-top: none; border-top-left-radius: 0; border-top-right-radius: 0;">
+            <div class="absolute top-0 left-0 right-0 h-6 bg-gradient-to-b from-black/80 to-transparent z-20"></div>
+
+            <img src="./comment_trans.png" onerror="this.src='./comment1_2.png'"
+              class="screen-content h-full object-top">
+
+            <div
+              class="absolute bottom-16 left-3 bg-emerald-600/90 text-white text-[9px] px-2 py-0.5 rounded-full shadow-md z-30">
+              3. 翻译结果</div>
+
+            <div class="absolute bottom-[60px] left-0 right-0 text-center opacity-80 z-20">
+              <div class="text-emerald-300 text-[9px] font-bold tracking-widest bg-black/60 inline-block px-2 rounded">
+                ...已达底部...</div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="absolute left-[260px] bottom-[80px] z-40">
+          <svg width="60" height="60" viewBox="0 0 60 60" fill="none"
+            class="drop-shadow-[0_0_10px_rgba(236,72,153,0.6)]">
+            <path d="M10 40 C 10 55, 50 55, 50 20" stroke="#ec4899" stroke-width="3" stroke-linecap="round"
+              stroke-dasharray="6 3" />
+            <path d="M40 20 L 50 10 L 60 20" stroke="#ec4899" stroke-width="3" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+          <div
+            class="absolute top-[45px] left-[20px] text-[9px] text-white font-bold bg-pink-600/80 px-2 py-0.5 rounded border border-pink-400/50 whitespace-nowrap">
+            继续上拉
+          </div>
+        </div>
+
+
+        <div class="absolute right-[-10px] bottom-[20px] z-30 transform rotate-2">
+          <div class="phone-frame w-[180px] h-[300px] border-pink-500 shadow-[0_0_40px_rgba(236,72,153,0.3)] bg-black">
+            <div class="notch scale-75"></div>
+            <img src="./chat.png" onerror="this.src='./chat.png'" class="screen-content h-full object-top">
+
+            <div class="absolute inset-0 border-2 border-pink-400/30 rounded-[32px] pointer-events-none"></div>
+
+            <div
+              class="absolute top-6 left-2 bg-pink-600 text-white text-[8px] px-3 py-1 rounded-full font-bold shadow-lg">
+              🎉 4. 抵达唠嗑群
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="text-gray-500 text-xs mt-4 text-center">请使用 Python 脚本生成高清图</div>
+  </div>
+
+
+  <div class="canvas-container">
+    <div class="xhs-card rounded-3xl pt-12 bg-black" id="card-5">
+      <div class="glow-bg bg-pink-900 w-[500px] h-[500px] bottom-[-200px] left-[-100px]"></div>
+
+      <div class="card-text-container">
+        <h2 class="text-3xl font-black text-white mb-2">评论区变<span class="highlight-pink">「唠嗑群」</span></h2>
+        <p class="text-gray-400 text-xs">轻松看懂老外玩梗 · 沉浸式语境</p>
+      </div>
+
+      <div class="phone-frame w-[300px] h-[550px] border-pink-900/30">
+        <div class="notch"></div>
+        <img src="./chat.png" class="screen-content h-full" alt="Chat UI">
+
+        <div
+          class="absolute bottom-20 left-4 bg-pink-600/90 text-white px-4 py-2 rounded-r-xl rounded-tl-xl text-[10px] font-bold shadow-lg border border-pink-400/30">
+          💬 Scrollish 独家体验
+        </div>
+      </div>
+    </div>
+    <button class="download-btn" onclick="downloadCard('card-5', '05_chat')">下载功能图3</button>
+  </div>
+
+  <script>
+    function downloadCard (cardId, fileName) {
+      const cardElement = document.getElementById(cardId)
+      const btn = event.currentTarget
+      const originalText = btn.innerText
+
+      btn.innerText = '生成中...'
+
+      // 核心配置：去除 scroll 影响，强制尺寸
+      html2canvas(cardElement, {
+        scale: 3, // 高清
+        useCORS: true,
+        backgroundColor: null,
+        scrollX: 0,
+        scrollY: -window.scrollY, // Fix: 防止因页面滚动导致的偏移
+        windowWidth: document.documentElement.offsetWidth,
+        windowHeight: document.documentElement.offsetHeight
+      }).then(canvas => {
+        const link = document.createElement('a')
+        link.download = `${fileName}.png`
+        link.href = canvas.toDataURL('image/png')
+        link.click()
+
+        btn.innerText = originalText
+      }).catch(err => {
+        console.error('Error:', err)
+        alert('生成失败，请检查控制台')
+        btn.innerText = originalText
+      })
+    }
+  </script>
+</body>
+
+</html>
