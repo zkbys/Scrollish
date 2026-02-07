@@ -12,6 +12,18 @@ interface ProfileProps {
   onPostSelect?: (post: Post) => void
 }
 
+const RoundedStar = ({ className = "size-6", fill = "currentColor" }) => (
+  <svg viewBox="0 0 24 24" className={className} fill={fill} xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M12 17.27L18.18 21L16.54 13.97L22 9.24L14.81 8.63L12 2L9.19 8.63L2 9.24L7.46 13.97L5.82 21L12 17.27Z"
+      stroke={fill}
+      strokeWidth="4"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
   const { likedPosts, profile, fetchProfile, updateProfile } = useUserStore()
   const { scrollPos, setScrollPos } = useProfileStore()
@@ -76,7 +88,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
       <div className="frost-overlay"></div>
       <div className="blob-pastel -top-20 -left-20 bg-[#FFEDD5] dark:bg-orange-500/20 opacity-60 dark:opacity-40"></div>
       <div className="blob-pastel top-1/4 -right-40 bg-[#FED7AA] dark:bg-red-500/10 opacity-60 dark:opacity-30"></div>
-      <div className="blob-pastel -bottom-20 -left-20 bg-[#FFF7ED] dark:bg-amber-500/10 opacity-60 dark:opacity-20"></div>
+      <div className="blob-pastel -bottom-20 -left-20 bg-[#FFEDD5] dark:bg-orange-500/10 opacity-60 dark:opacity-30"></div>
 
       {/* Settings Overlay */}
       <AnimatePresence>
@@ -194,39 +206,52 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         <motion.div variants={STAGGER_ITEM} className="grid grid-cols-2 gap-3.5 p-4">
           <div className="glass-card-premium p-4 flex items-center justify-between transition-transform active:scale-[0.98]">
             <div>
-              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Saved</p>
+              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Star</p>
               <p className="text-gray-900 dark:text-white text-2xl font-black">{likedPosts.length}</p>
             </div>
-            <div className="size-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-              <span className="material-symbols-outlined text-blue-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>bookmark</span>
+            <div className="size-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+              <RoundedStar className="size-6 text-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]" fill="currentColor" />
             </div>
           </div>
-          <div className="glass-card-premium p-4 flex items-center justify-between">
-            <div>
+          <div className="glass-card-premium p-4 flex items-center justify-between relative overflow-hidden group">
+            <div className="flex flex-col blur-[4px]">
+              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Words</p>
               <p className="text-gray-900 dark:text-white text-2xl font-black">{profile?.words_count || 0}</p>
             </div>
-            <div className="size-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+            <div className="size-10 rounded-xl bg-purple-500/10 flex items-center justify-center blur-[4px]">
               <span className="material-symbols-outlined text-purple-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>forum</span>
             </div>
+            {/* 终极锁定层 */}
+            <div className="absolute inset-0 z-10 backdrop-blur-[15px] bg-white/10 dark:bg-black/40 flex items-center justify-center border-0">
+              <span className="material-symbols-outlined text-orange-500 text-xl fill-[1] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">lock</span>
+            </div>
           </div>
-          <div className="glass-card-premium p-4 flex items-center justify-between">
-            <div>
+          <div className="glass-card-premium p-4 flex items-center justify-between relative overflow-hidden group">
+            <div className="flex flex-col blur-[4px]">
               <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">XP</p>
               <p className="text-gray-900 dark:text-white text-2xl font-black">
                 {currentXP > 1000 ? `${(currentXP / 1000).toFixed(1)}k` : currentXP}
               </p>
             </div>
-            <div className="size-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+            <div className="size-10 rounded-xl bg-orange-500/10 flex items-center justify-center blur-[4px]">
               <span className="material-symbols-outlined text-orange-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
             </div>
+            {/* 终极锁定层 */}
+            <div className="absolute inset-0 z-10 backdrop-blur-[15px] bg-white/10 dark:bg-black/40 flex items-center justify-center border-0">
+              <span className="material-symbols-outlined text-orange-500 text-xl fill-[1] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">lock</span>
+            </div>
           </div>
-          <div className="glass-card-premium p-4 flex items-center justify-between">
-            <div>
+          <div className="glass-card-premium p-4 flex items-center justify-between relative overflow-hidden group">
+            <div className="flex flex-col blur-[4px]">
               <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Streak</p>
               <p className="text-gray-900 dark:text-white text-2xl font-black">{profile?.current_streak || 0}</p>
             </div>
-            <div className="size-10 rounded-xl bg-yellow-500/10 flex items-center justify-center">
+            <div className="size-10 rounded-xl bg-yellow-500/10 flex items-center justify-center blur-[4px]">
               <span className="material-symbols-outlined text-yellow-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
+            </div>
+            {/* 终极锁定层 */}
+            <div className="absolute inset-0 z-10 backdrop-blur-[15px] bg-white/10 dark:bg-black/40 flex items-center justify-center border-0">
+              <span className="material-symbols-outlined text-orange-500 text-xl fill-[1] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">lock</span>
             </div>
           </div>
         </motion.div>
@@ -249,13 +274,19 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         <div className="sticky top-0 z-20 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5">
           <div className="flex px-4">
             <button className="flex flex-col items-center justify-center border-b-2 border-orange-500 text-gray-900 dark:text-white pb-3 pt-4 flex-1">
-              <p className="text-xs font-black tracking-tight uppercase">Saved</p>
+              <p className="text-xs font-black tracking-tight uppercase">Stars</p>
             </button>
-            <button className="flex flex-col items-center justify-center border-b-2 border-transparent text-gray-400 dark:text-white/40 pb-3 pt-4 flex-1">
-              <p className="text-xs font-bold tracking-tight uppercase">History</p>
+            <button disabled className="flex flex-col items-center justify-center border-b-2 border-transparent text-gray-400 dark:text-white/40 pb-3 pt-4 flex-1 relative group cursor-not-allowed">
+              <div className="flex items-center gap-1 opacity-20 blur-[6px]">
+                <p className="text-xs font-bold tracking-tight uppercase">History</p>
+              </div>
+              <span className="material-symbols-outlined text-[16px] text-orange-500 absolute top-1/2 -translate-y-1/2 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">lock</span>
             </button>
-            <button className="flex flex-col items-center justify-center border-b-2 border-transparent text-gray-400 dark:text-white/40 pb-3 pt-4 flex-1">
-              <p className="text-xs font-bold tracking-tight uppercase">Awards</p>
+            <button disabled className="flex flex-col items-center justify-center border-b-2 border-transparent text-gray-400 dark:text-white/40 pb-3 pt-4 flex-1 relative group cursor-not-allowed">
+              <div className="flex items-center gap-1 opacity-20 blur-[6px]">
+                <p className="text-xs font-bold tracking-tight uppercase">Awards</p>
+              </div>
+              <span className="material-symbols-outlined text-[16px] text-orange-500 absolute top-1/2 -translate-y-1/2 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">lock</span>
             </button>
           </div>
         </div>
@@ -264,8 +295,8 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         <div className="p-4 pb-32">
           {likedPosts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-gray-300 dark:text-white/20">
-              <span className="material-symbols-outlined text-6xl mb-4">bookmark_border</span>
-              <p className="text-xs font-bold uppercase tracking-widest text-center">No saved posts yet<br /><span className="text-[10px] lowercase font-medium opacity-50">Saved items will appear here</span></p>
+              <RoundedStar className="size-16 mb-4 opacity-50" fill="currentColor" />
+              <p className="text-xs font-bold uppercase tracking-widest text-center">No stars yet<br /><span className="text-[10px] lowercase font-medium opacity-50">Starred items will appear here</span></p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
@@ -298,8 +329,8 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                       </p>
                     </div>
                     <p className="text-gray-400 dark:text-white/30 text-[9px] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">
-                      <span className="material-symbols-outlined text-[10px]" style={{ fontVariationSettings: "'FILL' 1" }}>schedule</span>
-                      Saved recently
+                      <RoundedStar className="size-3 text-orange-500" fill="currentColor" />
+                      Starred recently
                     </p>
                   </div>
                 </motion.div>

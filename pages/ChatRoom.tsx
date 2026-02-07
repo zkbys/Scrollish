@@ -505,7 +505,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-[#0B0A09] max-w-[100vw] overflow-x-hidden select-none overscroll-none"
+      className="fixed inset-0 z-[60] flex flex-col bg-[#FDFCFB] dark:bg-[#0B0A09] max-w-[100vw] overflow-x-hidden select-none overscroll-none"
       style={{ overscrollBehavior: 'none' }}
       onTouchStart={handleBgTouchStart}
       onTouchMove={handleBgTouchMove}
@@ -549,13 +549,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              className="absolute top-0 bottom-0 right-0 w-72 bg-[#0B0A09]/95 backdrop-blur-2xl border-l border-white/5 z-[95] p-8 shadow-2xl flex flex-col"
+              className="absolute top-0 bottom-0 right-0 w-72 bg-[#FDFCFB]/95 dark:bg-[#0B0A09]/95 backdrop-blur-2xl border-l border-gray-200 dark:border-white/5 z-[95] p-8 shadow-2xl flex flex-col"
               onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 bg-orange-500/20 rounded-2xl flex items-center justify-center border border-orange-500/30">
                   <span className="material-symbols-outlined text-orange-500">psychology</span>
                 </div>
-                <h2 className="text-white font-black text-lg tracking-tight">Difficulty</h2>
+                <h2 className="text-gray-900 dark:text-white font-black text-lg tracking-tight">Difficulty</h2>
               </div>
 
               <div className="space-y-3 flex-1 overflow-y-auto no-scrollbar">
@@ -573,7 +573,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   <button
                     key={lvl}
                     onClick={() => setDifficulty(lvl)}
-                    className={`w-full p-4 rounded-2xl border-2 text-left flex justify-between items-center transition-all active:scale-95 ${difficulty === lvl ? 'bg-orange-500/10 border-orange-500 text-orange-500' : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}`}>
+                    className={`w-full p-4 rounded-2xl border-2 text-left flex justify-between items-center transition-all active:scale-95 ${difficulty === lvl ? 'bg-orange-500/10 border-orange-500 text-orange-500' : 'bg-gray-100 dark:bg-white/5 border-gray-100 dark:border-white/5 text-gray-500 dark:text-white/40 hover:bg-gray-200 dark:hover:bg-white/10'}`}>
                     <div className="flex flex-col">
                       <span className="text-[15px] font-black tracking-tight">
                         {lvl === 'Mixed' ? 'Dopamine Mix ⚡️' : lvl}
@@ -586,8 +586,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                 ))}
               </div>
 
-              <div className="mt-8 pt-6 border-t border-white/5">
-                <p className="text-[11px] text-white/20 font-black uppercase tracking-widest leading-relaxed">
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/5">
+                <p className="text-[11px] text-gray-400 dark:text-white/20 font-black uppercase tracking-widest leading-relaxed">
                   Adjust the difficulty to match your learning pace.
                 </p>
               </div>
@@ -725,7 +725,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
       {/* 固定顶栏：采用 fixed 定位确保绝对不会位移 */}
       <div
-        className="fixed top-0 left-0 right-0 flex items-center justify-between px-5 bg-black/40 backdrop-blur-3xl border-b border-white/5 z-[70] touch-none"
+        className="fixed top-0 left-0 right-0 flex items-center justify-between px-5 bg-orange-500/90 dark:bg-black/40 backdrop-blur-3xl border-b border-orange-600/20 dark:border-white/5 z-[70] touch-none"
         style={{
           paddingTop: 'env(safe-area-inset-top)',
           height: 'calc(4.5rem + env(safe-area-inset-top))'
@@ -735,25 +735,25 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             e.stopPropagation()
             onBack()
           }}
-          className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-2xl border-2 border-white/5 active:scale-90 transition-all shadow-lg"
+          className="w-10 h-10 flex items-center justify-center bg-white/20 dark:bg-white/10 rounded-2xl border-2 border-white/20 dark:border-white/5 active:scale-90 transition-all shadow-lg"
           style={{ borderRadius: DROPLET_SHAPE }}>
-          <span className="material-symbols-outlined text-white/80">keyboard_arrow_down</span>
+          <span className="material-symbols-outlined text-white dark:text-white/80">keyboard_arrow_down</span>
         </button>
 
         <div className="flex flex-col items-center">
           {isAiLoading ? (
-            <div className="flex items-center gap-2 animate-pulse text-orange-400 whitespace-nowrap">
-              <span className="w-2 h-2 bg-orange-500 rounded-full" />
+            <div className="flex items-center gap-2 animate-pulse text-white dark:text-orange-400 whitespace-nowrap">
+              <span className="w-2 h-2 bg-white dark:bg-orange-500 rounded-full" />
               <span className="text-[12px] font-black uppercase tracking-widest">Replying...</span>
             </div>
           ) : (
             <div className="flex flex-col items-center whitespace-nowrap">
-              <span className="text-white font-black text-[14px] tracking-tight">
+              <span className="text-white dark:text-white font-black text-[14px] tracking-tight">
                 Thread Discussion
               </span>
-              <div className="flex items-center gap-1.5 opacity-50">
-                <span className="w-1 h-1 bg-orange-500 rounded-full" />
-                <span className="text-white/80 text-[9px] font-black uppercase tracking-wider">
+              <div className="flex items-center gap-1.5 opacity-80 dark:opacity-50 mt-0.5 dark:mt-0">
+                <span className="w-1 h-1 bg-green-400 dark:bg-orange-500 rounded-full shadow-[0_0_4px_rgba(74,222,128,0.5)]" />
+                <span className="text-white/90 dark:text-white/80 text-[9px] font-black uppercase tracking-wider">
                   {messages.length - 1} RESPONSES
                 </span>
               </div>
@@ -766,9 +766,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             e.stopPropagation()
             setShowSettings(true)
           }}
-          className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-2xl border-2 border-white/5 active:scale-90 transition-all shadow-lg"
+          className="w-10 h-10 flex items-center justify-center bg-white/20 dark:bg-white/10 rounded-2xl border-2 border-white/20 dark:border-white/5 active:scale-90 transition-all shadow-lg"
           style={{ borderRadius: DROPLET_SHAPE }}>
-          <span className="material-symbols-outlined text-white/80 text-[20px]">tune</span>
+          <span className="material-symbols-outlined text-white dark:text-white/80 text-[20px]">tune</span>
         </button>
       </div>
 
@@ -794,7 +794,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                 initial={{ y: -200, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 120, damping: 20, mass: 1 }}
-                className="mb-10 p-6 bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] relative shadow-2xl overflow-hidden group"
+                className="mb-10 p-6 bg-white/80 dark:bg-white/5 backdrop-blur-3xl border border-gray-100 dark:border-white/10 rounded-[2.5rem] relative shadow-2xl overflow-hidden group"
                 onContextMenu={(e) => e.preventDefault()}>
 
                 {/* 装饰性背景光晕 */}
@@ -806,12 +806,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                       Original Post
                     </span>
                   </div>
-                  <span className="text-xs font-black text-white/50 tracking-tight">
+                  <span className="text-xs font-black text-gray-400 dark:text-white/50 tracking-tight">
                     by u/{msg.author}
                   </span>
                 </div>
 
-                <div className="text-white font-medium text-[17px] leading-relaxed tracking-wide space-y-4">
+                <div className="text-gray-800 dark:text-white font-medium text-[17px] leading-relaxed tracking-wide space-y-4">
                   {sentences.map((s, i) => {
                     const isImage = s.en.match(
                       /^https?:\/\/.*\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i,
@@ -842,7 +842,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   })}
                 </div>
                 {msg.content_cn && (
-                  <div className="mt-6 pt-6 border-t border-white/5 text-white/40 text-[14px] leading-relaxed italic font-medium">
+                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-white/10 text-gray-500 dark:text-white/40 text-[14px] leading-relaxed italic font-medium">
                     {msg.content_cn}
                   </div>
                 )}
@@ -866,12 +866,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               {/* 头像：改为圆角正方形 */}
               <div className="shrink-0">
                 <div
-                  className={`w-9 h-9 flex items-center justify-center overflow-hidden border-2 ${isRoot
+                  className={`w-9 h-9 flex items-center justify-center overflow-hidden border-2 shadow-lg ${isRoot
                     ? 'border-orange-500/40 bg-gradient-to-tr from-orange-400 to-orange-600 text-white'
                     : isUser
-                      ? 'border-indigo-500/40 bg-gradient-to-tr from-indigo-500 to-cyan-600 text-white'
-                      : 'border-white/10 bg-white/5 text-white/40'
-                    } rounded-lg shadow-lg`}>
+                      ? 'border-orange-500/40 bg-gradient-to-tr from-orange-500 to-red-500 text-white'
+                      : 'border-white/10 dark:border-white/10 bg-white/80 dark:bg-white/5 text-gray-400 dark:text-white/40'
+                    } rounded-lg`}>
                   {isRoot ? 'TOP' : (
                     msg.isLocalAi ? (
                       <img src={AI_AVATAR_PATH} alt="Dopa" className="w-full h-full object-cover" />
@@ -885,17 +885,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               {/* 气泡内容：首页磨砂 + 柑橘渐变 */}
               <div className={`flex flex-col gap-2 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
                 <div className="flex items-center gap-2 px-1">
-                  <span className="text-[11px] font-black text-white/30 uppercase tracking-widest leading-none">
+                  <span className="text-[11px] font-black text-gray-400 dark:text-white/30 uppercase tracking-widest leading-none">
                     {msg.isLocalAi ? 'Dopa' : msg.author}
                   </span>
                 </div>
 
-                {/* 引用回复展示：更加轻盈的样式 */}
+                {/* 引用回复展示：橙色引用线 */}
                 {!isRoot && msg.replyText && (
                   <div
                     onClick={(isUser || msg.isLocalAi) ? undefined : () => handleJumpToWithReturn(msg.parent_id, msg.id)}
-                    className={`text-[11px] text-white/30 italic border-l-2 border-indigo-400/50 pl-3 py-1 mb-1 active:bg-white/5 rounded-r ${(isUser || msg.isLocalAi) ? '' : 'cursor-pointer'} break-all whitespace-pre-wrap max-w-[200px] ${isUser ? 'text-right border-l-0 border-r-2 pr-3 border-indigo-400/50' : ''}`}>
-                    <span className="font-black not-italic text-orange-500/60 mr-1">
+                    className={`text-[11px] text-gray-500 dark:text-white/30 italic border-l-2 border-orange-500/50 pl-3 py-1 mb-1 shadow-sm rounded-r ${(isUser || msg.isLocalAi) ? '' : 'cursor-pointer active:bg-orange-500/5'} break-all whitespace-pre-wrap max-w-[200px] ${isUser ? 'text-right border-l-0 border-r-2 pr-3' : ''}`}>
+                    <span className="font-black not-italic text-orange-500/80 mr-1">
                       @{msg.replyToName}
                     </span>
                     <span className="line-clamp-1">{msg.replyText}</span>
@@ -907,11 +907,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   onTouchMove={(isUser) ? undefined : handleBubbleTouchMove}
                   onTouchEnd={(isUser) ? undefined : handleBubbleTouchEnd}
                   className={`relative px-4 py-2 shadow-xl ${isUser
-                    ? 'bg-gradient-to-br from-indigo-500 to-cyan-600 text-white rounded-[1.8rem] rounded-tr-none shadow-indigo-500/20'
+                    ? 'bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-[1.8rem] rounded-tr-none shadow-orange-500/20'
                     : msg.isLocalAi
-                      ? 'bg-white/5 backdrop-blur-3xl border border-indigo-500/30 text-white/90 rounded-[1.8rem] rounded-tl-none ring-1 ring-indigo-500/10'
-                      : 'bg-white/5 backdrop-blur-3xl border border-white/5 text-white/90 rounded-[1.8rem] rounded-tl-none'
-                    } ${isFlash ? 'animate-pulse border-indigo-400' : ''}`}
+                      ? 'bg-white/80 dark:bg-white/5 backdrop-blur-3xl border border-orange-500/30 text-gray-800 dark:text-white/90 rounded-[1.8rem] rounded-tl-none ring-1 ring-orange-500/10'
+                      : 'bg-white/80 dark:bg-white/5 backdrop-blur-3xl border border-gray-100 dark:border-white/5 text-gray-800 dark:text-white/90 rounded-[1.8rem] rounded-tl-none'
+                    } ${isFlash ? 'animate-pulse border-orange-400' : ''}`}
                 >
                   {/* 文化注记指示器 */}
                   {hasCulturalNote && (
@@ -954,7 +954,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   </div>
 
                   {(expandedTranslations[msg.id] || showGlobalTranslation) && msg.content_cn && (
-                    <div className="mt-3 pt-3 border-t border-white/10 text-[13px] opacity-60 italic leading-snug">
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-white/10 text-[13px] text-gray-400 dark:text-white/40 italic leading-snug">
                       {msg.content_cn}
                     </div>
                   )}
@@ -985,14 +985,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         className="fixed bottom-6 left-4 right-4 z-50 flex flex-col pointer-events-auto"
         onClick={(e) => e.stopPropagation()}>
 
-        <div className={`bg-white/10 dark:bg-black/40 backdrop-blur-3xl rounded-[2rem] shadow-2xl p-2 transition-all duration-300 ${!isAiMode ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'}`}>
+        <div className={`bg-gray-100/80 dark:bg-black/40 backdrop-blur-3xl rounded-[2rem] shadow-2xl p-2 transition-all duration-300 ${!isAiMode ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'} border border-gray-200 dark:border-white/5`}>
           {quotedMessage && (
-            <div className="flex justify-between items-center bg-white/5 rounded-3xl p-3 mb-2 animate-in slide-in-from-bottom-4">
+            <div className="flex justify-between items-center bg-black/5 dark:bg-white/5 rounded-3xl p-3 mb-2 animate-in slide-in-from-bottom-4">
               <div className="flex flex-col max-w-[85%]">
                 <span className="text-[9px] font-black uppercase tracking-widest text-orange-500 mb-1">
                   {isAiMode ? `✨ Ask ${quotedMessage.author}` : 'Replying to'}
                 </span>
-                <span className="text-[12px] text-white/50 truncate font-medium italic">
+                <span className="text-[12px] text-gray-500 dark:text-white/50 truncate font-medium italic">
                   "{quotedMessage.content}"
                 </span>
               </div>
@@ -1001,8 +1001,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   setQuotedMessage(null)
                   setIsAiMode(false)
                 }}
-                className="w-7 h-7 flex items-center justify-center bg-white/10 rounded-full">
-                <span className="material-symbols-outlined text-[16px] text-white/50">close</span>
+                className="w-7 h-7 flex items-center justify-center bg-gray-200 dark:bg-white/10 rounded-full">
+                <span className="material-symbols-outlined text-[16px] text-gray-500 dark:text-white/50">close</span>
               </button>
             </div>
           )}
@@ -1012,7 +1012,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               <input
                 ref={inputRef}
                 disabled={!isAiMode}
-                className={`w-full h-12 bg-transparent px-5 text-white text-[15px] outline-none border-none ring-0 focus:ring-0 focus:outline-none placeholder:text-white/20 font-medium ${!isAiMode ? 'cursor-not-allowed' : 'cursor-text'}`}
+                className={`w-full h-12 bg-transparent px-5 text-gray-900 dark:text-white text-[15px] outline-none border-none ring-0 focus:ring-0 focus:outline-none placeholder:text-gray-400 dark:placeholder:text-white/20 font-medium ${!isAiMode ? 'cursor-not-allowed' : 'cursor-text'}`}
                 placeholder={isAiMode ? `Ask ${quotedMessage?.author}...` : 'Click a sentence to ask Dopa'}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}

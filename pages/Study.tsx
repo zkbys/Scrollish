@@ -3,11 +3,23 @@ import React from 'react';
 
 const Study: React.FC = () => {
   return (
-    <div className="h-full flex flex-col bg-background-light dark:bg-background-dark overflow-y-auto no-scrollbar pb-10">
-      <header className="sticky top-0 z-20 flex items-center bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md p-4 pb-2 justify-between">
+    <div className="relative h-full flex flex-col bg-background-light dark:bg-background-dark overflow-y-auto no-scrollbar pb-10 transition-all duration-500">
+      {/* 锁定层：极致简约磨砂玻璃 */}
+      <div className="absolute inset-0 z-[55] backdrop-blur-[15px] bg-white/5 dark:bg-black/10 flex flex-col items-center justify-center pointer-events-auto select-none border-0">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-20 h-20 bg-white/10 backdrop-blur-3xl rounded-[2rem] border-2 border-orange-400/20 flex items-center justify-center shadow-2xl shadow-orange-500/5 transition-transform duration-300">
+            <span className="material-symbols-outlined text-4xl text-orange-500 fill-[1] drop-shadow-[0_0_15px_rgba(249,115,22,0.6)]">lock</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <h3 className="text-[#1b0d0e] dark:text-white text-xl font-black tracking-tight">Locked</h3>
+            <p className="text-gray-500 dark:text-white/40 font-black tracking-[0.2em] uppercase text-[10px]">Study Space Coming Soon</p>
+          </div>
+        </div>
+      </div>
+      <header className="sticky top-0 z-[50] flex items-center bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md p-4 pb-2 justify-between">
         <div className="flex size-12 shrink-0 items-center">
-          <div 
-            className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border-2 border-primary/20" 
+          <div
+            className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border-2 border-primary/20"
             style={{ backgroundImage: `url("https://lh3.googleusercontent.com/aida-public/AB6AXuDgxbURKIeampluH7fuXi7Lee6li_vJfw_n2humWogQ9tp-lhI09xUOFDtf5CqBOKKSxAzdhtfazQKqZkIxZshvgJd3M8J5m3a7YCk4ATAR3yVRBwZgv3gug8e74jcmP1BGPeAzgf3ufv2znkr8b0LR0StR8pDHlQZib0dRez_agylTh94Kyir6CGGBw1MH6npSVIk_UjrFuGQ9Ctqjcb_6Fa9N3lDfY1PQrDlIMHuKWcUTK43lHf_RmbUqJJfL26IlbQ0bVlhzANE")` }}
           />
         </div>

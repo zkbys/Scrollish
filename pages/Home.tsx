@@ -239,12 +239,18 @@ const Home: React.FC<HomeProps> = ({
       {/* Header: 柑橘元气风重绘 */}
       <header className="absolute top-0 left-0 right-0 z-50 flex flex-col items-center px-5 pt-12 pb-10 bg-gradient-to-b from-black/80 via-black/20 to-transparent pointer-events-none transition-all duration-500">
         <div className="w-full flex items-center justify-between pointer-events-auto">
-          <button className="h-11 w-11 flex items-center justify-center bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
-            <span className="material-symbols-outlined text-[22px] text-white/90 group-hover:text-orange-400">menu</span>
+          <button disabled className="h-11 w-11 flex items-center justify-center bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+            {/* 增加模糊程度的菜单残影 */}
+            <span className="material-symbols-outlined text-[22px] text-white/20 blur-[1.2px]">menu</span>
+
+            {/* 顶层叠加的实心锁定图标 */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[18px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">lock</span>
+            </div>
           </button>
 
           {/* Tab 切换器：柑橘气泡 (回归简洁：无滑块) */}
-          <div className="flex p-1.5 bg-black/40 backdrop-blur-2xl rounded-[2.5rem] border-2 border-white/5 shadow-2xl relative">
+          <div className="flex p-1.5 bg-black/40 backdrop-blur-2xl rounded-[2.5rem] border-2 border-white/5 shadow-2xl relative pointer-events-auto">
             <button
               onClick={() => setActiveTab('following')}
               className={`px-6 py-2.5 rounded-[2rem] text-[14px] font-black transition-all duration-300 ${activeTab === 'following' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
@@ -537,8 +543,7 @@ export const FeedItem: React.FC<{
                     <span className="material-symbols-outlined text-[14px] text-blue-400 fill-[1]">verified</span>
                   </span>
                   <div className="flex items-center gap-1 mt-0.5 opacity-60">
-                    <span className="material-symbols-outlined text-[10px] text-orange-400">sparkles</span>
-                    <span className="text-white text-[10px] font-black uppercase tracking-widest">Active Now</span>
+                    <span className="text-white text-[10px] font-black uppercase tracking-widest">Active Community</span>
                   </div>
                 </div>
                 <motion.button

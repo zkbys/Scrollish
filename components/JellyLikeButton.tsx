@@ -40,7 +40,10 @@ const JellyLikeButton: React.FC<JellyLikeButtonProps> = ({ isLiked, onClick, cou
     return (
         <div className="flex flex-col items-center gap-1.5 relative select-none">
             {/* 细腻径向气泡层 - 90px */}
-            <div className="absolute top-[23px] left-1/2 -translate-x-1/2 w-0 h-0 pointer-events-none z-0">
+            <div
+                key={isLiked ? 'particles-on' : 'particles-off'}
+                className="absolute top-[23px] left-1/2 -translate-x-1/2 w-0 h-0 pointer-events-none z-0"
+            >
                 {isLiked && [...Array(30)].map((_, i) => (
                     <motion.div
                         key={`${i}-${isLiked}`}
@@ -58,15 +61,15 @@ const JellyLikeButton: React.FC<JellyLikeButtonProps> = ({ isLiked, onClick, cou
                 whileTap={{ scale: 0.8 }}
                 onClick={handleClick}
                 animate={isLiked ? {
-                    scale: [0.8, 1.2, 0.9, 1.1, 1],
-                    y: [0, -8, 0], // 垂直起跳
+                    scale: [0.8, 1.25, 0.9, 1.1, 1],
+                    y: [0, -10, 0], // 跳动效果
                 } : { scale: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className={`flex items-center justify-center transition-all duration-300 relative overflow-hidden z-10 ${isLiked ? 'bg-gradient-to-br from-orange-400 to-orange-600 shadow-lg shadow-orange-500/40' : 'bg-transparent shadow-none'}`}
-                style={{ borderRadius: DROPLET_SHAPE, width: '46px', height: '46px' }}
+                className="flex items-center justify-center transition-all duration-300 relative z-10 bg-transparent shadow-none"
+                style={{ width: '46px', height: '46px' }}
             >
                 <span
-                    className={`material-symbols-outlined text-[28px] transition-colors duration-300 ${isLiked ? 'text-white fill-[1]' : 'text-orange-400/80 drop-shadow-sm'}`}>
+                    className={`material-symbols-outlined text-[32px] transition-all duration-300 ${isLiked ? 'text-orange-500 fill-[1] drop-shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'text-white/70 hover:text-white'}`}>
                     favorite
                 </span>
             </motion.button>
