@@ -8,11 +8,12 @@ interface InteractiveTextProps {
   externalOnClick?: (word: string) => void // 新增
 }
 
-const InteractiveText: React.FC<InteractiveTextProps> = ({
+const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> = ({
   text,
   contextSentence = '',
   className = '',
   externalOnClick,
+  disabled = false,
 }) => {
   const { triggerAnalysis, isAnalyzing, cachedDefinitions } =
     useDictionaryStore()
@@ -33,6 +34,7 @@ const InteractiveText: React.FC<InteractiveTextProps> = ({
 
   // 在 InteractiveText 组件内修改 handleWordClick
   const handleWordClick = (word: string) => {
+    if (disabled) return
     if (externalOnClick) {
       externalOnClick(word) // 优先使用外部控制
     } else {
@@ -55,14 +57,14 @@ const InteractiveText: React.FC<InteractiveTextProps> = ({
             <span
               key={i}
               onClick={(e) => {
+                if (disabled) return
                 e.stopPropagation()
                 handleWordClick(word)
               }}
               className={`
-                relative inline-block cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5
-                hover:bg-white/10 active:scale-95
-                ${isLoading ? 'animate-pulse text-orange-400/80' : ''} 
-                ${isReady ? 'decoration-green-500 decoration-wavy underline underline-offset-4 decoration-2' : ''}
+                relative inline-block ${disabled ? '' : 'cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5 hover:bg-white/10 active:scale-95'}
+                ${!disabled && isLoading ? 'animate-pulse text-orange-400/80' : ''} 
+                ${!disabled && isReady ? 'decoration-green-500 decoration-wavy underline underline-offset-4 decoration-2' : ''}
               `}>
               {word}
               {/* Loading 状态下的下划线动画 */}

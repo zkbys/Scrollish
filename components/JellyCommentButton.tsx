@@ -11,7 +11,7 @@ const JellyCommentButton: React.FC<JellyCommentButtonProps> = ({ onClick, label 
     const DROPLET_SHAPE = "50% 50% 50% 50% / 60% 60% 43% 43%"
 
     return (
-        <div className="flex flex-col items-center gap-1.5 relative group">
+        <div className="flex flex-col items-center gap-1.5 relative group select-none">
             <motion.button
                 whileHover={{ scale: 1.15, y: -2 }}
                 whileTap={{ scale: 0.9 }}
