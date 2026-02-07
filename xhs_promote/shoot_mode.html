@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scrollish 摆拍模式</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #000;
+      /* 纯黑背景，适合拍屏幕 */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+
+    /* 模拟器容器 */
+    .device-container {
+      width: 450px;
+      /* 放大尺寸，方便拍摄细节 */
+      height: 800px;
+      background: #111;
+      border-radius: 40px;
+      border: 8px solid #333;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 100px rgba(255, 255, 255, 0.1);
+      /* 给屏幕一点氛围光 */
+    }
+
+    .screen-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top;
+    }
+
+    /* 切换按钮 */
+    .controls {
+      position: fixed;
+      bottom: 30px;
+      display: flex;
+      gap: 20px;
+      z-index: 100;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button:hover {
+      background: #555;
+    }
+
+    /* 隐藏类 */
+    .hidden {
+      display: none;
+    }
+
+    /* 引导文字（拍摄时可以避开，或者拍进去当解说） */
+    .guide-text {
+      position: absolute;
+      bottom: -60px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      color: #666;
+      font-size: 12px;
+    }
+
+    /* 查词特写的高亮圈 */
+    .focus-ring {
+      position: absolute;
+      border: 3px solid #10b981;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      top: 400px;
+      /* 根据图片实际位置调整 */
+      right: 50px;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+      animation: pulse 2s infinite;
+    }
+
+    /* 长按的手指指示 */
+    .finger-touch {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      background: rgba(59, 130, 246, 0.3);
+      border: 2px solid rgba(59, 130, 246, 0.8);
+      border-radius: 50%;
+      top: 250px;
+      /* 根据图片实际位置调整 */
+      left: 150px;
+      backdrop-filter: blur(4px);
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: 0.7;
+      }
+
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="device-container" id="screen">
+    <div id="scene-1" class="scene h-full relative">
+      <img src="./click_click3.png" class="screen-img opacity-40"> <img src="./click_dict2.png"
+        class="absolute bottom-0 w-full shadow-2xl rounded-t-3xl">
+      <div class="focus-ring" style="top: 280px; left: 120px;"></div>
+      <div class="absolute top-[220px] left-[180px] text-emerald-400 font-bold text-xl drop-shadow-md">
+        👈 点这里
+      </div>
+    </div>
+
+    <div id="scene-2" class="scene h-full relative hidden">
+      <img src="./long_press.png" class="screen-img">
+      <div class="finger-touch"></div>
+      <div
+        class="absolute top-[340px] width-full text-center w-full text-blue-400 font-bold bg-black/50 py-2 backdrop-blur-md">
+        长按屏幕 · 偷看中文
+      </div>
+    </div>
+
+    <div id="scene-3" class="scene h-full relative hidden">
+      <img src="./op_content.jpg" class="screen-img">
+      <div
+        class="absolute bottom-10 right-4 bg-white/10 backdrop-blur-md border border-white/20 text-white px-4 py-2 rounded-full text-sm">
+        沉浸式阅读
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button onclick="showScene(1)">1. 拍查词细节</button>
+    <button onclick="showScene(2)">2. 拍长按细节</button>
+    <button onclick="showScene(3)">3. 拍阅读界面</button>
+  </div>
+
+  <script>
+    function showScene (n) {
+      document.querySelectorAll('.scene').forEach(el => el.classList.add('hidden'))
+      document.getElementById(`scene-${n}`).classList.remove('hidden')
+    }
+  </script>
+</body>
+
+</html>

@@ -3,7 +3,7 @@ import os
 from playwright.async_api import async_playwright
 
 # 你的 HTML 文件名
-HTML_FILENAME = "xhs_promote/generate.html"
+HTML_FILENAME = "xhs_promote/detail.html"
 
 async def capture_cards():
     # 获取 HTML 文件的绝对路径

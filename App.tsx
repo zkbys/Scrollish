@@ -1,3 +1,4 @@
+/* type: uploaded file fileName: App.tsx */
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from './supabase'
@@ -23,14 +24,24 @@ const App: React.FC = () => {
   const [originPage, setOriginPage] = useState<Page>(Page.Home)
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
   const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
-  const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
-  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null)
+  const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(
+    null,
+  )
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(
+    null,
+  )
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [isCommunityFlow, setIsCommunityFlow] = useState(false)
 
-  // 修复合并冲突：合并两个版本的解构
-  const { currentUser, profile, login, logout, setLoading: setAuthLoading, isLoading: isAuthLoading } = useUserStore()
+  const {
+    currentUser,
+    profile,
+    login,
+    logout,
+    setLoading: setAuthLoading,
+    isLoading: isAuthLoading,
+  } = useUserStore()
   const { initializeExplore } = useExploreStore()
 
   // [修改] 仅在初始化时确认加载完成
@@ -46,7 +57,12 @@ const App: React.FC = () => {
       setCurrentPage(Page.Login)
     }
     // [新增] 如果已登录但未完成引导设置，强制进入 Onboarding
-    if (!isAuthLoading && currentUser && !profile?.learning_reason && currentPage !== Page.Onboarding) {
+    if (
+      !isAuthLoading &&
+      currentUser &&
+      !profile?.learning_reason &&
+      currentPage !== Page.Onboarding
+    ) {
       setCurrentPage(Page.Onboarding)
     }
   }, [currentUser, currentPage, isAuthLoading, profile])
@@ -182,8 +198,7 @@ const App: React.FC = () => {
       case Page.ChatRoom:
         return (
           <ChatRoom
-            postId={activePost.id}
-            postImage={activePost.image}
+            post={activePost} // [优化] 直接传递完整的 post 对象，避免 ChatRoom 内部二次请求
             focusCommentId={selectedCommentId}
             onBack={() => {
               // ChatRoom 只返回到 TopicHub，不修改 originPage
@@ -247,9 +262,7 @@ const App: React.FC = () => {
           />
         )
       default:
-        return (
-          <Home onNavigate={navigateTo} onPostSelect={handlePostClick} />
-        )
+        return <Home onNavigate={navigateTo} onPostSelect={handlePostClick} />
     }
   }
 
@@ -264,13 +277,20 @@ const App: React.FC = () => {
   // [新增] 定义页面顺序，用于决定滑动方向
   const getPageRank = (page: Page) => {
     switch (page) {
-      case Page.Home: return 0
-      case Page.Explore: return 1
-      case Page.Study: return 2
-      case Page.Profile: return 3
-      case Page.CommunityDetail: return 4
-      case Page.Login: return -1
-      default: return 0
+      case Page.Home:
+        return 0
+      case Page.Explore:
+        return 1
+      case Page.Study:
+        return 2
+      case Page.Profile:
+        return 3
+      case Page.CommunityDetail:
+        return 4
+      case Page.Login:
+        return -1
+      default:
+        return 0
     }
   }
 
@@ -300,18 +320,22 @@ const App: React.FC = () => {
               }
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={
-                (currentPage === Page.Home && lastPage === Page.TopicHub) || currentPage === Page.TopicHub
+                (currentPage === Page.Home && lastPage === Page.TopicHub) ||
+                currentPage === Page.TopicHub
                   ? { opacity: 0 }
                   : currentPage === Page.CommunityDetail // [新增] 返回社区详情时，立即销毁当前页，避免双重动画
                     ? { opacity: 0, transition: { duration: 0 } }
                     : { opacity: 0, x: direction * -50, scale: 0.98 }
               }
               transition={{
-                duration: (currentPage === Page.Home && lastPage === Page.TopicHub) || currentPage === Page.TopicHub ? 0.2 : 0.4,
-                ease: [0.22, 1, 0.36, 1]
+                duration:
+                  (currentPage === Page.Home && lastPage === Page.TopicHub) ||
+                  currentPage === Page.TopicHub
+                    ? 0.2
+                    : 0.4,
+                ease: [0.22, 1, 0.36, 1],
               }}
-              className="absolute inset-0 h-full w-full will-change-transform"
-            >
+              className="absolute inset-0 h-full w-full will-change-transform">
               {renderPage()}
             </motion.div>
           </AnimatePresence>
