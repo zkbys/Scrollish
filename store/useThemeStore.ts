@@ -7,12 +7,23 @@ interface ThemeState {
   theme: Theme
   toggleTheme: () => void
   setTheme: (theme: Theme) => void
+  initTheme: () => void // [新增] 初始化方法
+}
+
+// 辅助函数：操作 DOM class
+const updateDom = (theme: Theme) => {
+  const root = document.documentElement
+  if (theme === 'dark') {
+    root.classList.add('dark')
+  } else {
+    root.classList.remove('dark')
+  }
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: 'dark', // 默认为暗色，符合现有风格
+      theme: 'dark', // 默认为暗色
 
       toggleTheme: () => {
         const newTheme = get().theme === 'dark' ? 'light' : 'dark'
@@ -24,12 +35,17 @@ export const useThemeStore = create<ThemeState>()(
         set({ theme })
         updateDom(theme)
       },
+
+      // [新增] 强制同步 DOM，用于 App 挂载时
+      initTheme: () => {
+        updateDom(get().theme)
+      },
     }),
     {
       name: 'scrollish-theme-storage',
       storage: createJSONStorage(() => localStorage),
-      // 初始化时自动应用主题
       onRehydrateStorage: () => (state) => {
+        // 确保 hydration 完成后立即同步 DOM
         if (state) {
           updateDom(state.theme)
         }
@@ -37,12 +53,3 @@ export const useThemeStore = create<ThemeState>()(
     },
   ),
 )
-
-// 辅助函数：操作 DOM class
-const updateDom = (theme: Theme) => {
-  if (theme === 'dark') {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
-}

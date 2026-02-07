@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../supabase'
 import { useCommentStore } from '../store/useCommentStore'
@@ -14,17 +14,8 @@ interface ChatRoomProps {
   postId: string
   focusCommentId?: string | null
   onBack: () => void
+  postImage?: string
 }
-
-type DifficultyLevel =
-  | 'Original'
-  | 'Mixed'
-  | 'IELTS'
-  | 'CET6'
-  | 'CET4'
-  | 'HighSchool'
-  | 'MiddleSchool'
-  | 'PrimarySchool'
 
 const ChatRoom: React.FC<ChatRoomProps> = ({
   postId,
@@ -32,11 +23,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   onBack,
 }) => {
   // --- Stores ---
-  const { getComments, fetchComments, addLocalComment, deleteLocalComment } =
-    useCommentStore()
+  // [关键修复] 1. 解构出 comments 状态，实现数据订阅
+  const {
+    comments,
+    fetchComments,
+    addLocalComment,
+    deleteLocalComment,
+    buildMessageThread,
+  } = useCommentStore()
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
 
   // --- State: Data & Content ---
+  const [messages, setMessages] = useState<Comment[]>([])
+  const [isInitializing, setIsInitializing] = useState(true)
+
   const [opPostData, setOpPostData] = useState<{
     content: string
     content_cn: string
@@ -49,7 +49,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const [viewingWord, setViewingWord] = useState<string | null>(null)
   const [viewingNote, setViewingNote] = useState<CulturalNote[] | null>(null)
   const [showGlobalTranslation, setShowGlobalTranslation] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -62,7 +61,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   // --- State: AI & Difficulty ---
   const [isAiMode, setIsAiMode] = useState(false)
   const [isAiLoading, setIsAiLoading] = useState(false)
-  const [difficulty, setDifficulty] = useState<DifficultyLevel>('Original')
 
   // --- State: Navigation & Highlight ---
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
@@ -77,8 +75,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const touchStartRef = useRef(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const pressTimerRef = useRef<NodeJS.Timeout | null>(null)
   const bgPressTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const bubblePressTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // 1. 全局抑制浏览器默认菜单
   useEffect(() => {
@@ -94,7 +92,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       })
   }, [])
 
-  // 2. 自动聚焦 Effect：当进入引用模式时，自动拉起键盘
+  // 2. 自动聚焦 Effect
   useEffect(() => {
     if (quotedMessage && inputRef.current) {
       setTimeout(() => {
@@ -123,103 +121,26 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     fetchComments(postId)
   }, [postId, fetchComments])
 
-  const allComments = getComments(postId)
-
-  // 4. 构建消息树 (OP -> OP追问 -> Top Comment -> Children)
-  const messages = useMemo(() => {
-    if (!opPostData || !allComments.length || !focusCommentId) return []
-
-    // A. 构造 OP 消息
-    const opMessage: Comment = {
-      id: 'op-message',
-      post_id: postId,
-      author: opPostData.author,
-      content: opPostData.content,
-      content_cn: opPostData.content_cn,
-      upvotes: 0,
-      depth: -1,
-      parent_id: null,
-      created_at: new Date().toISOString(),
-      enrichment: { sentence_segments: null, cultural_notes: [] } as any,
+  // 4. [关键修复] 构建消息树
+  // 依赖项加入 comments[postId]，确保数据更新时视图刷新
+  useEffect(() => {
+    const updateMessages = () => {
+      const msgs = buildMessageThread(postId, focusCommentId, opPostData)
+      setMessages(msgs)
     }
 
-    const rootComment = allComments.find((c) => c.id === focusCommentId)
-    if (!rootComment) return [opMessage]
-
-    // B. 建立索引
-    const childrenMap = new Map<string, Comment[]>()
-    // 特殊处理：找出所有回复给 'op-message' 的本地消息
-    const opChildren: Comment[] = []
-
-    allComments.forEach((c) => {
-      if (c.parent_id === 'op-message') {
-        opChildren.push(c)
-      } else if (c.parent_id) {
-        if (!childrenMap.has(c.parent_id)) childrenMap.set(c.parent_id, [])
-        childrenMap.get(c.parent_id)?.push(c)
-      }
-    })
-
-    const result: Comment[] = []
-
-    // C. 压入 OP
-    result.push(opMessage)
-
-    // D. 压入 OP 的追问 (插在 Top Comment 之前)
-    const traverseOpChildren = (nodes: Comment[]) => {
-      nodes.sort(
-        (a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-      )
-      nodes.forEach((child) => {
-        result.push({
-          ...child,
-          replyToName: 'OP',
-          replyText: opMessage.content,
-        })
-        // 检查该追问是否有 AI 回复
-        if (childrenMap.has(child.id)) {
-          traverse(child.id) // 复用通用遍历逻辑
-        }
-      })
+    if (isInitializing) {
+      // 首次加载，延迟 150ms 以配合转场动画
+      const timer = setTimeout(() => {
+        updateMessages()
+        setIsInitializing(false)
+      }, 150)
+      return () => clearTimeout(timer)
+    } else {
+      // 后续数据更新（如发送消息），立即刷新
+      updateMessages()
     }
-    traverseOpChildren(opChildren)
-
-    // E. 压入 Top Comment (Sub-OP)
-    result.push({ ...rootComment, replyToName: 'OP' })
-
-    // F. 遍历 Top Comment 的子树
-    const traverse = (parentId: string) => {
-      const children = childrenMap.get(parentId) || []
-
-      children.sort((a, b) => {
-        // 核心修复：本地消息 (用户追问/AI回复) 永远排在最前 (紧贴父节点)
-        if (a.isLocal && !b.isLocal) return -1
-        if (!a.isLocal && b.isLocal) return 1
-        if (a.isLocal && b.isLocal) {
-          return (
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          )
-        }
-        return (b.upvotes || 0) - (a.upvotes || 0)
-      })
-
-      children.forEach((child) => {
-        const parentNode =
-          allComments.find((p) => p.id === parentId) ||
-          (parentId === 'op-message' ? opMessage : null)
-        result.push({
-          ...child,
-          replyToName: parentNode?.author,
-          replyText: parentNode?.content,
-        })
-        traverse(child.id)
-      })
-    }
-    traverse(focusCommentId)
-
-    return result
-  }, [allComments, focusCommentId, opPostData])
+  }, [postId, focusCommentId, opPostData, buildMessageThread, comments[postId]])
 
   // 5. 新消息自动滚动
   useEffect(() => {
@@ -240,30 +161,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const getInitials = (name: string) =>
     name ? name.substring(0, 2).toUpperCase() : '??'
 
-  // 6. 分句与难度处理逻辑
+  // 6. 分句逻辑
   const getDisplaySentences = (msg: Comment) => {
-    // A. 难度替换 (AI Rewriting)
-    if (difficulty !== 'Original' && msg.enrichment?.difficulty_variants) {
-      const variant = msg.enrichment.difficulty_variants[difficulty]
-      if (variant && variant.content) {
-        try {
-          // @ts-ignore
-          const segmenter = new Intl.Segmenter('en', {
-            granularity: 'sentence',
-          })
-          return [...segmenter.segment(variant.content)]
-            .map((s: any) => ({
-              en: s.segment.trim(),
-              zh: msg.content_cn,
-            }))
-            .filter((s: any) => s.en.length > 0)
-        } catch {
-          return [{ en: variant.content, zh: msg.content_cn }]
-        }
-      }
-    }
-
-    // B. OP 消息强制分句
+    // OP 消息强制分句
     if (msg.id === 'op-message') {
       const text = msg.content || ''
       const rawSentences = text.match(
@@ -272,24 +172,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       return rawSentences.map((en) => ({ en: en.trim(), zh: null }))
     }
 
-    // C. 普通消息
+    // 普通消息
     let segments: { en: string; zh: string | null }[] = []
     if (msg.enrichment?.sentence_segments) {
       segments = msg.enrichment.sentence_segments
     } else {
-      // 降级分句
-      try {
-        // @ts-ignore
-        const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
-        segments = [...segmenter.segment(msg.content)].map((s: any) => ({
-          en: s.segment.trim(),
-          zh: msg.content_cn,
-        }))
-      } catch {
-        segments = [{ en: msg.content, zh: msg.content_cn }]
-      }
+      segments = [{ en: msg.content, zh: msg.content_cn }]
     }
-    // 过滤空白气泡
     return segments.filter((s) => s.en && s.en.trim() !== '')
   }
 
@@ -298,7 +187,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     setViewingWord(word)
   }
 
-  // 7. 发送消息逻辑 (含 AI 模拟)
+  // 7. 发送消息逻辑
   const handleSend = async () => {
     if (!inputText.trim()) return
 
@@ -315,7 +204,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         content: questionContent,
         content_cn: '',
         depth: (quotedMessage.depth || 0) + 1,
-        parent_id: quotedMessage.id,
+        parent_id: quotedMessage.id, // 指向被引用的消息
         upvotes: 0,
         created_at: new Date().toISOString(),
         isLocal: true,
@@ -323,6 +212,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         replyToName: quotedMessage.author,
         replyText: quotedMessage.content,
       }
+
+      // 更新 Store，会触发 useEffect 立即刷新界面
       addLocalComment(postId, userQuestionMsg)
 
       setQuotedMessage(null)
@@ -407,10 +298,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   }
 
   // 9. 背景长按 (翻译)
-  const handleBgTouchStart = (e: React.TouchEvent) => {
+  const handleBgStart = (e: React.SyntheticEvent) => {
     if ((e.target as HTMLElement).closest('input') || contextMenu) return
+    // e.nativeEvent.touches 用于区分触摸
+    const isTouch = 'touches' in e.nativeEvent
     if (scrollContainerRef.current?.scrollTop === 0) {
-      touchStartRef.current = e.touches[0].clientY
+      touchStartRef.current = isTouch
+        ? (e.nativeEvent as TouchEvent).touches[0].clientY
+        : (e as any).clientY
       setIsDragging(true)
     }
     bgPressTimerRef.current = setTimeout(() => {
@@ -418,47 +313,53 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       setShowGlobalTranslation(true)
     }, 400)
   }
-  const handleBgTouchEnd = () => {
+  const handleBgEnd = () => {
     if (bgPressTimerRef.current) clearTimeout(bgPressTimerRef.current)
     setShowGlobalTranslation(false)
     setIsDragging(false)
     if (pullY > 100) onBack()
     setPullY(0)
   }
-  const handleBgTouchMove = (e: React.TouchEvent) => {
+  const handleBgMove = (e: React.SyntheticEvent) => {
     if (bgPressTimerRef.current) {
       clearTimeout(bgPressTimerRef.current)
       bgPressTimerRef.current = null
     }
     if (!isDragging) return
-    const currentY = e.touches[0].clientY
+
+    const isTouch = 'touches' in e.nativeEvent
+    const currentY = isTouch
+      ? (e.nativeEvent as TouchEvent).touches[0].clientY
+      : (e as any).clientY
+
     const diff = currentY - touchStartRef.current
     if (diff > 0 && scrollContainerRef.current?.scrollTop === 0) {
       setPullY(Math.pow(diff, 0.8))
     }
   }
 
-  // 10. 气泡长按 (菜单)
-  const handleBubbleTouchStart = (e: React.TouchEvent, msg: Comment) => {
-    e.stopPropagation()
-    const touch = e.touches[0]
-    const x = touch.clientX
-    const y = touch.clientY
-    bubblePressTimerRef.current = setTimeout(() => {
+  // 10. [关键修复] 通用交互处理 (支持鼠标和触摸)
+  const handleStartPress = (e: React.SyntheticEvent, msg: Comment) => {
+    // e.stopPropagation() // 如有需要可开启
+    const clientX =
+      'touches' in e.nativeEvent
+        ? (e.nativeEvent as TouchEvent).touches[0].clientX
+        : (e as any).clientX
+    const clientY =
+      'touches' in e.nativeEvent
+        ? (e.nativeEvent as TouchEvent).touches[0].clientY
+        : (e as any).clientY
+
+    pressTimerRef.current = setTimeout(() => {
       if (navigator.vibrate) navigator.vibrate(50)
-      setContextMenu({ x, y, msg })
+      setContextMenu({ x: clientX, y: clientY, msg })
     }, 500)
   }
-  const handleBubbleTouchEnd = () => {
-    if (bubblePressTimerRef.current) {
-      clearTimeout(bubblePressTimerRef.current)
-      bubblePressTimerRef.current = null
-    }
-  }
-  const handleBubbleTouchMove = () => {
-    if (bubblePressTimerRef.current) {
-      clearTimeout(bubblePressTimerRef.current)
-      bubblePressTimerRef.current = null
+
+  const handleEndPress = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current)
+      pressTimerRef.current = null
     }
   }
 
@@ -488,9 +389,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         transform: `translateY(${pullY}px)`,
         borderRadius: pullY > 0 ? '40px' : '0px',
       }}
-      onTouchStart={handleBgTouchStart}
-      onTouchMove={handleBgTouchMove}
-      onTouchEnd={handleBgTouchEnd}
+      // 背景交互
+      onTouchStart={handleBgStart}
+      onTouchMove={handleBgMove}
+      onTouchEnd={handleBgEnd}
+      onMouseDown={handleBgStart}
+      onMouseMove={handleBgMove}
+      onMouseUp={handleBgEnd}
       onContextMenu={(e) => {
         e.preventDefault()
         return false
@@ -502,66 +407,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           onClose={() => setViewingWord(null)}
         />
       )}
-
-      {/* Difficulty Settings (Toggle) */}
-      <AnimatePresence>
-        {showSettings && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 z-[90] backdrop-blur-sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowSettings(false)
-              }}
-            />
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              className="absolute top-0 bottom-0 right-0 w-64 bg-white dark:bg-[#1C1C1E] border-l border-gray-200 dark:border-white/10 z-[95] p-6 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-gray-900 dark:text-white font-bold mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-orange-500">
-                  psychology
-                </span>
-                Difficulty
-              </h2>
-              <div className="space-y-2 max-h-[80vh] overflow-y-auto">
-                {(
-                  [
-                    'Original',
-                    'Mixed',
-                    'IELTS',
-                    'CET6',
-                    'CET4',
-                    'HighSchool',
-                    'PrimarySchool',
-                  ] as DifficultyLevel[]
-                ).map((lvl) => (
-                  <button
-                    key={lvl}
-                    onClick={() => setDifficulty(lvl)}
-                    className={`w-full p-3 rounded-xl border text-left flex justify-between items-center ${difficulty === lvl ? 'bg-orange-500/20 border-orange-500 text-orange-600 dark:text-orange-500' : 'bg-background-light dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-700 dark:text-white/60'}`}>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold">
-                        {lvl === 'Mixed' ? 'Dopamine Mix ⚡️' : lvl}
-                      </span>
-                    </div>
-                    {difficulty === lvl && (
-                      <span className="material-symbols-outlined text-sm">
-                        check
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* Cultural Note Overlay */}
       <AnimatePresence>
@@ -711,205 +556,189 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                 Thread
               </span>
               <span className="text-gray-500 dark:text-white/40 text-[10px]">
-                {messages.length - 1} comments
+                {isInitializing
+                  ? 'Loading...'
+                  : `${messages.length - 1} comments`}
               </span>
             </>
           )}
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setShowSettings(true)
-          }}
-          className="w-10 h-10 flex items-center justify-center text-gray-500 dark:text-white/60">
-          <span className="material-symbols-outlined">tune</span>
-        </button>
+        <div className="w-10" />
       </div>
 
       <main
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-background-light dark:bg-[#0B0A09] transition-colors">
-        {messages.map((msg, index) => {
-          const isOP = msg.id === 'op-message'
-          const isRoot = index === 1
-          const sentences = getDisplaySentences(msg)
-          const hasCulturalNote =
-            msg.enrichment?.cultural_notes &&
-            msg.enrichment.cultural_notes.length > 0
-          const isHighlighted = highlightedId === msg.id
-          const isUser = msg.isLocal && !msg.isLocalAi
-          const isFlash = flashMessageId === msg.id
+        className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-background-light dark:bg-[#0B0A09] transition-colors relative">
+        {/* Loading Skeleton */}
+        <AnimatePresence>
+          {isInitializing && (
+            <motion.div
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 p-4 space-y-8 bg-background-light dark:bg-[#0B0A09] z-40">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex gap-3 animate-pulse">
+                  <div className="w-8 h-8 bg-gray-200 dark:bg-white/5 rounded-full shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="w-24 h-3 bg-gray-200 dark:bg-white/5 rounded" />
+                    <div className="w-full h-16 bg-gray-200 dark:bg-white/5 rounded-2xl" />
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          if (isOP) {
+        {/* Real Messages */}
+        {!isInitializing &&
+          messages.map((msg, index) => {
+            const isOP = msg.id === 'op-message'
+            const isRoot = index === 1
+            const sentences = getDisplaySentences(msg)
+            const hasCulturalNote =
+              msg.enrichment?.cultural_notes &&
+              msg.enrichment.cultural_notes.length > 0
+            const isHighlighted = highlightedId === msg.id
+            const isUser = msg.isLocal && !msg.isLocalAi
+            const isFlash = flashMessageId === msg.id
+
             return (
               <div
+                id={`msg-${msg.id}`}
                 key={msg.id}
-                className="mb-8 p-4 bg-gradient-to-br from-gray-200 to-gray-100 dark:from-white/10 dark:to-white/5 border border-gray-200 dark:border-white/10 rounded-2xl relative select-none touch-callout-none shadow-sm"
-                onContextMenu={(e) => e.preventDefault()}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="bg-primary/20 text-primary text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
-                    OP
-                  </span>
-                  <span className="text-xs font-bold text-gray-800 dark:text-white/90 line-clamp-1">
-                    {msg.author}
-                  </span>
+                className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''} ${isRoot || isOP ? 'mb-8' : ''} transition-all duration-500 ${isHighlighted ? 'bg-orange-100 dark:bg-white/5 -mx-2 px-2 py-2 rounded-xl' : ''} ${isFlash ? 'animate-flash bg-blue-50 dark:bg-white/10 rounded-xl' : ''}`}>
+                <div className="shrink-0">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border border-gray-200 dark:border-white/10 ${isRoot || isOP ? 'bg-gradient-to-tr from-orange-500 to-red-500 text-white w-10 h-10 text-xs' : 'bg-gray-200 dark:bg-[#1A1A1A] text-gray-500 dark:text-white/60'}`}>
+                    {isOP ? 'OP' : isRoot ? 'TOP' : getInitials(msg.author)}
+                  </div>
+                  {(isRoot || isOP) && (
+                    <div className="h-full w-[1px] bg-gray-200 dark:bg-white/10 mx-auto my-2" />
+                  )}
                 </div>
-                <div className="text-gray-800 dark:text-white/80 text-[15px] leading-relaxed">
+
+                <div
+                  className={`flex flex-col gap-1 max-w-[85%] ${isUser ? 'items-end' : ''}`}>
+                  <div
+                    className={`flex items-baseline gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
+                    <span
+                      className={`text-xs font-bold ${isRoot || isOP ? 'text-gray-900 dark:text-white text-sm' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {msg.author}
+                    </span>
+                    {isOP && (
+                      <span className="bg-orange-500/20 text-orange-500 text-[9px] px-1 rounded font-bold">
+                        OP
+                      </span>
+                    )}
+                    {isRoot && (
+                      <span className="bg-orange-500/20 text-orange-500 text-[9px] px-1 rounded font-bold">
+                        Top Comment
+                      </span>
+                    )}
+                    {msg.isLocalAi && (
+                      <span className="bg-blue-500/20 text-blue-500 dark:text-blue-400 text-[9px] px-1 rounded font-bold">
+                        AI
+                      </span>
+                    )}
+                  </div>
+
+                  {!isRoot && !isOP && msg.replyText && (
+                    <div
+                      onClick={() =>
+                        handleJumpToWithReturn(msg.parent_id, msg.id)
+                      }
+                      className={`text-[11px] text-gray-400 dark:text-white/40 italic border-l-2 border-gray-300 dark:border-white/20 pl-2 mb-1 active:bg-black/5 dark:active:bg-white/5 rounded-r cursor-pointer break-all whitespace-pre-wrap ${isUser ? 'text-right border-l-0 border-r-2 pr-2' : ''}`}>
+                      <span className="font-bold not-italic text-gray-500 dark:text-white/30 mr-1">
+                        @{msg.replyToName}
+                      </span>
+                      {msg.replyText}
+                    </div>
+                  )}
+
                   {sentences.map((s, i) => {
-                    // 图片检测
                     const isImage = s.en.match(
                       /^https?:\/\/.*\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i,
                     )
-                    if (isImage)
-                      return (
-                        <img
-                          key={i}
-                          src={s.en}
-                          alt=""
-                          className="rounded-lg max-w-full h-auto my-2"
-                        />
-                      )
-
                     return (
-                      <span key={i}>
-                        <InteractiveText
-                          text={s.en}
-                          contextSentence={s.en}
-                          externalOnClick={(w) => handleWordClick(w, s.en)}
-                        />
-                        <span className="inline-block w-1" />
-                      </span>
-                    )
-                  })}
-                </div>
-                {msg.content_cn && (
-                  <div className="mt-3 pt-3 border-t border-gray-300 dark:border-white/5 text-gray-500 dark:text-white/50 text-xs italic">
-                    {msg.content_cn}
-                  </div>
-                )}
-              </div>
-            )
-          }
-
-          return (
-            <div
-              id={`msg-${msg.id}`}
-              key={msg.id}
-              className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''} ${isRoot || isOP ? 'mb-8' : ''} transition-all duration-500 ${isHighlighted ? 'bg-orange-100 dark:bg-white/5 -mx-2 px-2 py-2 rounded-xl' : ''} ${isFlash ? 'animate-flash bg-blue-50 dark:bg-white/10 rounded-xl' : ''}`}>
-              <div className="shrink-0">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black border border-gray-200 dark:border-white/10 ${isRoot || isOP ? 'bg-gradient-to-tr from-orange-500 to-red-500 text-white w-10 h-10 text-xs' : 'bg-gray-200 dark:bg-[#1A1A1A] text-gray-500 dark:text-white/60'}`}>
-                  {isOP ? 'OP' : isRoot ? 'TOP' : getInitials(msg.author)}
-                </div>
-                {(isRoot || isOP) && (
-                  <div className="h-full w-[1px] bg-gray-200 dark:bg-white/10 mx-auto my-2" />
-                )}
-              </div>
-
-              <div
-                className={`flex flex-col gap-1 max-w-[85%] ${isUser ? 'items-end' : ''}`}>
-                <div
-                  className={`flex items-baseline gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
-                  <span
-                    className={`text-xs font-bold ${isRoot || isOP ? 'text-gray-900 dark:text-white text-sm' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {msg.author}
-                  </span>
-                  {isOP && (
-                    <span className="bg-orange-500/20 text-orange-500 text-[9px] px-1 rounded font-bold">
-                      OP
-                    </span>
-                  )}
-                  {isRoot && (
-                    <span className="bg-orange-500/20 text-orange-500 text-[9px] px-1 rounded font-bold">
-                      Top Comment
-                    </span>
-                  )}
-                  {msg.isLocalAi && (
-                    <span className="bg-blue-500/20 text-blue-500 dark:text-blue-400 text-[9px] px-1 rounded font-bold">
-                      AI
-                    </span>
-                  )}
-                </div>
-
-                {!isRoot && !isOP && msg.replyText && (
-                  <div
-                    onClick={() =>
-                      handleJumpToWithReturn(msg.parent_id, msg.id)
-                    }
-                    className={`text-[11px] text-gray-400 dark:text-white/40 italic border-l-2 border-gray-300 dark:border-white/20 pl-2 mb-1 active:bg-black/5 dark:active:bg-white/5 rounded-r cursor-pointer break-all whitespace-pre-wrap ${isUser ? 'text-right border-l-0 border-r-2 pr-2' : ''}`}>
-                    <span className="font-bold not-italic text-gray-500 dark:text-white/30 mr-1">
-                      @{msg.replyToName}
-                    </span>
-                    {msg.replyText}
-                  </div>
-                )}
-
-                {sentences.map((s, i) => {
-                  const isImage = s.en.match(
-                    /^https?:\/\/.*\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i,
-                  )
-                  return (
-                    <div
-                      key={i}
-                      onTouchStart={(e) => handleBubbleTouchStart(e, msg)}
-                      onTouchEnd={handleBubbleTouchEnd}
-                      onTouchMove={handleBubbleTouchMove}
-                      onContextMenu={(e) => e.preventDefault()}
-                      className={`
-                             relative p-3 pr-6 rounded-2xl text-[15px] leading-relaxed border transition-all duration-300 select-none touch-callout-none
+                      <div
+                        key={i}
+                        // [修复] 绑定通用 Press 事件，支持鼠标和触摸
+                        onTouchStart={(e) => handleStartPress(e, msg)}
+                        onTouchEnd={handleEndPress}
+                        onMouseDown={(e) => handleStartPress(e, msg)}
+                        onMouseUp={handleEndPress}
+                        onMouseLeave={handleEndPress}
+                        onContextMenu={(e) => e.preventDefault()}
+                        className={`
+                             relative group p-3 pr-6 rounded-2xl text-[15px] leading-relaxed border transition-all duration-300 select-none touch-callout-none
                              ${isRoot || isOP ? 'bg-gray-100 dark:bg-white/10 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white' : 'bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-white/5 text-gray-800 dark:text-gray-200'}
                              ${hasCulturalNote ? 'shadow-[0_0_15px_rgba(234,179,8,0.2)] border-yellow-500/40 bg-gradient-to-br from-yellow-50 to-white dark:from-[#1A1A1A] dark:to-yellow-900/20' : ''}
                            `}>
-                      {hasCulturalNote && i === 0 && (
-                        <div
+                        {/* 显式引用按钮 */}
+                        <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            setViewingNote(msg.enrichment!.cultural_notes)
+                            handleQuote(msg)
                           }}
-                          className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white dark:border-[#0B0A09] z-10 animate-pulse cursor-pointer active:scale-90">
-                          <span className="material-symbols-outlined text-[12px] text-black font-bold">
-                            lightbulb
+                          className="absolute -right-2 -top-2 w-6 h-6 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10 scale-90 active:scale-95 cursor-pointer">
+                          <span className="material-symbols-outlined text-[14px]">
+                            format_quote
                           </span>
-                        </div>
-                      )}
+                        </button>
 
-                      {isImage ? (
-                        <img
-                          src={s.en}
-                          alt=""
-                          className="rounded-lg max-w-full h-auto"
-                        />
-                      ) : (
-                        <InteractiveText
-                          text={s.en || ''}
-                          contextSentence={s.en || ''}
-                          externalOnClick={(w) => handleWordClick(w, s.en)}
-                        />
-                      )}
+                        {hasCulturalNote && i === 0 && (
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setViewingNote(msg.enrichment!.cultural_notes)
+                            }}
+                            className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white dark:border-[#0B0A09] z-10 animate-pulse cursor-pointer active:scale-90">
+                            <span className="material-symbols-outlined text-[12px] text-black font-bold">
+                              lightbulb
+                            </span>
+                          </div>
+                        )}
 
-                      <AnimatePresence>
-                        {(showGlobalTranslation ||
-                          expandedTranslations[msg.id]) &&
-                          (s.zh ||
-                            (isOP &&
-                              i === sentences.length - 1 &&
-                              msg.content_cn)) && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="mt-2 pt-2 border-t border-gray-200 dark:border-white/5 text-sm text-gray-500 dark:text-white/50 italic overflow-hidden">
-                              {s.zh || msg.content_cn}
-                            </motion.div>
-                          )}
-                      </AnimatePresence>
-                    </div>
-                  )
-                })}
+                        {isImage ? (
+                          <img
+                            src={s.en}
+                            alt=""
+                            className="rounded-lg max-w-full h-auto"
+                          />
+                        ) : (
+                          <InteractiveText
+                            text={s.en || ''}
+                            contextSentence={s.en || ''}
+                            externalOnClick={(w) => handleWordClick(w, s.en)}
+                          />
+                        )}
+
+                        <AnimatePresence>
+                          {(showGlobalTranslation ||
+                            expandedTranslations[msg.id]) &&
+                            (s.zh ||
+                              (isOP &&
+                                i === sentences.length - 1 &&
+                                msg.content_cn)) && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="mt-2 pt-2 border-t border-gray-200 dark:border-white/5 text-sm text-gray-500 dark:text-white/50 italic overflow-hidden">
+                                {s.zh ||
+                                  (i === sentences.length - 1
+                                    ? msg.content_cn
+                                    : '')}
+                              </motion.div>
+                            )}
+                        </AnimatePresence>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
 
         {isAiLoading && (
           <div className="flex justify-start px-12 py-4 animate-in slide-in-from-bottom-2 fade-in">

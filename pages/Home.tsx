@@ -5,7 +5,7 @@ import React, {
   useState,
   useCallback,
 } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../store/useAppStore'
 import { useUserStore } from '../store/useUserStore'
 import { useAnalyticsStore } from '../store/useAnalyticsStore'
@@ -19,6 +19,37 @@ interface HomeProps {
   filteredCommunityId?: string | null
   onClearFilter?: () => void
   initialTab?: 'following' | 'foryou'
+}
+
+// [新增] 简易图片预览组件
+const ImagePreviewOverlay: React.FC<{ src: string; onClose: () => void }> = ({
+  src,
+  onClose,
+}) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center cursor-zoom-out"
+      onClick={onClose}>
+      <motion.img
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.8, opacity: 0 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        src={src}
+        className="max-w-full max-h-screen object-contain p-2"
+        onClick={(e) => e.stopPropagation()} // 防止点图片关闭，必须点背景（可选，根据需求）
+      />
+      <button
+        onClick={onClose}
+        className="absolute top-5 right-5 w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md">
+        <span className="material-symbols-outlined">close</span>
+      </button>
+    </motion.div>
+  )
 }
 
 const Home: React.FC<HomeProps> = ({
@@ -42,6 +73,9 @@ const Home: React.FC<HomeProps> = ({
   const { followedCommunities } = useUserStore()
   const [activeTab, setActiveTab] = useState<'following' | 'foryou'>(initialTab)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // [新增] 预览图片状态
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   const [isReady, setIsReady] = useState(() => {
     return !(posts.length > 0 && currentPostIndex > 0)
@@ -213,6 +247,16 @@ const Home: React.FC<HomeProps> = ({
 
   return (
     <div className="relative h-full w-full bg-background-light dark:bg-background-dark overflow-hidden transition-colors duration-300">
+      {/* [新增] 图片预览覆盖层 */}
+      <AnimatePresence>
+        {previewImage && (
+          <ImagePreviewOverlay
+            src={previewImage}
+            onClose={() => setPreviewImage(null)}
+          />
+        )}
+      </AnimatePresence>
+
       {filteredCommunityId && activeTab === 'foryou' && (
         <div className="absolute top-[100px] left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top-4 duration-300">
           <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/20 backdrop-blur-md border border-primary/30 rounded-full">
@@ -292,6 +336,8 @@ const Home: React.FC<HomeProps> = ({
               <FeedItem
                 post={post}
                 onOpenDiscussion={() => handleOpenDiscussion(post)}
+                // [新增] 传递点击放大回调
+                onViewImage={(url) => setPreviewImage(url)}
                 isExiting={false}
                 isActive={index === currentPostIndex}
               />
@@ -323,10 +369,18 @@ const Home: React.FC<HomeProps> = ({
 export const FeedItem: React.FC<{
   post: any
   onOpenDiscussion: () => void
+  onViewImage?: (url: string) => void // [新增]
   isExiting: boolean
   onBack?: () => void
   isActive?: boolean
-}> = ({ post, onOpenDiscussion, isExiting, onBack, isActive = true }) => {
+}> = ({
+  post,
+  onOpenDiscussion,
+  onViewImage,
+  isExiting,
+  onBack,
+  isActive = true,
+}) => {
   const {
     toggleLike,
     isLiked: checkIsLiked,
@@ -430,10 +484,16 @@ export const FeedItem: React.FC<{
         <div
           className="absolute inset-0 h-full w-full overflow-hidden"
           onClick={() => {
-            if (!isExiting && hasVideo && videoRef.current)
-              videoRef.current.paused
-                ? videoRef.current.play()
-                : videoRef.current.pause()
+            if (!isExiting) {
+              if (hasVideo && videoRef.current) {
+                videoRef.current.paused
+                  ? videoRef.current.play()
+                  : videoRef.current.pause()
+              } else if (!hasVideo && onViewImage) {
+                // [新增] 如果是图片且非退出状态，触发预览
+                onViewImage(imageUrl)
+              }
+            }
           }}>
           {hasVideo ? (
             <video
