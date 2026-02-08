@@ -181,10 +181,10 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                   <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">Wechatroom</h3>
                   <div className="p-4 rounded-2xl bg-orange-500/5 border border-orange-500/10 flex flex-col items-center gap-4">
                     <div
-                      onClick={() => setFullscreenImage('/scrollish交流1群.jpg')}
+                      onClick={() => setFullscreenImage('/内侧交流群.jpg')}
                       className="w-full aspect-square max-w-[220px] bg-white dark:bg-white/10 rounded-2xl border border-orange-500/20 flex items-center justify-center relative group overflow-hidden shadow-lg p-3 cursor-zoom-in active:scale-95 transition-transform">
                       <img
-                        src="/scrollish交流1群.jpg"
+                        src="/内侧交流群.jpg"
                         alt="Wechatroom QR Code"
                         className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                       />
