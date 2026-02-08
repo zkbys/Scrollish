@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { supabase } from '../supabase'
 import { Page } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
-import { useDictionaryStore } from '../store/useDictionaryStore'
-import InteractiveText from '../components/InteractiveText'
-import WordDetailOverlay from '../components/WordDetailOverlay'
 
 interface TopicHubProps {
   onNavigate: (page: Page) => void
@@ -25,12 +22,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const [isExiting, setIsExiting] = useState(false)
   const [videoError, setVideoError] = useState(false)
 
-  // 查词相关状态 - 从 main 版本恢复
-  const [viewingWord, setViewingWord] = useState<string | null>(null)
-  const [viewingContext, setViewingContext] = useState<string>('')
-  const { getDefinition, triggerAnalysis } = useDictionaryStore()
 
-  // OP 内容
+  // 独立状态存储 OP 内容，防止 props 中缺失
   const [opContent, setOpContent] = useState<{ en: string; cn: string } | null>(
     null,
   )
@@ -42,10 +35,12 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const { fetchComments, getComments, isLoading } = useCommentStore()
 
-  // 1. 获取 OP 正文
+  // 1. 获取 OP 正文 (修复 Loading content 问题)
   useEffect(() => {
     if (post?.id) {
       fetchComments(post.id)
+
+      // 优先使用 props 里的内容，如果缺失则去数据库查
       if (post.content_en && post.content_en.length > 10) {
         setOpContent({ en: post.content_en, cn: post.content_cn })
       } else {
@@ -70,6 +65,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const allComments = getComments(post.id)
 
   const comments = useMemo(() => {
+    // 2. 构造第0张卡片 (OP)
+    // 优先级: state -> props -> fallback
     const finalContentEn =
       opContent?.en || post.content_en || post.title_en || 'Loading content...'
     const finalContentCn =
@@ -83,15 +80,17 @@ const TopicHub: React.FC<TopicHubProps> = ({
       content_cn: finalContentCn,
       upvotes: post.upvotes || 0,
       depth: -1,
-      enrichment: null,
+      enrichment: null, // OP 卡片通常没有 enrichment 分句数据
     }
 
     const topLevel = allComments.filter((c) => c.depth === 0)
     const sortedComments = topLevel.sort((a, b) => b.upvotes - a.upvotes)
 
+    // 即使评论没加载完，也要先显示 OP 卡片，而不是空列表
     if (topLevel.length === 0 && isLoading[post.id]) {
       return [opCard]
     }
+
     return [opCard, ...sortedComments]
   }, [allComments, isLoading, post, opContent])
 
@@ -139,7 +138,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   useEffect(() => {
     if (hasVideo && videoRef.current) {
       videoRef.current.muted = true
-      videoRef.current.play().catch(() => {})
+      videoRef.current.play().catch(() => { })
     }
   }, [hasVideo])
 
@@ -149,8 +148,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
       ? replyCounts[activeComment.id] || 0
       : 0
 
+  // --- 分句逻辑 ---
   const displaySegments = useMemo(() => {
     if (!activeComment) return []
+
+    // OP Card: 走正则分句 + 底部整段翻译
     if (activeComment.isOpCard) {
       const text = activeComment.content || ''
       const rawSentences = text.match(
@@ -158,12 +160,17 @@ const TopicHub: React.FC<TopicHubProps> = ({
       ) || [text]
       return rawSentences.map((en) => ({ en: en.trim(), zh: null }))
     }
+
+    // Comment Card: 优先使用 enrichment 数据
+    // 注意：Store 中已经处理了 enrichment 为数组的情况，这里直接判断
     if (
       activeComment.enrichment?.sentence_segments &&
       Array.isArray(activeComment.enrichment.sentence_segments)
     ) {
       return activeComment.enrichment.sentence_segments
     }
+
+    // 降级：正则分句，zh 为 null (显示在底部)
     const rawSentences = activeComment.content.match(
       /[^.!?。！？\n]+[.!?。！？\n]+|[^.!?。！？\n]+$/g,
     ) || [activeComment.content]
@@ -189,6 +196,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
     setIsExiting(true)
     setTimeout(() => onNavigate(Page.Home), 50)
   }
+
 
   const handleTouchStart = (e: React.TouchEvent) => {
     startPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
@@ -237,37 +245,13 @@ const TopicHub: React.FC<TopicHubProps> = ({
     }, 200)
   }
 
-  // --- 恢复单词查询功能 ---
-  const handleWordClick = async (word: string, context: string) => {
-    // 1. 触发分析 (InteractiveText 组件会自己显示 Loading 状态)
-    const result = await triggerAnalysis(word, context)
-
-    // 2. 只有当结果回来之后，才打开 Overlay
-    if (result) {
-      setViewingContext(context)
-      setViewingWord(word)
-    }
-  }
-
   const isPageLoading = isLoading[post.id] && comments.length <= 1
 
   return (
     <div
       className={`h-full flex flex-col bg-[#FDFCFB] dark:bg-[#0B0A09] overflow-hidden select-none relative transition-colors duration-500 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
 
-      {/* 单词详情弹窗 - 从 main 版本恢复 */}
-      <AnimatePresence>
-        {viewingWord && (
-          <WordDetailOverlay
-            word={viewingWord}
-            definition={getDefinition(viewingWord)}
-            context={viewingContext}
-            onClose={() => setViewingWord(null)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* 活力开朗背景体系 (与 Profile 同步) - 从 lixiao 版本保留 */}
+      {/* 活力开朗背景体系 (与 Profile 同步) */}
       <div className="absolute inset-0 pointer-events-none z-0">
         <div className="frost-overlay" />
         <div className="blob-pastel -top-20 -left-20 bg-[#FFEDD5] dark:bg-orange-500/20 opacity-60 dark:opacity-40" />
@@ -282,6 +266,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
       </div>
 
       <div className="mx-4 mt-12 h-56 relative z-50">
+        {/* 透明镜头框容器：作为移动的显示窗口 */}
         <motion.div
           initial={{ y: -300, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -330,6 +315,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
               <img src={imageUrl} className="max-h-[85%] max-w-[calc(100%-120px)] object-contain relative z-10 shadow-2xl rounded-sm" alt="" />
             )}
           </motion.div>
+
+          {/* 渐变遮罩放在镜头框内，跟随下落 */}
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/60 dark:to-black/80 rounded-[2.5rem] z-20 pointer-events-none" />
         </motion.div>
 
@@ -436,15 +423,10 @@ const TopicHub: React.FC<TopicHubProps> = ({
                       key={i}
                       className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 p-4 rounded-xl rounded-tl-none border-l-2 border-l-orange-500/50 select-none touch-callout-none"
                       onContextMenu={(e) => e.preventDefault()}>
-                      {/* 恢复 InteractiveText 的点击事件 */}
-                      <InteractiveText
-                        text={seg.en}
-                        contextSentence={seg.en}
-                        externalOnClick={(word) =>
-                          handleWordClick(word, seg.en)
-                        }
-                        className="text-gray-800 dark:text-gray-100 text-[15px] font-medium"
-                      />
+                      <span className="text-gray-800 dark:text-gray-100 text-[15px] font-medium">
+                        {seg.en}
+                      </span>
+                      {/* 只有在 enrichment 数据存在时，才按句显示中文 */}
                       {seg.zh && (
                         <div className="mt-3 pt-2 border-t border-gray-200 dark:border-white/10">
                           <p className="text-gray-500 dark:text-white/60 text-sm leading-relaxed italic">
@@ -455,6 +437,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
                     </div>
                   ))}
 
+                  {/* 如果没有分句中文，显示底部整段翻译 */}
                   {(!activeComment?.enrichment?.sentence_segments ||
                     activeComment?.isOpCard) &&
                     activeComment?.content_cn && (
@@ -473,10 +456,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
                         </p>
                       </div>
                     )}
-                  {/* 修复 BottomNav 遮挡：增加底部留白 */}
-                  <div className="h-32" />
                 </div>
               )}
+              <div className="h-12" />
             </div>
 
             <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white dark:from-[#121212] to-transparent pointer-events-none flex items-end justify-center pb-4 opacity-50">
@@ -502,9 +484,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
             </div>
           </div>
         </div>
-      </main>
+      </main >
 
-      {/* 底部氛围律动条 (Ambient Ticker) - 从 lixiao 版本保留 */}
+      {/* 底部氛围律动条 (Ambient Ticker) - 解决空旷且避开冗余功能 */}
       <div className="h-14 w-full relative z-40 overflow-hidden flex items-center bg-gray-100/50 dark:bg-white/5 backdrop-blur-md border-t border-gray-200 dark:border-white/5 opacity-80">
         <div className="flex whitespace-nowrap animate-ticker items-center gap-10 px-8">
           {[1, 2, 3].map((v) => (
@@ -565,7 +547,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
             z-index: 5;
         }
       `}</style>
-    </div>
+    </div >
   )
 }
 

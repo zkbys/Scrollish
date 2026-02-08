@@ -94,6 +94,7 @@ export interface Comment {
   isLocal?: boolean
   isQuestion?: boolean
   isLocalAi?: boolean
+  isLoading?: boolean // AI 回复加载状态
   replyToName?: string
   replyText?: string
   replyAvatar?: string

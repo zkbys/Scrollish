@@ -6,6 +6,7 @@ import { supabase } from '../supabase';
 import { IMAGES } from '../constants';
 import { SPRING_GENTLE, BUTTON_SPRING } from '../motion';
 import { preloadImages } from '../utils/media';
+import { useUserStore } from '../store/useUserStore';
 
 interface LoginProps {
     onNavigate: (page: Page) => void;
@@ -43,15 +44,40 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 if (user) {
                     // --- [新增] 资源预加载机制 ---
                     setIsPreloading(true);
+
+                    // [修复] 移除提前的 login 调用，防止 App.tsx 抢跑
+                    // useUserStore.getState().login(user);
+
                     try {
-                        await preloadImages([
-                            IMAGES.london,
-                            IMAGES.avatar1,
-                            IMAGES.grammar,
-                            '/哆吧1.png'
-                        ]);
+                        const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000)); // 至少持继 2 秒
+
+                        // [修复] 手动拉取 Profile
+                        const fetchProfilePromise = supabase
+                            .from('profiles')
+                            .select('*')
+                            .eq('id', user.id)
+                            .single()
+                            .then(({ data }) => {
+                                if (data) {
+                                    useUserStore.getState().setProfile(data);
+                                }
+                            });
+
+                        const tasks = [
+                            preloadImages([
+                                IMAGES.london,
+                                IMAGES.avatar1,
+                                IMAGES.grammar,
+                                '/哆吧1.png'
+                            ]),
+                            fetchProfilePromise,
+                            minLoadingTime
+                        ];
+                        await Promise.all(tasks);
                     } catch (e) {
                         console.warn('Preloading failed, proceeding anyway', e);
+                        // 即使预加载失败，也要保证最小展示时间
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                     }
                     onLoginSuccess(user);
                 }
@@ -92,16 +118,41 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 if (user) {
                     // --- [新增] 资源预加载机制 ---
                     setIsPreloading(true);
+
+                    // [修复] 移除提前的 login 调用
+                    // useUserStore.getState().login(user);
+
                     try {
                         // 预加载 Onboarding 和首页核心资源
-                        await preloadImages([
-                            IMAGES.london,
-                            IMAGES.avatar1,
-                            IMAGES.grammar,
-                            '/哆吧1.png'
-                        ]);
+                        const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000)); // 至少持继 2 秒
+
+                        // [修复] 手动拉取 Profile
+                        const fetchProfilePromise = supabase
+                            .from('profiles')
+                            .select('*')
+                            .eq('id', user.id)
+                            .single()
+                            .then(({ data }) => {
+                                if (data) {
+                                    useUserStore.getState().setProfile(data);
+                                }
+                            });
+
+                        const tasks = [
+                            preloadImages([
+                                IMAGES.london,
+                                IMAGES.avatar1,
+                                IMAGES.grammar,
+                                '/哆吧1.png'
+                            ]),
+                            fetchProfilePromise,
+                            minLoadingTime
+                        ];
+                        await Promise.all(tasks);
                     } catch (e) {
                         console.warn('Preloading failed, proceeding anyway', e);
+                        // 即使预加载失败，也要保证最小展示时间
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                     }
 
                     onLoginSuccess(user);
