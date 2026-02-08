@@ -93,6 +93,12 @@ const Home: React.FC<HomeProps> = ({
     const newIndex = Math.round(container.scrollTop / rowHeight)
     if (newIndex !== currentPostIndex) {
       setCurrentPostIndex(newIndex)
+
+      // [新增] 记录浏览历史
+      const currentPost = posts[newIndex]
+      if (currentPost) {
+        useUserStore.getState().addViewHistory(currentPost)
+      }
     }
   }
 
@@ -305,11 +311,11 @@ const Home: React.FC<HomeProps> = ({
       {renderEmptyState() || (
         <div
           ref={scrollContainerRef}
-          className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 ${isReady ? 'opacity-100' : 'opacity-0'}`}
-          onScroll={handleScroll}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
+          className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 ${isReady ? 'opacity-100' : 'opacity-0'} ${isLoading ? 'pointer-events-none' : ''}`}
+          onScroll={isLoading ? undefined : handleScroll}
+          onTouchStart={isLoading ? undefined : handleTouchStart}
+          onTouchMove={isLoading ? undefined : handleTouchMove}
+          onTouchEnd={isLoading ? undefined : handleTouchEnd}
           style={{ transform: `translateY(${pullY > 0 ? pullY / 3 : 0}px)` }}>
           {posts.map((post, index) => (
             <div
@@ -323,6 +329,7 @@ const Home: React.FC<HomeProps> = ({
                 isExiting={false}
                 isActive={index === currentPostIndex}
                 isReady={isReady}
+                isLoading={isLoading}
               />
             </div>
           ))}
@@ -356,6 +363,7 @@ export const FeedItem: React.FC<{
   onBack?: () => void
   isActive: boolean
   isReady?: boolean
+  isLoading?: boolean
 }> = ({
   post,
   onOpenDiscussion,
@@ -363,6 +371,7 @@ export const FeedItem: React.FC<{
   onBack,
   isActive,
   isReady = true,
+  isLoading = false,
 }) => {
     const {
       toggleLike,
@@ -521,7 +530,7 @@ export const FeedItem: React.FC<{
             key={`actions-${post.id}`}
             variants={STAGGER_CONTAINER}
             initial="initial"
-            animate={isReady && isActive ? "animate" : "initial"}
+            animate={isReady && isActive && !isLoading ? "animate" : "initial"}
             exit="exit"
             inherit={false}
             className="absolute inset-0 z-[120] pointer-events-none">

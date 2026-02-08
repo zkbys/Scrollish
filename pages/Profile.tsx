@@ -26,9 +26,10 @@ const RoundedStar = ({ className = "size-6", fill = "currentColor" }) => (
 );
 
 const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
-  const { likedPosts, starredWords, profile, fetchProfile, updateProfile } = useUserStore()
+  const { likedPosts, starredWords, viewHistory, profile, fetchProfile, updateProfile } = useUserStore()
   const { scrollPos, setScrollPos } = useProfileStore()
   const { theme, toggleTheme } = useThemeStore()
+  const [activeTab, setActiveTab] = useState<'favorites' | 'history'>('favorites')
 
   useEffect(() => {
     fetchProfile()
@@ -346,14 +347,14 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         <div className="sticky top-0 z-20 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5">
           <div className="flex px-4">
             <button
-              className="flex flex-col items-center justify-center border-b-2 border-orange-500 text-gray-900 dark:text-white pb-3 pt-4 flex-1">
+              onClick={() => setActiveTab('favorites')}
+              className={`flex flex-col items-center justify-center border-b-2 ${activeTab === 'favorites' ? 'border-orange-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-white/40'} pb-3 pt-4 flex-1 transition-colors`}>
               <p className="text-xs font-black tracking-tight uppercase">Favorites</p>
             </button>
-            <button disabled className="flex flex-col items-center justify-center border-b-2 border-transparent text-gray-400 dark:text-white/40 pb-3 pt-4 flex-1 relative group cursor-not-allowed">
-              <div className="flex items-center gap-1 opacity-20 blur-[6px]">
-                <p className="text-xs font-bold tracking-tight uppercase">History</p>
-              </div>
-              <span className="material-symbols-outlined text-[16px] text-orange-500 absolute top-1/2 -translate-y-1/2 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">lock</span>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`flex flex-col items-center justify-center border-b-2 ${activeTab === 'history' ? 'border-orange-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-white/40'} pb-3 pt-4 flex-1 transition-colors`}>
+              <p className="text-xs font-black tracking-tight uppercase">History</p>
             </button>
             <button disabled className="flex flex-col items-center justify-center border-b-2 border-transparent text-gray-400 dark:text-white/40 pb-3 pt-4 flex-1 relative group cursor-not-allowed">
               <div className="flex items-center gap-1 opacity-20 blur-[6px]">
@@ -366,49 +367,98 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
 
         {/* Content Grid */}
         <div className="p-4 pb-32">
-          {likedPosts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-300 dark:text-white/20">
-              <RoundedStar className="size-16 mb-4 opacity-50" fill="currentColor" />
-              <p className="text-xs font-bold uppercase tracking-widest text-center">No stars yet<br /><span className="text-[10px] lowercase font-medium opacity-50">Starred items will appear here</span></p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
-              {likedPosts.map((post) => (
-                <motion.div
-                  key={post.id}
-                  variants={STAGGER_ITEM}
-                  onClick={() => handlePostClick(post)}
-                  className="group glass-card-premium overflow-hidden flex flex-col transition-all duration-300 active:scale-95 shadow-sm hover:shadow-lg cursor-pointer">
-                  <div className="aspect-square w-full bg-gray-100 dark:bg-black overflow-hidden relative">
-                    {post.video_url ? (
-                      <video src={post.video_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
-                    ) : (
-                      <div className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url("${post.image_url}")` }} />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                    {post.video_url && (
-                      <div className="absolute top-2 right-2 w-7 h-7 bg-white/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/60">
-                        <span className="material-symbols-outlined text-white text-lg font-bold">play_arrow</span>
+          {activeTab === 'favorites' ? (
+            likedPosts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-gray-300 dark:text-white/20">
+                <RoundedStar className="size-16 mb-4 opacity-50" fill="currentColor" />
+                <p className="text-xs font-bold uppercase tracking-widest text-center">No stars yet<br /><span className="text-[10px] lowercase font-medium opacity-50">Starred items will appear here</span></p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {likedPosts.map((post) => (
+                  <motion.div
+                    key={post.id}
+                    variants={STAGGER_ITEM}
+                    onClick={() => handlePostClick(post)}
+                    className="group glass-card-premium overflow-hidden flex flex-col transition-all duration-300 active:scale-95 shadow-sm hover:shadow-lg cursor-pointer">
+                    <div className="aspect-square w-full bg-gray-100 dark:bg-black overflow-hidden relative">
+                      {post.video_url ? (
+                        <video src={post.video_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
+                      ) : (
+                        <div className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url("${post.image_url}")` }} />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                      {post.video_url && (
+                        <div className="absolute top-2 right-2 w-7 h-7 bg-white/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/60">
+                          <span className="material-symbols-outlined text-white text-lg font-bold">play_arrow</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 flex flex-col justify-between flex-grow">
+                      <div>
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-orange-100/60 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[9px] font-black uppercase mb-1.5 border border-orange-200/50 dark:border-orange-500/20">
+                          r/{post.subreddit || 'Reddit'}
+                        </span>
+                        <p className="text-gray-900 dark:text-white text-[11px] font-extrabold leading-snug line-clamp-2">
+                          {post.title_en}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                  <div className="p-3 flex flex-col justify-between flex-grow">
-                    <div>
-                      <span className="inline-block px-2 py-0.5 rounded-md bg-orange-100/60 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[9px] font-black uppercase mb-1.5 border border-orange-200/50 dark:border-orange-500/20">
-                        r/{post.subreddit || 'Reddit'}
-                      </span>
-                      <p className="text-gray-900 dark:text-white text-[11px] font-extrabold leading-snug line-clamp-2">
-                        {post.title_en}
+                      <p className="text-gray-400 dark:text-white/30 text-[9px] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">
+                        <RoundedStar className="size-3 text-orange-500" fill="currentColor" />
+                        Starred recently
                       </p>
                     </div>
-                    <p className="text-gray-400 dark:text-white/30 text-[9px] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">
-                      <RoundedStar className="size-3 text-orange-500" fill="currentColor" />
-                      Starred recently
-                    </p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+                  </motion.div>
+                ))}
+              </div>
+            )
+          ) : (
+            // History Tab
+            viewHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-gray-300 dark:text-white/20">
+                <span className="material-symbols-outlined text-6xl mb-4 opacity-50">history</span>
+                <p className="text-xs font-bold uppercase tracking-widest text-center">No history yet<br /><span className="text-[10px] lowercase font-medium opacity-50">Posts you view will appear here</span></p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {viewHistory.map((item) => (
+                  <motion.div
+                    key={item.postId}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    onClick={() => handlePostClick(item.post)}
+                    className="group glass-card-premium overflow-hidden flex flex-col transition-all duration-300 active:scale-95 shadow-sm hover:shadow-lg cursor-pointer">
+                    <div className="aspect-square w-full bg-gray-100 dark:bg-black overflow-hidden relative">
+                      {item.post.video_url ? (
+                        <video src={item.post.video_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
+                      ) : (
+                        <div className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url("${item.post.image_url}")` }} />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                      {item.post.video_url && (
+                        <div className="absolute top-2 right-2 w-7 h-7 bg-white/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/60">
+                          <span className="material-symbols-outlined text-white text-lg font-bold">play_arrow</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 flex flex-col justify-between flex-grow">
+                      <div>
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-purple-100/60 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 text-[9px] font-black uppercase mb-1.5 border border-purple-200/50 dark:border-purple-500/20">
+                          r/{item.post.subreddit || 'Reddit'}
+                        </span>
+                        <p className="text-gray-900 dark:text-white text-[11px] font-extrabold leading-snug line-clamp-2">
+                          {item.post.title_en}
+                        </p>
+                      </div>
+                      <p className="text-gray-400 dark:text-white/30 text-[9px] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">
+                        <span className="material-symbols-outlined text-[12px] text-purple-500">history</span>
+                        {new Date(item.viewedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )
           )}
         </div>
       </main>

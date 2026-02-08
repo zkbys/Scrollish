@@ -4,10 +4,18 @@ import { supabase } from '../supabase'
 import { ProductionPost } from './useAppStore'
 import { DictionaryResult } from './useDictionaryStore'
 
+export interface ViewHistoryItem {
+  postId: string
+  viewedAt: string
+  post: ProductionPost
+}
+
 interface UserState {
   likedPosts: ProductionPost[]
   starredWords: DictionaryResult[]
   followedCommunities: string[] // 存储关注的社区 ID
+  viewedPostIds: string[] // 已浏览帖子的 ID 列表
+  viewHistory: ViewHistoryItem[] // 完整的浏览历史
 
   currentUser: any | null
   profile: any | null
@@ -19,6 +27,9 @@ interface UserState {
   isWordStarred: (wordName: string) => boolean
   toggleFollowCommunity: (communityId: string) => void
   isFollowing: (communityId: string) => boolean
+  addViewHistory: (post: ProductionPost) => void
+  isViewed: (postId: string) => boolean
+  clearViewHistory: () => void
   login: (user: any) => void
   logout: () => void
   setLoading: (loading: boolean) => void
@@ -34,6 +45,8 @@ export const useUserStore = create<UserState>()(
       likedPosts: [],
       starredWords: [],
       followedCommunities: [],
+      viewedPostIds: [],
+      viewHistory: [],
       currentUser: null,
       profile: null,
       isLoading: true,
@@ -83,6 +96,34 @@ export const useUserStore = create<UserState>()(
 
       isFollowing: (communityId: string) => {
         return get().followedCommunities.includes(communityId)
+      },
+
+      addViewHistory: (post: ProductionPost) => {
+        const { viewedPostIds, viewHistory } = get()
+
+        // 如果已经浏览过,不重复添加
+        if (viewedPostIds.includes(post.id)) {
+          return
+        }
+
+        const newHistoryItem: ViewHistoryItem = {
+          postId: post.id,
+          viewedAt: new Date().toISOString(),
+          post: post
+        }
+
+        set({
+          viewedPostIds: [...viewedPostIds, post.id],
+          viewHistory: [newHistoryItem, ...viewHistory] // 最新的在前面
+        })
+      },
+
+      isViewed: (postId: string) => {
+        return get().viewedPostIds.includes(postId)
+      },
+
+      clearViewHistory: () => {
+        set({ viewedPostIds: [], viewHistory: [] })
       },
 
       login: (userData: any) => {

@@ -63,15 +63,43 @@ export const useAppStore = create<AppState>((set, get) => ({
           .order('created_at', { ascending: false })
           .limit(15))
       } else {
-        // 默认随机推荐
-        ; ({ data, error } = await supabase.rpc('get_random_posts', {
-          limit_count: 15,
-        }))
+        // [修改] 获取所有帖子,然后在客户端随机排序
+        ; ({ data, error } = await supabase
+          .from('production_posts')
+          .select('*'))
       }
 
       if (error) throw error
       if (data) {
-        set({ posts: data, hasLoaded: !isFiltered, currentPostIndex: 0 })
+        // [新增] 随机推送逻辑(仅对 For You 标签)
+        let finalPosts = data
+        if (!isFiltered) {
+          const { useUserStore } = await import('./useUserStore')
+          const viewedPostIds = useUserStore.getState().viewedPostIds
+
+          // Fisher-Yates 洗牌算法
+          const shuffleArray = (array: any[]) => {
+            const shuffled = [...array]
+            for (let i = shuffled.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+            }
+            return shuffled
+          }
+
+          // 分离未浏览和已浏览的帖子
+          const unviewedPosts = data.filter(p => !viewedPostIds.includes(p.id))
+          const viewedPosts = data.filter(p => viewedPostIds.includes(p.id))
+
+          // 随机打乱
+          const shuffledUnviewed = shuffleArray(unviewedPosts)
+          const shuffledViewed = shuffleArray(viewedPosts)
+
+          // 优先显示未浏览的,然后补充已浏览的
+          finalPosts = [...shuffledUnviewed, ...shuffledViewed]
+        }
+
+        set({ posts: finalPosts, hasLoaded: !isFiltered, currentPostIndex: 0 })
       }
     } catch (err) {
       console.error('Feed init failed:', err)
@@ -102,14 +130,44 @@ export const useAppStore = create<AppState>((set, get) => ({
           .order('created_at', { ascending: false })
           .limit(15))
       } else {
-        ; ({ data, error } = await supabase.rpc('get_random_posts', {
-          limit_count: 15,
-        }))
+        // [修改] 获取所有帖子,然后在客户端随机排序
+        ; ({ data, error } = await supabase
+          .from('production_posts')
+          .select('*'))
       }
 
       if (error) throw error
       if (data) {
-        set({ posts: data, currentPostIndex: 0 })
+        // [新增] 随机推送逻辑(仅对 For You 标签)
+        let finalPosts = data
+        const isFiltered = !!(filters?.communityId || filters?.followedIds?.length)
+        if (!isFiltered) {
+          const { useUserStore } = await import('./useUserStore')
+          const viewedPostIds = useUserStore.getState().viewedPostIds
+
+          // Fisher-Yates 洗牌算法
+          const shuffleArray = (array: any[]) => {
+            const shuffled = [...array]
+            for (let i = shuffled.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+            }
+            return shuffled
+          }
+
+          // 分离未浏览和已浏览的帖子
+          const unviewedPosts = data.filter(p => !viewedPostIds.includes(p.id))
+          const viewedPosts = data.filter(p => viewedPostIds.includes(p.id))
+
+          // 随机打乱
+          const shuffledUnviewed = shuffleArray(unviewedPosts)
+          const shuffledViewed = shuffleArray(viewedPosts)
+
+          // 优先显示未浏览的,然后补充已浏览的
+          finalPosts = [...shuffledUnviewed, ...shuffledViewed]
+        }
+
+        set({ posts: finalPosts, currentPostIndex: 0 })
       }
     } catch (err) {
       console.error('Feed refresh failed:', err)

@@ -84,7 +84,6 @@ const App: React.FC = () => {
         const { data, error } = await supabase
           .from('production_posts')
           .select('*')
-          .order('created_at', { ascending: false })
 
         if (error) throw error
 
@@ -120,9 +119,16 @@ const App: React.FC = () => {
   }, [])
 
   // [重构] 恢复瞬间导航：移除延迟和遮罩，优先响应速度
-  const navigateTo = (nextPage: Page) => {
-    if (currentPage === nextPage) return
-    performNavigation(nextPage)
+  const navigateTo = (page: Page) => {
+    if (currentPage === page) {
+      // [新增] 如果点击的是当前页面且是 Home,则刷新内容
+      if (page === Page.Home) {
+        const { refreshFeed } = useAppStore.getState()
+        refreshFeed() // 重新随机排序
+      }
+      return
+    }
+    performNavigation(page)
   }
 
   const performNavigation = (nextPage: Page) => {
