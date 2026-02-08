@@ -20,7 +20,7 @@ interface ExploreProps {
 
 /**
  * [新增] 局部图片加载器组件
- * Lixiao 分支核心组件：用于解决图片白块问题
+ * 用于解决图片白块问题，在未加载完成前显示柑橘圆环
  */
 const SafeImage: React.FC<{ src: string; className?: string; alt?: string; layoutId?: string }> = ({ src, className, alt, layoutId }) => {
   const [isLoaded, setIsLoaded] = useState(false)
@@ -80,7 +80,6 @@ const Explore: React.FC<ExploreProps> = ({
     excludedTrendingIds,
     addExcludedTrendingIds,
     resetSearch,
-    initializeExplore,
   } = useExploreStore()
 
   const [isLoading, setIsLoading] = useState(categories.length === 0)
@@ -185,11 +184,26 @@ const Explore: React.FC<ExploreProps> = ({
     const fetchData = async () => {
       if (categories.length > 0) {
         setIsLoading(false)
+        if (trendingPosts.length === 0) fetchTrending(true)
         return
       }
       setIsLoading(true)
-      await initializeExplore()
-      setIsLoading(false)
+      try {
+        const { data: catData } = await supabase
+          .from('categories')
+          .select('*')
+          .order('name_en')
+        if (catData) {
+          setCategories(catData)
+          if (catData.length > 0 && !activeCategoryId)
+            setActiveCategoryId(catData[0].id)
+        }
+        await fetchTrending(true)
+      } catch (error) {
+        console.error('Error fetching explore data:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
     fetchData()
   }, [])
@@ -339,7 +353,13 @@ const Explore: React.FC<ExploreProps> = ({
     }
   }
 
-  const isContentReady = categories.length > 0 && trendingPosts.length > 0
+  if (isLoading)
+    return (
+      <div className="h-full w-full bg-gray-50 dark:bg-[#0B0A09] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+      </div>
+    )
+
   const currentCategoryData = activeCategoryId
     ? categorySubreddits[activeCategoryId] || []
     : []
@@ -361,12 +381,15 @@ const Explore: React.FC<ExploreProps> = ({
         onScroll={handleMainScroll}
         className="relative z-10 h-full flex flex-col overflow-y-auto no-scrollbar scroll-smooth">
 
-        {/* Header - Always Visible */}
+        {/* Header */}
         <header className="sticky top-0 z-50 bg-white/40 dark:bg-black/40 backdrop-blur-xl border-b border-white/60 dark:border-white/5 transition-all">
           <div className="flex items-center px-5 pt-12 pb-4 justify-between relative">
-            {/* LIXIAO: 锁定状态的菜单按钮 */}
+            {/* 锁定状态的菜单按钮 */}
             <div className="h-9 w-9 flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+              {/* 底层 40% 透明度 + 1.2px 模糊的菜单图标 */}
               <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/40 blur-[2px]">menu</span>
+
+              {/* 核心锁定标志：实心橙色小锁 */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="material-symbols-outlined text-[14px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]">lock</span>
               </div>
@@ -377,7 +400,7 @@ const Explore: React.FC<ExploreProps> = ({
             </h1>
 
             <div className="relative">
-              {/* LIXIAO: 锁定状态的铃铛按钮 */}
+              {/* 锁定状态的铃铛按钮 */}
               <div className="h-9 w-9 flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
                 <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/40 blur-[2px]">notifications</span>
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -387,7 +410,7 @@ const Explore: React.FC<ExploreProps> = ({
             </div>
           </div>
 
-          {/* Search Bar - Always Visible */}
+          {/* Search Bar */}
           <div className="px-5 pb-4 relative">
             <div className="flex w-full items-center rounded-2xl h-11 bg-white/60 dark:bg-white/5 border border-white/80 dark:border-white/5 focus-within:border-orange-500/50 focus-within:bg-white dark:focus-within:bg-[#1C1C1E] px-4 gap-3 transition-all shadow-sm">
               {isSearching ? (
@@ -424,7 +447,7 @@ const Explore: React.FC<ExploreProps> = ({
               )}
             </div>
 
-            {/* Search Results (Lixiao: Removed AnimatePresence wrapper for direct conditional rendering & uses SafeImage) */}
+            {/* Search Results */}
             {showResults && searchQuery && (
               <div className="absolute top-[calc(100%-8px)] left-5 right-5 bg-white/90 dark:bg-[#121111]/95 backdrop-blur-2xl border border-white/60 dark:border-white/10 rounded-2xl shadow-2xl z-[100] max-h-[70vh] overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="p-4 space-y-6">
@@ -518,8 +541,7 @@ const Explore: React.FC<ExploreProps> = ({
 
         <div
           className={`relative z-10 transition-all duration-300 ${showResults ? 'blur-md opacity-40 translate-y-2' : 'blur-0 opacity-100'}`}>
-
-          {/* Trending Section */}
+          {/* Trending */}
           <section className="mt-2 text-gray-900 dark:text-gray-100">
             <div className="flex items-center justify-between px-5 pb-3 pt-4">
               <h2 className="text-gray-900 dark:text-white text-xl font-black tracking-tight">
@@ -552,7 +574,6 @@ const Explore: React.FC<ExploreProps> = ({
                     onClick={() => handlePostClick(post)}
                     className="relative w-full aspect-[3/4.2] rounded-[2rem] overflow-hidden glass-card-premium transition-all cursor-pointer group shadow-lg">
                     <div className="absolute inset-0">
-                      {/* LIXIAO: 使用 SafeImage，移除了视频支持，符合内测版特性 */}
                       {post.video_url ? (
                         <video
                           src={post.video_url}
@@ -570,7 +591,18 @@ const Explore: React.FC<ExploreProps> = ({
                           alt=""
                         />
                       )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80" />
                     </div>
+                    {post.image_type === 'generated' && (
+                      <div className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-2.5 py-1 bg-black/30 backdrop-blur-md rounded-full border border-white/10">
+                        <span className="material-symbols-outlined text-[12px] text-orange-500">
+                          auto_awesome
+                        </span>
+                        <span className="text-[9px] font-black text-white/90 uppercase tracking-tighter">
+                          AI Art
+                        </span>
+                      </div>
+                    )}
                     <div className="absolute bottom-5 left-5 right-5 z-20">
                       <p className="text-[14px] font-black text-white leading-snug tracking-tight line-clamp-1 drop-shadow-md">
                         {post.title_en}
@@ -585,7 +617,7 @@ const Explore: React.FC<ExploreProps> = ({
             </div>
           </section>
 
-          {/* Categories Navbar (LIXIAO: Locked & Blurred) */}
+          {/* Categories Navbar */}
           <nav className="sticky top-[156px] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all relative">
             <div className="flex overflow-x-auto no-scrollbar px-5 gap-8 opacity-40 blur-[1px]">
               {categories.map((cat) => (
@@ -609,7 +641,7 @@ const Explore: React.FC<ExploreProps> = ({
             </div>
           </nav>
 
-          {/* Communities List (LIXIAO: Locked, Blurred & Overlay) */}
+          {/* Communities List */}
           <main className="flex-1 p-5 space-y-4 mb-24 min-h-[400px] relative overflow-hidden">
             <div className="space-y-4 blur-[4px] opacity-40 select-none pointer-events-none">
               {isListLoading ? (
@@ -672,11 +704,11 @@ const Explore: React.FC<ExploreProps> = ({
                       </span>
                     </div>
                   </div>
-                ))
-              )}
+                )
+                ))}
             </div>
 
-            {/* LIXIAO: 全局锁定层：深层模糊 + 背景变色 + 内测提示 */}
+            {/* 全局锁定层：深层模糊 + 背景变色 */}
             <div className="absolute inset-0 z-30 backdrop-blur-[15px] bg-white/5 dark:bg-black/10 flex items-center justify-center flex-col gap-4">
               <div className="w-16 h-16 rounded-3xl bg-white/20 dark:bg-white/5 backdrop-blur-2xl flex items-center justify-center border border-white/20 shadow-2xl animate-pulse">
                 <span className="material-symbols-outlined text-orange-500 text-3xl fill-[1] drop-shadow-[0_0_15px_rgba(249,115,22,0.8)]">lock</span>
