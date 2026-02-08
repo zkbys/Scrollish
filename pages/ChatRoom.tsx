@@ -17,13 +17,67 @@ interface ChatRoomProps {
   postImage?: string
 }
 
+type DifficultyLevel =
+  | 'Original'
+  | 'Mixed'
+  | 'IELTS'
+  | 'CET6'
+  | 'CET4'
+  | 'HighSchool'
+  | 'MiddleSchool'
+  | 'PrimarySchool'
+
+// --- Helper Functions ---
+
+// 1. HTML 实体解码
+const decodeHtmlEntity = (str: string) => {
+  if (!str) return ''
+  return str
+    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+}
+
+// 2. 解析 Reddit Giphy 语法
+const parseGiphy = (text: string) => {
+  if (!text) return ''
+  const giphyRegex = /!\[gif\]\(giphy\|([a-zA-Z0-9]+)(?:\|[^)]*)?\)/g
+  return text.replace(giphyRegex, (match, id) => {
+    return `https://media.giphy.com/media/${id}/giphy.gif`
+  })
+}
+
+// 3. 判断是否为图片 URL
+const isImageUrl = (text: string) => {
+  if (!text) return false
+  return (
+    /^https?:\/\/.*\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i.test(text) ||
+    text.includes('media.giphy.com') ||
+    text.includes('i.redd.it') ||
+    text.includes('preview.redd.it')
+  )
+}
+
+// 4. 通用分句器
+const segmentText = (text: string): string[] => {
+  try {
+    // @ts-ignore
+    const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
+    return [...segmenter.segment(text)].map((s: any) => s.segment.trim())
+  } catch (e) {
+    return text.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [text]
+  }
+}
+
 const ChatRoom: React.FC<ChatRoomProps> = ({
   postId,
   focusCommentId,
   onBack,
 }) => {
   // --- Stores ---
-  // [关键修复] 1. 解构出 comments 状态，实现数据订阅
+  // [修复] 补全 deleteLocalComment
   const {
     comments,
     fetchComments,
@@ -33,7 +87,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   } = useCommentStore()
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
 
-  // --- State: Data & Content ---
+  // --- State ---
   const [messages, setMessages] = useState<Comment[]>([])
   const [isInitializing, setIsInitializing] = useState(true)
 
@@ -42,13 +96,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     content_cn: string
     author: string
   } | null>(null)
+
   const [inputText, setInputText] = useState('')
   const [quotedMessage, setQuotedMessage] = useState<Comment | null>(null)
 
-  // --- State: UI & Interaction ---
+  // UI States
   const [viewingWord, setViewingWord] = useState<string | null>(null)
   const [viewingNote, setViewingNote] = useState<CulturalNote[] | null>(null)
   const [showGlobalTranslation, setShowGlobalTranslation] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -58,27 +114,26 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     Record<string, boolean>
   >({})
 
-  // --- State: AI & Difficulty ---
+  // AI & Difficulty
   const [isAiMode, setIsAiMode] = useState(false)
   const [isAiLoading, setIsAiLoading] = useState(false)
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>('Original')
 
-  // --- State: Navigation & Highlight ---
+  // Navigation & Animation
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [returnToId, setReturnToId] = useState<string | null>(null)
   const [flashMessageId, setFlashMessageId] = useState<string | null>(null)
-
-  // --- State: Gestures ---
   const [pullY, setPullY] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
 
-  // --- Refs ---
+  // Refs
   const touchStartRef = useRef(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null)
   const bgPressTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // 1. 全局抑制浏览器默认菜单
+  // 1. 全局抑制右键默认菜单
   useEffect(() => {
     const handleContextMenu = (e: Event) => {
       e.preventDefault()
@@ -92,16 +147,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       })
   }, [])
 
-  // 2. 自动聚焦 Effect
+  // 2. 自动聚焦
   useEffect(() => {
     if (quotedMessage && inputRef.current) {
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 100)
+      setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [quotedMessage])
 
-  // 3. Fetch OP Data & Comments
+  // 3. 数据获取
   useEffect(() => {
     const fetchOp = async () => {
       const { data } = await supabase
@@ -121,8 +174,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     fetchComments(postId)
   }, [postId, fetchComments])
 
-  // 4. [关键修复] 构建消息树
-  // 依赖项加入 comments[postId]，确保数据更新时视图刷新
+  // 4. 构建消息树 (响应式更新)
   useEffect(() => {
     const updateMessages = () => {
       const msgs = buildMessageThread(postId, focusCommentId, opPostData)
@@ -130,19 +182,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
 
     if (isInitializing) {
-      // 首次加载，延迟 150ms 以配合转场动画
       const timer = setTimeout(() => {
         updateMessages()
         setIsInitializing(false)
       }, 150)
       return () => clearTimeout(timer)
     } else {
-      // 后续数据更新（如发送消息），立即刷新
       updateMessages()
     }
-  }, [postId, focusCommentId, opPostData, buildMessageThread, comments[postId]])
+  }, [
+    postId,
+    focusCommentId,
+    opPostData,
+    buildMessageThread,
+    comments?.[postId],
+  ])
 
-  // 5. 新消息自动滚动
+  // 5. 自动滚动
   useEffect(() => {
     const lastMsg = messages[messages.length - 1]
     if (lastMsg && lastMsg.isLocalAi && lastMsg.id !== flashMessageId) {
@@ -161,33 +217,56 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const getInitials = (name: string) =>
     name ? name.substring(0, 2).toUpperCase() : '??'
 
-  // 6. 分句逻辑
+  // --- 分句与内容清洗逻辑 ---
   const getDisplaySentences = (msg: Comment) => {
-    // OP 消息强制分句
-    if (msg.id === 'op-message') {
-      const text = msg.content || ''
-      const rawSentences = text.match(
-        /[^.!?。！？\n]+[.!?。！？\n]+|[^.!?。！？\n]+$/g,
-      ) || [text]
-      return rawSentences.map((en) => ({ en: en.trim(), zh: null }))
+    let segments: { en: string; zh: string | null }[] = []
+    let shouldUseRawSegmentation = false
+    let contentToProcess = ''
+
+    if (difficulty !== 'Original' && msg.enrichment?.difficulty_variants) {
+      const variant = msg.enrichment.difficulty_variants[difficulty]
+      if (variant && variant.content) {
+        contentToProcess = variant.content
+        shouldUseRawSegmentation = true
+      }
     }
 
-    // 普通消息
-    let segments: { en: string; zh: string | null }[] = []
-    if (msg.enrichment?.sentence_segments) {
-      segments = msg.enrichment.sentence_segments
+    if (!contentToProcess && msg.id === 'op-message') {
+      contentToProcess = msg.content || ''
+      const rawSentences = contentToProcess.match(
+        /[^.!?。！？\n]+[.!?。！？\n]+|[^.!?。！？\n]+$/g,
+      ) || [contentToProcess]
+      segments = rawSentences.map((en) => ({ en, zh: null }))
+    } else if (!contentToProcess && msg.enrichment?.sentence_segments) {
+      segments = msg.enrichment.sentence_segments.map((s) => ({
+        en: s.en,
+        zh: s.zh || msg.content_cn,
+      }))
     } else {
-      segments = [{ en: msg.content, zh: msg.content_cn }]
+      contentToProcess = contentToProcess || msg.content || ''
+      shouldUseRawSegmentation = true
     }
-    return segments.filter((s) => s.en && s.en.trim() !== '')
+
+    if (shouldUseRawSegmentation && contentToProcess) {
+      const rawSegments = segmentText(contentToProcess)
+      segments = rawSegments.map((en) => ({ en, zh: msg.content_cn }))
+    }
+
+    return segments
+      .map((s) => ({
+        ...s,
+        en: parseGiphy(decodeHtmlEntity(s.en)),
+      }))
+      .filter((s) => s.en && s.en.trim().length > 0)
   }
+
+  // --- Actions ---
 
   const handleWordClick = async (word: string, context: string) => {
     const cachedResult = await triggerAnalysis(word, context)
     setViewingWord(word)
   }
 
-  // 7. 发送消息逻辑
   const handleSend = async () => {
     if (!inputText.trim()) return
 
@@ -204,7 +283,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         content: questionContent,
         content_cn: '',
         depth: (quotedMessage.depth || 0) + 1,
-        parent_id: quotedMessage.id, // 指向被引用的消息
+        parent_id: quotedMessage.id,
         upvotes: 0,
         created_at: new Date().toISOString(),
         isLocal: true,
@@ -213,9 +292,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         replyText: quotedMessage.content,
       }
 
-      // 更新 Store，会触发 useEffect 立即刷新界面
       addLocalComment(postId, userQuestionMsg)
-
       setQuotedMessage(null)
       setIsAiMode(false)
 
@@ -272,7 +349,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }
 
-  // 8. 跳转逻辑
   const handleJumpTo = (targetId: string | null) => {
     if (!targetId) return
     const el = document.getElementById(`msg-${targetId}`)
@@ -297,10 +373,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }
 
-  // 9. 背景长按 (翻译)
+  // Gestures
   const handleBgStart = (e: React.SyntheticEvent) => {
     if ((e.target as HTMLElement).closest('input') || contextMenu) return
-    // e.nativeEvent.touches 用于区分触摸
     const isTouch = 'touches' in e.nativeEvent
     if (scrollContainerRef.current?.scrollTop === 0) {
       touchStartRef.current = isTouch
@@ -326,21 +401,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       bgPressTimerRef.current = null
     }
     if (!isDragging) return
-
     const isTouch = 'touches' in e.nativeEvent
     const currentY = isTouch
       ? (e.nativeEvent as TouchEvent).touches[0].clientY
       : (e as any).clientY
-
     const diff = currentY - touchStartRef.current
     if (diff > 0 && scrollContainerRef.current?.scrollTop === 0) {
       setPullY(Math.pow(diff, 0.8))
     }
   }
-
-  // 10. [关键修复] 通用交互处理 (支持鼠标和触摸)
   const handleStartPress = (e: React.SyntheticEvent, msg: Comment) => {
-    // e.stopPropagation() // 如有需要可开启
     const clientX =
       'touches' in e.nativeEvent
         ? (e.nativeEvent as TouchEvent).touches[0].clientX
@@ -349,13 +419,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       'touches' in e.nativeEvent
         ? (e.nativeEvent as TouchEvent).touches[0].clientY
         : (e as any).clientY
-
     pressTimerRef.current = setTimeout(() => {
       if (navigator.vibrate) navigator.vibrate(50)
       setContextMenu({ x: clientX, y: clientY, msg })
     }, 500)
   }
-
   const handleEndPress = () => {
     if (pressTimerRef.current) {
       clearTimeout(pressTimerRef.current)
@@ -363,7 +431,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }
 
-  // 11. 菜单动作
+  // Menu Actions
   const toggleSingleTranslation = (msgId: string) => {
     setExpandedTranslations((prev) => ({ ...prev, [msgId]: !prev[msgId] }))
     setContextMenu(null)
@@ -389,7 +457,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         transform: `translateY(${pullY}px)`,
         borderRadius: pullY > 0 ? '40px' : '0px',
       }}
-      // 背景交互
       onTouchStart={handleBgStart}
       onTouchMove={handleBgMove}
       onTouchEnd={handleBgEnd}
@@ -408,7 +475,66 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         />
       )}
 
-      {/* Cultural Note Overlay */}
+      {/* Settings Overlay (Difficulty) */}
+      <AnimatePresence>
+        {showSettings && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 z-[90] backdrop-blur-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowSettings(false)
+              }}
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              className="absolute top-0 bottom-0 right-0 w-64 bg-white dark:bg-[#1C1C1E] border-l border-gray-200 dark:border-white/10 z-[95] p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-gray-900 dark:text-white font-bold mb-6 flex items-center gap-2">
+                <span className="material-symbols-outlined text-orange-500">
+                  psychology
+                </span>
+                Difficulty
+              </h2>
+              <div className="space-y-2 max-h-[80vh] overflow-y-auto">
+                {(
+                  [
+                    'Original',
+                    'Mixed',
+                    'IELTS',
+                    'CET6',
+                    'CET4',
+                    'HighSchool',
+                    'PrimarySchool',
+                  ] as DifficultyLevel[]
+                ).map((lvl) => (
+                  <button
+                    key={lvl}
+                    onClick={() => setDifficulty(lvl)}
+                    className={`w-full p-3 rounded-xl border text-left flex justify-between items-center ${difficulty === lvl ? 'bg-orange-500/20 border-orange-500 text-orange-600 dark:text-orange-500' : 'bg-background-light dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-700 dark:text-white/60'}`}>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold">
+                        {lvl === 'Mixed' ? 'Dopamine Mix ⚡️' : lvl}
+                      </span>
+                    </div>
+                    {difficulty === lvl && (
+                      <span className="material-symbols-outlined text-sm">
+                        check
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {viewingNote && (
           <motion.div
@@ -563,13 +689,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             </>
           )}
         </div>
-        <div className="w-10" />
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowSettings(true)
+          }}
+          className="w-10 h-10 flex items-center justify-center text-gray-500 dark:text-white/60">
+          <span className="material-symbols-outlined">tune</span>
+        </button>
       </div>
 
       <main
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-background-light dark:bg-[#0B0A09] transition-colors relative">
-        {/* Loading Skeleton */}
         <AnimatePresence>
           {isInitializing && (
             <motion.div
@@ -589,7 +721,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Real Messages */}
         {!isInitializing &&
           messages.map((msg, index) => {
             const isOP = msg.id === 'op-message'
@@ -656,13 +787,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   )}
 
                   {sentences.map((s, i) => {
-                    const isImage = s.en.match(
-                      /^https?:\/\/.*\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i,
-                    )
+                    const isImage = isImageUrl(s.en)
+                    const isQuote = s.en.trim().startsWith('>')
+
                     return (
                       <div
                         key={i}
-                        // [修复] 绑定通用 Press 事件，支持鼠标和触摸
                         onTouchStart={(e) => handleStartPress(e, msg)}
                         onTouchEnd={handleEndPress}
                         onMouseDown={(e) => handleStartPress(e, msg)}
@@ -674,7 +804,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                              ${isRoot || isOP ? 'bg-gray-100 dark:bg-white/10 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white' : 'bg-white dark:bg-[#1A1A1A] border-gray-200 dark:border-white/5 text-gray-800 dark:text-gray-200'}
                              ${hasCulturalNote ? 'shadow-[0_0_15px_rgba(234,179,8,0.2)] border-yellow-500/40 bg-gradient-to-br from-yellow-50 to-white dark:from-[#1A1A1A] dark:to-yellow-900/20' : ''}
                            `}>
-                        {/* 显式引用按钮 */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -703,8 +832,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                           <img
                             src={s.en}
                             alt=""
-                            className="rounded-lg max-w-full h-auto"
+                            className="rounded-lg max-w-full h-auto min-h-[50px] bg-gray-100 dark:bg-white/5"
+                            onError={(e) => {
+                              ;(e.target as HTMLImageElement).style.display =
+                                'none'
+                            }}
                           />
+                        ) : isQuote ? (
+                          <div className="border-l-4 border-gray-300 dark:border-white/20 pl-3 text-gray-500 dark:text-white/50 italic">
+                            <InteractiveText
+                              text={s.en.substring(1).trim()}
+                              contextSentence={s.en}
+                              externalOnClick={(w) => handleWordClick(w, s.en)}
+                            />
+                          </div>
                         ) : (
                           <InteractiveText
                             text={s.en || ''}
