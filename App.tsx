@@ -14,25 +14,38 @@ import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
 import BottomNav from './components/BottomNav'
 import { useUserStore } from './store/useUserStore'
+import { useAppStore } from './store/useAppStore'
 import { useExploreStore } from './store/useExploreStore'
+import { PAGE_VARIANTS } from './motion'
+import { preloadImage, preloadImages } from './utils/media'
+
+// [核心重构] 定义页面顺序，用于决定滑动方向
+const getPageRank = (page: Page) => {
+  switch (page) {
+    case Page.Login: return -1
+    case Page.Home: return 0
+    case Page.Explore: return 1
+    case Page.Study: return 2
+    case Page.Profile: return 3
+    case Page.CommunityDetail: return 4
+    default: return 0
+  }
+}
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
   const [lastPage, setLastPage] = useState<Page>(Page.Home)
   const [originPage, setOriginPage] = useState<Page>(Page.Home)
+  const [transitionDirection, setTransitionDirection] = useState(1)
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
   const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
-  const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(
-    null,
-  )
-  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(
-    null,
-  )
+  const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null)
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [isCommunityFlow, setIsCommunityFlow] = useState(false)
 
-  // [修改] 引入 _hasHydrated 状态
+  // 状态管理
   const {
     currentUser,
     profile,
@@ -49,9 +62,8 @@ const App: React.FC = () => {
     initializeExplore()
   }, [])
 
-  // [修改] 路由守卫：增加对 _hasHydrated 的判断
+  // [路由守卫优化] 增加对 _hasHydrated 的判断，防止从本地存储加载完成前误跳 Login
   useEffect(() => {
-    // 只有当本地存储加载完毕 (_hasHydrated) 且 认证检查完毕 (!isAuthLoading) 后才执行跳转逻辑
     if (_hasHydrated && !isAuthLoading) {
       if (!currentUser && currentPage !== Page.Login) {
         setCurrentPage(Page.Login)
@@ -60,7 +72,6 @@ const App: React.FC = () => {
         !profile?.learning_reason &&
         currentPage !== Page.Onboarding
       ) {
-        // 由于 useUserStore 做了乐观更新，这里的 profile 应该是最新的，不会导致死循环
         setCurrentPage(Page.Onboarding)
       }
     }
@@ -103,12 +114,19 @@ const App: React.FC = () => {
         setLoading(false)
       }
     }
-
     fetchAllPosts()
   }, [])
 
+  // [性能重构] 恢复瞬间导航：移除延迟和遮罩，提升 UI 响应反馈
   const navigateTo = (nextPage: Page) => {
+    if (currentPage === nextPage) return
+    
+    const oldRank = getPageRank(currentPage)
+    const newRank = getPageRank(nextPage)
+    
+    setTransitionDirection(newRank >= oldRank ? 1 : -1)
     setLastPage(currentPage)
+
     const mainTabPages = [Page.Home, Page.Explore, Page.Study, Page.Profile]
     if (mainTabPages.includes(nextPage)) {
       setOriginPage(nextPage)
@@ -146,6 +164,7 @@ const App: React.FC = () => {
             <FeedItem
               post={activePost}
               isExiting={false}
+              isActive={true}
               onOpenDiscussion={() => navigateTo(Page.TopicHub)}
               onBack={() => navigateTo(originPage)}
             />
@@ -246,28 +265,7 @@ const App: React.FC = () => {
     currentPage === Page.Onboarding ||
     currentPage === Page.Login
 
-  const getPageRank = (page: Page) => {
-    switch (page) {
-      case Page.Home:
-        return 0
-      case Page.Explore:
-        return 1
-      case Page.Study:
-        return 2
-      case Page.Profile:
-        return 3
-      case Page.CommunityDetail:
-        return 4
-      case Page.Login:
-        return -1
-      default:
-        return 0
-    }
-  }
-
-  const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
-
-  // [核心修复] 如果 Store 还没从 LocalStorage 加载完，显示 Loading，防止跳错页面
+  // [核心修复] 如果持久化存储还没加载完，显示 Loading，防止权限检查异常
   if (!_hasHydrated || isAuthLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0B0A09]">
@@ -280,33 +278,15 @@ const App: React.FC = () => {
     <div className="flex justify-center bg-black min-h-screen">
       <div className="relative w-full max-w-md h-screen overflow-hidden bg-[#0B0A09] shadow-2xl flex flex-col">
         <main className="flex-1 overflow-hidden relative">
-          <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+          <AnimatePresence mode="wait">
             <motion.div
               key={currentPage}
-              custom={direction}
-              initial={
-                currentPage === Page.TopicHub || lastPage === Page.TopicHub
-                  ? { opacity: 0 }
-                  : { opacity: 0, x: direction * 50, scale: 0.98 }
-              }
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={
-                (currentPage === Page.Home && lastPage === Page.TopicHub) ||
-                currentPage === Page.TopicHub
-                  ? { opacity: 0 }
-                  : currentPage === Page.CommunityDetail
-                    ? { opacity: 0, transition: { duration: 0 } }
-                    : { opacity: 0, x: direction * -50, scale: 0.98 }
-              }
-              transition={{
-                duration:
-                  (currentPage === Page.Home && lastPage === Page.TopicHub) ||
-                  currentPage === Page.TopicHub
-                    ? 0.2
-                    : 0.4,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-              className="absolute inset-0 h-full w-full will-change-transform">
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="absolute inset-0 h-full w-full"
+            >
               {renderPage()}
             </motion.div>
           </AnimatePresence>

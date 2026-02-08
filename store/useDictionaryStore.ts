@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { supabase } from '../supabase'
 
-const SILICONFLOW_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'
 const AI_MODEL = 'Qwen/Qwen2.5-7B-Instruct'
 
 export interface DictionaryResult {
@@ -112,38 +111,34 @@ export const useDictionaryStore = create<DictionaryState>()(
         set({ analyzingWords: [...analyzingWords, normalizedWord] })
 
         try {
-          const apiKey = import.meta.env.VITE_SILICONFLOW_API_KEY
-          if (!apiKey) throw new Error('No API Key')
-
-          const response = await fetch(SILICONFLOW_API_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
+          const { data, error } = await supabase.functions.invoke('dictionary', {
+            body: {
+              word,
+              context,
+              model: AI_MODEL, // 可选，后端有默认值
             },
-            body: JSON.stringify({
-              model: AI_MODEL,
-              messages: [
-                {
-                  role: 'system',
-                  content: `You are a linguistic expert API. Output strictly valid JSON.`,
-                },
-                {
-                  role: 'user',
-                  content: `Word: "${word}"\nContext: "${context}"\nRespond with JSON: { "ipa": "", "context_meaning_cn": "", "context_meaning_en": "", "definition_cn": "", "definition_en": "", "roots": "" }`,
-                },
-              ],
-              stream: false,
-              temperature: 0.3,
-            }),
           })
 
-          const data = await response.json()
-          const jsonStr = (data.choices?.[0]?.message?.content || '{}')
-            .replace(/```json|```/g, '')
-            .trim()
-          let parsedResult = JSON.parse(jsonStr)
-          parsedResult.word = normalizedWord
+          if (error) throw error
+
+          const content = data.choices?.[0]?.message?.content || '{}'
+          const jsonStr = content.replace(/```json|```/g, '').trim()
+
+          let parsedResult: DictionaryResult
+          try {
+            parsedResult = JSON.parse(jsonStr)
+          } catch (e) {
+            parsedResult = {
+              word,
+              ipa: '',
+              roots: '',
+              context_meaning_cn: '解析失败，请重试',
+              context_meaning_en: 'Parse failed',
+              definition_cn: '',
+              definition_en: '',
+            }
+          }
+          parsedResult.word = word
 
           set((state) => ({
             cachedDefinitions: {

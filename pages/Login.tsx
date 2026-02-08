@@ -4,6 +4,8 @@ import { Page } from '../types';
 
 import { supabase } from '../supabase';
 import { IMAGES } from '../constants';
+import { SPRING_GENTLE, BUTTON_SPRING } from '../motion';
+import { preloadImages } from '../utils/media';
 
 interface LoginProps {
     onNavigate: (page: Page) => void;
@@ -15,9 +17,13 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
     const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [inviteCode, setInviteCode] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showSupportQR, setShowSupportQR] = useState(false);
+    const [isPreloading, setIsPreloading] = useState(false);
+
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -35,10 +41,42 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 if (authError) throw authError;
 
                 if (user) {
+                    // --- [新增] 资源预加载机制 ---
+                    setIsPreloading(true);
+                    try {
+                        await preloadImages([
+                            IMAGES.london,
+                            IMAGES.avatar1,
+                            IMAGES.grammar,
+                            '/哆吧1.png'
+                        ]);
+                    } catch (e) {
+                        console.warn('Preloading failed, proceeding anyway', e);
+                    }
                     onLoginSuccess(user);
                 }
             } else {
-                // 使用官方 Supabase Auth 注册
+                // 邀请码验证逻辑 (数据库动态校验)
+                if (!inviteCode) {
+                    throw new Error('请输入内测邀请码');
+                }
+
+                // 1. 检查邀请码是否存在
+                const { data: codeData, error: checkError } = await supabase
+                    .from('invite_codes')
+                    .select('*')
+                    .eq('code', inviteCode.toUpperCase().trim())
+                    .single();
+
+                if (checkError || !codeData) {
+                    throw new Error('内测邀请码不存在，请联系管理员获取');
+                }
+
+                if (codeData.used) {
+                    throw new Error('该邀请码已被他人使用');
+                }
+
+                // 2. 使用官方 Supabase Auth 注册
                 const { data: { user }, error: authError } = await supabase.auth.signUp({
                     email,
                     password,
@@ -52,24 +90,66 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 if (authError) throw authError;
 
                 if (user) {
+                    // --- [新增] 资源预加载机制 ---
+                    setIsPreloading(true);
+                    try {
+                        // 预加载 Onboarding 和首页核心资源
+                        await preloadImages([
+                            IMAGES.london,
+                            IMAGES.avatar1,
+                            IMAGES.grammar,
+                            '/哆吧1.png'
+                        ]);
+                    } catch (e) {
+                        console.warn('Preloading failed, proceeding anyway', e);
+                    }
+
                     onLoginSuccess(user);
                     // 提示用户：如果开启了邮箱验证，可能需要去邮箱点击确认
                     if (!user.identities || user.identities.length === 0) {
-                        setError('Account exists but needs confirmation. Please check your email.');
+                        setError('账号已创建，但需要检查您的邮箱点击确认链接。');
                     }
                 } else {
-                    setError('Please check your email for confirmation');
+                    setError('请检查您的邮箱以完成验证');
                 }
             }
         } catch (err: any) {
-            setError(err.message || 'An error occurred during authentication');
+            console.error('Auth error:', err);
+            setError(err.message || '登录过程中发生错误');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="h-full w-full bg-[#0B0A09] flex flex-col items-center justify-center p-6 overflow-hidden relative font-sans">
+        <div className="h-screen h-[100dvh] w-full bg-[#0B0A09] flex flex-col items-center justify-center p-6 overflow-hidden relative font-sans">
+            {/* --- Preloading Overlay --- */}
+            <AnimatePresence>
+                {isPreloading && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-[#0B0A09] flex flex-col items-center justify-center space-y-8"
+                    >
+                        <div className="relative">
+                            <motion.div
+                                animate={{ rotate: 360 }}
+                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                className="w-24 h-24 rounded-full border-t-2 border-primary border-r-2 border-primary/20"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-primary font-black text-xs tracking-tighter italic">LOAD</span>
+                            </div>
+                        </div>
+                        <div className="text-center space-y-2">
+                            <h2 className="text-white font-black text-xl tracking-tighter italic uppercase">Please wait, loading...</h2>
+                            <p className="text-white/30 text-[10px] font-bold uppercase tracking-[0.3em] animate-pulse">正在加载请稍后...</p>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* --- Premium Background Layer --- */}
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/20 blur-[120px] rounded-full animate-pulse-slow"></div>
@@ -78,21 +158,21 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
             </div>
 
             <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={SPRING_GENTLE}
                 className="w-full max-w-sm z-10"
             >
                 {/* Brand Header */}
-                <div className="mb-10 text-center">
+                <div className="mb-6 text-center">
                     <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="inline-flex items-center justify-center w-16 h-16 bg-transparent rounded-[1.25rem] mb-4 shadow-xl border border-white/5 overflow-hidden"
+                        {...BUTTON_SPRING}
+                        className="inline-flex items-center justify-center w-22 h-22 bg-transparent rounded-3xl mb-4 shadow-2xl border border-white/10 overflow-hidden"
                     >
                         <img
-                            src="/汽橙.jpg"
+                            src="/哆吧1.png"
                             alt="Logo"
-                            className="w-full h-full object-cover scale-150"
+                            className="w-full h-full object-cover"
                         />
                     </motion.div>
                     <h1 className="text-3xl font-black text-white mb-1 tracking-tighter italic">
@@ -104,7 +184,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 </div>
 
                 {/* Main Glass Card */}
-                <div className="bg-white/[0.03] backdrop-blur-2xl p-7 pt-9 rounded-[2.5rem] border border-white/[0.08] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                <div className="bg-white/[0.03] backdrop-blur-2xl p-6 pt-8 rounded-[2.5rem] border border-white/[0.08] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary/40 to-transparent"></div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
@@ -140,6 +220,27 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             />
                         </div>
 
+                        {!isLogin && (
+                            <div key="invite-code">
+                                <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
+                                    Invitation Code
+                                </label>
+                                <div className="relative group">
+                                    <input
+                                        type="text"
+                                        required
+                                        value={inviteCode}
+                                        onChange={(e) => setInviteCode(e.target.value)}
+                                        className="w-full h-15 px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 pr-14 shadow-inner"
+                                        placeholder="Enter alpha code"
+                                    />
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40 p-2">
+                                        <span className="material-symbols-outlined text-[20px]">vpn_key</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div>
                             <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
                                 Password
@@ -165,10 +266,11 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             </div>
                         </div>
 
-                        <button
+                        <motion.button
+                            {...BUTTON_SPRING}
                             type="submit"
                             disabled={loading}
-                            className="w-full h-16 bg-primary text-white font-black rounded-[1.25rem] hover:brightness-110 active:scale-[0.97] shadow-[0_10px_30px_-5px_rgba(255,107,0,0.4)] mt-4 flex items-center justify-center gap-3 group overflow-hidden relative"
+                            className="w-full h-16 bg-primary text-white font-black rounded-[1.25rem] shadow-[0_10px_30px_-5px_rgba(255,107,0,0.4)] mt-4 flex items-center justify-center gap-3 group overflow-hidden relative"
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/15 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                             {loading ? (
@@ -183,46 +285,36 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                     </span>
                                 </>
                             )}
-                        </button>
+                        </motion.button>
                     </form>
 
-                    {/* Social Login Separator */}
-                    <div className="relative py-8">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-white/[0.05]"></div>
-                        </div>
-                        <div className="relative flex justify-center text-[9px] font-black uppercase text-white/20 tracking-[0.3em]">
-                            <span className="bg-[#121214] px-4 rounded-full">Secure Verification</span>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <button className="h-14 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.05] rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 group">
-                            <span className="material-symbols-outlined text-[20px] text-[#07C160]/70 group-hover:text-[#07C160]">chat</span>
-                            <span className="text-[10px] font-black text-white/30 group-hover:text-white/60 uppercase tracking-wider">WeChat</span>
-                        </button>
-                        <button className="h-14 border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.05] rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 group">
-                            <span className="material-symbols-outlined text-[20px] text-[#12B7F5]/70 group-hover:text-[#12B7F5]">chat_bubble</span>
-                            <span className="text-[10px] font-black text-white/30 group-hover:text-white/60 uppercase tracking-wider">Connect QQ</span>
+                    {/* Support Button instead of social login */}
+                    <div className="mt-8 flex flex-col items-center">
+                        <div className="w-full border-t border-white/[0.05] mb-6"></div>
+                        <button
+                            type="button"
+                            onClick={() => setShowSupportQR(true)}
+                            className="flex items-center gap-2 group transition-all"
+                        >
+                            <span className="material-symbols-outlined text-[18px] text-primary group-hover:scale-110 transition-transform">contact_support</span>
+                            <span className="text-[11px] font-bold text-white/40 group-hover:text-white/70 uppercase tracking-widest">联系客服获取邀请码</span>
                         </button>
                     </div>
                 </div>
 
                 {/* Aesthetic Footer */}
-                <div className="mt-10 text-center">
-                    <p className="text-xs text-white/30 font-bold uppercase tracking-widest">
-                        {isLogin ? "New Subect?" : "Known Participant?"}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setIsLogin(!isLogin);
-                                setError(null);
-                            }}
-                            className="text-primary font-black hover:text-orange-400 hover:underline underline-offset-8 ml-2"
-                        >
-                            {isLogin ? "INITIALIZE" : "IDENTIFY"}
-                        </button>
-                    </p>
+                <div className="mt-8 text-center text-xs text-white/30 font-bold uppercase tracking-widest">
+                    <span>{isLogin ? "New Subect?" : "Known Participant?"}</span>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setIsLogin(!isLogin);
+                            setError(null);
+                        }}
+                        className="text-primary font-black hover:text-orange-400 hover:underline underline-offset-8 ml-2"
+                    >
+                        {isLogin ? "INITIALIZE" : "IDENTIFY"}
+                    </button>
                 </div>
 
                 {/* Error Banner */}
@@ -243,11 +335,76 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 </AnimatePresence>
             </motion.div>
 
+            {/* --- CUSTOMER SERVICE QR MODAL --- */}
+            <AnimatePresence>
+                {showSupportQR && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowSupportQR(false)}
+                        className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-[280px] bg-white/[0.03] border border-white/10 rounded-[3rem] p-8 flex flex-col items-center gap-6 relative"
+                        >
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary/40 to-transparent"></div>
+
+                            <div className="text-center">
+                                <h3 className="text-white font-black text-lg tracking-tight mb-1">联系客服</h3>
+                                <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest">获取内测邀请码</p>
+                            </div>
+
+                            <div className="w-full aspect-square bg-white p-2 rounded-3xl shadow-[0_20px_40px_rgba(0,0,0,0.3)] relative group">
+                                <img
+                                    src="/客服.png"
+                                    alt="QR Code"
+                                    style={{ WebkitTouchCallout: 'default' } as any}
+                                    className="w-full h-full object-contain relative z-10"
+                                />
+                            </div>
+
+                            <p className="text-[10px] text-white/30 text-center font-bold uppercase tracking-widest leading-relaxed">
+                                长按上方图片保存<br />或点击下方按钮下载
+                            </p>
+
+                            <div className="flex gap-4 w-full">
+                                <button
+                                    onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = '/客服.png';
+                                        link.download = 'Scrollish_Support_QR.png';
+                                        link.click();
+                                    }}
+                                    className="flex-1 h-14 rounded-2xl bg-primary text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-primary/20"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">download</span>
+                                    保存到相册
+                                </button>
+
+                                <button
+                                    onClick={() => setShowSupportQR(false)}
+                                    className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white active:scale-95 transition-all"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">close</span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <style>{`
                 .drop-shadow-glow {
                     filter: drop-shadow(0 0 10px rgba(255, 107, 0, 0.4));
                 }
                 .h-15 { height: 3.75rem; }
+                .w-22 { width: 5.5rem; }
+                .h-22 { height: 5.5rem; }
             `}</style>
         </div>
     );

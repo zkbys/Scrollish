@@ -8,11 +8,12 @@ interface InteractiveTextProps {
   externalOnClick?: (word: string) => void
 }
 
-const InteractiveText: React.FC<InteractiveTextProps> = ({
+const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> = ({
   text,
   contextSentence = '',
   className = '',
   externalOnClick,
+  disabled = false,
 }) => {
   const { triggerAnalysis, isAnalyzing, cachedDefinitions, getInteraction } =
     useDictionaryStore()
@@ -32,6 +33,7 @@ const InteractiveText: React.FC<InteractiveTextProps> = ({
   }, [text])
 
   const handleWordClick = (word: string) => {
+    if (disabled) return
     if (externalOnClick) {
       externalOnClick(word)
     } else {
@@ -45,7 +47,7 @@ const InteractiveText: React.FC<InteractiveTextProps> = ({
     if (count <= 1) return 'decoration-green-400/50' // 第一次查：浅绿
     if (count <= 3) return 'decoration-green-500' // 2-3次：标准绿
     if (count <= 5) return 'decoration-green-600 decoration-[3px]' // 4-5次：深绿且加粗
-    return 'decoration-red-500 decoration-[3px]' // >5次：变成红色（警示：这个词你老记不住！）
+    return 'decoration-red-500 decoration-[3px]' // >5次：红色警示
   }
 
   return (
@@ -67,21 +69,22 @@ const InteractiveText: React.FC<InteractiveTextProps> = ({
             <span
               key={i}
               onClick={(e) => {
+                if (disabled) return
                 e.stopPropagation()
                 handleWordClick(word)
               }}
               className={`
-                relative inline-block cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5
-                hover:bg-white/10 active:scale-95
-                ${isLoading ? 'animate-pulse text-orange-400/80' : ''} 
-                ${isReady ? `underline underline-offset-4 decoration-wavy ${highlightClass}` : ''}
+                relative inline-block 
+                ${disabled ? '' : 'cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5 hover:bg-white/10 active:scale-95'}
+                ${!disabled && isLoading ? 'animate-pulse text-orange-400/80' : ''} 
+                ${!disabled && isReady ? `underline underline-offset-4 decoration-wavy ${highlightClass}` : ''}
               `}>
               {word}
               {/* Loading Line */}
-              {isLoading && (
+              {!disabled && isLoading && (
                 <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-orange-500/50 animate-progress-line" />
               )}
-              {/* 收藏标记：如果收藏了，在右上角显示一个小红点或星星 */}
+              {/* 收藏标记 */}
               {interaction.isSaved && (
                 <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-orange-500 rounded-full shadow-sm" />
               )}

@@ -12,6 +12,9 @@ import { useAnalyticsStore } from '../store/useAnalyticsStore'
 import { supabase } from '../supabase'
 import { Page, Post } from '../types'
 import { IMAGES } from '../constants'
+import { STAGGER_CONTAINER, STAGGER_ITEM, BUTTON_SPRING, SPRING_GENTLE } from '../motion'
+import JellyLikeButton from '../components/JellyLikeButton'
+import JellyCommentButton from '../components/JellyCommentButton'
 
 interface HomeProps {
   onNavigate: (page: Page) => void
@@ -97,6 +100,9 @@ const Home: React.FC<HomeProps> = ({
 
   useEffect(() => {
     initFeed(getFilters())
+    // 切换 Tab 时重置索引并滚动回顶端，解决首个帖子 UI 不显示的问题
+    setCurrentPostIndex(0)
+    scrollContainerRef.current?.scrollTo({ top: 0 })
   }, [activeTab, filteredCommunityId, followedCommunities.length])
 
   useLayoutEffect(() => {
@@ -274,38 +280,60 @@ const Home: React.FC<HomeProps> = ({
         </div>
       )}
 
-      {/* Header: 沉浸式遮罩 */}
-      <header className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-5 pt-12 pb-8 bg-gradient-to-b from-black/60 via-black/20 to-transparent pointer-events-none transition-all duration-300">
-        <button className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
-          <span className="material-symbols-outlined text-[20px]">menu</span>
-        </button>
+      {/* Header: 柑橘元气风重绘 */}
+      <header className="absolute top-0 left-0 right-0 z-50 flex flex-col items-center px-5 pt-12 pb-10 bg-gradient-to-b from-black/80 via-black/20 to-transparent pointer-events-none transition-all duration-500">
+        <div className="w-full flex items-center justify-between pointer-events-auto">
+          <button disabled className="h-11 w-11 flex items-center justify-center bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+            {/* 增加模糊程度的菜单残影 */}
+            <span className="material-symbols-outlined text-[22px] text-white/20 blur-[1.2px]">menu</span>
 
-        <div className="flex gap-6 pointer-events-auto items-center">
-          <button
-            onClick={() => setActiveTab('following')}
-            className={`text-[16px] font-bold transition-colors drop-shadow-md ${activeTab === 'following' ? 'text-white' : 'text-white/60'}`}>
-            Following
+            {/* 顶层叠加的实心锁定图标 */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[18px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">lock</span>
+            </div>
           </button>
-          <div className="h-4 w-[1px] bg-white/20"></div>
+
+          {/* Tab 切换器：柑橘气泡 (回归简洁：无滑块) */}
+          <div className="flex p-1.5 bg-black/40 backdrop-blur-2xl rounded-[2.5rem] border-2 border-white/5 shadow-2xl relative pointer-events-auto">
+            <button
+              onClick={() => setActiveTab('following')}
+              className={`px-6 py-2.5 rounded-[2rem] text-[14px] font-black transition-all duration-300 ${activeTab === 'following' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
+              Following
+            </button>
+            <button
+              onClick={handleForYouClick}
+              className={`px-6 py-2.5 rounded-[2rem] text-[14px] font-black transition-all duration-300 ${activeTab === 'foryou' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
+              For You
+            </button>
+          </div>
+
           <button
-            onClick={handleForYouClick}
-            className={`text-[16px] font-bold transition-colors relative drop-shadow-md flex items-center gap-1 ${activeTab === 'foryou' ? 'text-white' : 'text-white/60'}`}>
-            For You
-            {isLoading && activeTab === 'foryou' && (
-              <span className="w-2.5 h-2.5 border-[1.5px] border-white/30 border-t-white rounded-full animate-spin absolute -right-4 top-1.5"></span>
-            )}
-            {activeTab === 'foryou' && !isLoading && (
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-5 h-[3px] bg-primary rounded-full shadow-[0_0_10px_rgba(var(--primary-rgb),0.8)]" />
-            )}
+            onClick={() => onNavigate(Page.Explore)}
+            className="h-11 w-11 flex items-center justify-center bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
+            <span className="material-symbols-outlined text-[22px] text-white/90 group-hover:text-orange-400">search</span>
           </button>
         </div>
-
-        <button
-          onClick={() => onNavigate(Page.Explore)}
-          className="pointer-events-auto text-white/90 h-9 w-9 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full active:scale-90 transition-transform border border-white/5">
-          <span className="material-symbols-outlined text-[20px]">search</span>
-        </button>
       </header>
+
+      {/* 中心加载图标：极简柑橘风 */}
+      <AnimatePresence>
+        {isLoading && !isLoadingMore && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none">
+            <div className="relative w-10 h-10">
+              <div className="absolute inset-0 border-2 border-orange-400/20 rounded-full" />
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 border-2 border-orange-400 border-t-transparent rounded-full"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div
         className="absolute top-12 left-0 right-0 z-40 flex justify-center transition-transform duration-300 pointer-events-none"
@@ -340,6 +368,7 @@ const Home: React.FC<HomeProps> = ({
                 onViewImage={(url) => setPreviewImage(url)}
                 isExiting={false}
                 isActive={index === currentPostIndex}
+                isReady={isReady}
               />
             </div>
           ))}
@@ -372,14 +401,16 @@ export const FeedItem: React.FC<{
   onViewImage?: (url: string) => void // [新增]
   isExiting: boolean
   onBack?: () => void
-  isActive?: boolean
+  isActive: boolean
+  isReady?: boolean
 }> = ({
   post,
   onOpenDiscussion,
   onViewImage,
   isExiting,
   onBack,
-  isActive = true,
+  isActive,
+  isReady = true,
 }) => {
   const {
     toggleLike,
@@ -425,7 +456,6 @@ export const FeedItem: React.FC<{
             videoRef.current!.pause()
           }
         } catch (e) {
-          console.log('Playback prevented', e)
         }
       }
       attemptPlay()
@@ -440,12 +470,12 @@ export const FeedItem: React.FC<{
     setLikes((prev) => (isLiked ? Math.max(0, prev - 1) : prev + 1))
 
     try {
-      const newCount = isLiked ? likes - 1 : likes + 1
+      const newCount = isLiked ? (initialLikes > 0 ? initialLikes - 1 : 0) : initialLikes + 1
       await supabase
         .from('production_posts')
         .update({ upvotes: newCount })
         .eq('id', post.id)
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const handleDiscussionClick = () => {
@@ -462,10 +492,19 @@ export const FeedItem: React.FC<{
       })
   }
 
+  // “柑橘元气风”动画配置 (参考 test.tsx)
+  const CITRUS_SQUISH = {
+    type: 'spring',
+    stiffness: 600,
+    damping: 15,
+    mass: 1
+  }
+
+  const DROPLET_SHAPE = "50% 50% 50% 50% / 60% 60% 43% 43%"
+
   return (
     <div className="h-full w-full bg-[#0B0A09] relative">
       <motion.div
-        layoutId={`post-card-${post.id}`}
         transition={{ type: 'spring', stiffness: 70, damping: 20 }}
         className="relative h-full w-full overflow-hidden bg-[#121212] z-[100]">
         {onBack && !isExiting && (
@@ -490,7 +529,7 @@ export const FeedItem: React.FC<{
                   ? videoRef.current.play()
                   : videoRef.current.pause()
               } else if (!hasVideo && onViewImage) {
-                // [新增] 如果是图片且非退出状态，触发预览
+                // [融合 Main 分支逻辑] 如果是图片且非退出状态，触发预览
                 onViewImage(imageUrl)
               }
             }
@@ -500,6 +539,7 @@ export const FeedItem: React.FC<{
               ref={videoRef}
               src={post.videoUrl || post.video_url}
               className="h-full w-full object-cover"
+              style={{ objectPosition: 'center 35%' }}
               loop
               muted
               playsInline
@@ -513,9 +553,9 @@ export const FeedItem: React.FC<{
               />
               <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
               <motion.img
-                layoutId={`post-image-${post.id}`}
                 src={imageUrl}
-                className="absolute inset-0 w-full h-full object-contain object-center z-10 drop-shadow-2xl"
+                className="absolute inset-0 w-full h-full object-contain z-10 drop-shadow-2xl"
+                style={{ objectPosition: 'center 35%' }}
                 transition={{ type: 'spring', stiffness: 70, damping: 20 }}
               />
             </>
@@ -531,87 +571,88 @@ export const FeedItem: React.FC<{
           onDoubleClick={handleLike}
         />
 
-        <div
-          className={`absolute inset-0 z-40 pointer-events-none transition-all duration-200 ease-out ${isExiting ? 'opacity-0 translate-y-4 scale-95' : 'opacity-100 translate-y-0 scale-100'}`}>
-          <div className="absolute bottom-0 left-0 w-[82%] p-5 pb-24">
-            <div className="flex items-center gap-2 mb-3 pointer-events-auto">
-              <div className="w-10 h-10 rounded-full border border-white/20 bg-black/40 backdrop-blur-md flex items-center justify-center overflow-hidden">
-                <span className="text-white font-black text-sm">
-                  {subreddit.substring(0, 2).toUpperCase()}
+        <motion.div
+          key={`actions-${post.id}`}
+          variants={STAGGER_CONTAINER}
+          initial="initial"
+          animate={isReady && isActive ? "animate" : "initial"}
+          exit="exit"
+          inherit={false}
+          className="absolute inset-0 z-[120] pointer-events-none">
+          <div className="absolute bottom-0 left-0 w-[85%] p-5 pb-24 flex flex-col items-start gap-4">
+            <motion.div variants={STAGGER_ITEM} className="flex items-center gap-2.5 pointer-events-auto">
+              <div
+                className="w-10 h-10 border-2 border-orange-400/30 bg-black/60 backdrop-blur-xl flex items-center justify-center overflow-hidden shadow-lg relative"
+                style={{ borderRadius: DROPLET_SHAPE }}>
+                {/* 元气绿色小叶子 */}
+                <div className="absolute top-1 right-1.5 w-3.5 h-2 bg-green-500/60 rounded-full rotate-[-35deg] blur-[0.3px] pointer-events-none" />
+                <span className="text-orange-400 font-black text-[16px]">
+                  {subreddit.substring(0, 1).toUpperCase()}
                 </span>
               </div>
-              <div className="flex flex-col drop-shadow-md">
-                <span className="text-white font-bold text-[15px] leading-tight">
+              <div className="flex flex-col drop-shadow-xl">
+                <span className="text-white font-black text-[15px] leading-tight flex items-center gap-1.5">
                   r/{subreddit}
+                  <span className="material-symbols-outlined text-[14px] text-blue-400 fill-[1]">verified</span>
                 </span>
-                {post.image_type === 'generated' && (
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="material-symbols-outlined text-[10px] text-primary">
-                      auto_awesome
-                    </span>
-                    <span className="text-primary text-[10px] font-bold">
-                      AI Illustration
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center gap-1 mt-0.5 opacity-60">
+                  <span className="text-white text-[10px] font-black uppercase tracking-widest">Active Community</span>
+                </div>
               </div>
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                transition={CITRUS_SQUISH}
                 onClick={handleToggleSub}
-                className={`backdrop-blur-md border text-[10px] font-bold px-3 py-1.5 rounded-full ml-2 transition-all active:scale-95 pointer-events-auto ${isSubscribed ? 'bg-primary/20 border-primary/30 text-primary' : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'}`}>
+                className={`backdrop-blur-xl border-2 text-[11px] font-black px-4 py-2 rounded-[1.2rem] ml-1 transition-all pointer-events-auto ${isSubscribed ? 'bg-orange-400/20 border-orange-400/40 text-orange-400' : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'}`}>
                 {isSubscribed ? 'Following' : 'Subscribe'}
-              </button>
-            </div>
-            <div className="pointer-events-auto mb-2 space-y-1">
-              <h1 className="text-white text-[18px] font-black leading-snug drop-shadow-lg pr-4">
+              </motion.button>
+            </motion.div>
+
+            <motion.div
+              variants={STAGGER_ITEM}
+              className="pointer-events-auto p-6 bg-black/40 backdrop-blur-2xl border-2 border-white/5 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+              <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl group-hover:bg-orange-500/20 transition-all duration-700" />
+              <h1 className="text-white text-[20px] font-black leading-tight drop-shadow-2xl mb-2">
                 {titleEn}
               </h1>
-              <p className="text-white/80 text-[15px] font-medium leading-snug drop-shadow-md line-clamp-3 pr-4">
+              <p className="text-white/70 text-[15px] font-bold leading-relaxed line-clamp-2">
                 {titleCn}
               </p>
-            </div>
+            </motion.div>
           </div>
 
-          <div className="absolute bottom-24 right-2 flex flex-col items-center gap-6 pointer-events-auto w-14">
-            <div className="flex flex-col items-center gap-1">
-              <button
-                onClick={handleLike}
-                className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all active:scale-90">
-                <span
-                  className={`material-symbols-outlined text-[30px] transition-colors ${isLiked ? 'text-[#ff2d55] fill-[1]' : 'text-white'}`}>
-                  favorite
-                </span>
-              </button>
-              <span className="text-white text-[12px] font-bold drop-shadow-md">
-                {likes}
-              </span>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <button
-                onClick={handleDiscussionClick}
-                className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all active:scale-90 hover:bg-white/20">
-                <span className="material-symbols-outlined text-[28px] text-white fill-[1]">
-                  mode_comment
-                </span>
-              </button>
-              {/* 修复：0 评论时显示 Discuss */}
-              <span className="text-white text-[12px] font-bold drop-shadow-md">
-                {parseInt(commentCount) > 0 ? commentCount : 'Discuss'}
-              </span>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <button
+          <motion.div variants={STAGGER_ITEM} className="absolute bottom-24 right-2.5 flex flex-col-reverse items-center gap-6 pointer-events-auto w-14">
+            {/* 分享：太阳造型 */}
+            <div className="flex flex-col items-center gap-1.5">
+              <motion.button
+                whileHover={{ scale: 1.1, y: -2 }}
+                whileTap={{ scale: 0.9 }}
+                transition={CITRUS_SQUISH}
                 onClick={handleShare}
-                className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all active:scale-90 hover:bg-white/20">
-                <span className="material-symbols-outlined text-[28px] text-white transform -rotate-12">
-                  reply
+                className="w-12 h-12 bg-transparent flex items-center justify-center transition-colors relative transition-all overflow-hidden"
+                style={{ borderRadius: DROPLET_SHAPE, width: '46px', height: '46px' }}>
+                <span className="material-symbols-outlined text-[24px] text-white">
+                  sunny
                 </span>
-              </button>
-              <span className="text-white text-[12px] font-bold drop-shadow-md">
-                Share
-              </span>
+              </motion.button>
+              <span className="text-white/50 text-[9px] font-black tracking-[0.2em] uppercase drop-shadow-md">Share</span>
             </div>
-          </div>
-        </div>
+
+            {/* 评论 */}
+            <JellyCommentButton
+              onClick={handleDiscussionClick}
+              label="Discuss"
+            />
+
+            {/* 点赞 (果冻爆炸版) */}
+            <JellyLikeButton
+              isLiked={isLiked}
+              onClick={handleLike}
+              count={likes}
+            />
+          </motion.div>
+        </motion.div>
       </motion.div>
     </div>
   )

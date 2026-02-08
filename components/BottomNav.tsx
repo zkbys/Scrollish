@@ -1,5 +1,7 @@
-import React from 'react'
+import React, { useState, useRef } from 'react'
+import { motion, PanInfo } from 'framer-motion'
 import { Page } from '../types'
+import { SPRING_SNAPPY } from '../motion'
 
 interface BottomNavProps {
   activePage: Page
@@ -14,41 +16,124 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
     { id: Page.Profile, label: 'Me', icon: 'person' },
   ]
 
+  const [isHovered, setIsHovered] = useState(false)
+  const [showSolidBg, setShowSolidBg] = useState(false)
+  const navRef = useRef<HTMLElement>(null)
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
+
+  const currentIndex = navItems.findIndex(item => item.id === activePage)
+
+  const CONTAINER_WIDTH = 320
+  const ITEM_WIDTH = (CONTAINER_WIDTH - 16) / navItems.length
+
+  // 判定是否处于浅色背景页面
+  const isLightPage = activePage === Page.Explore || activePage === Page.Study
+
+  const handlePointerDown = () => {
+    // 开启 0.3s 计时
+    longPressTimer.current = setTimeout(() => {
+      setShowSolidBg(true)
+    }, 300)
+  }
+
+  const handlePointerUp = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+    setShowSolidBg(false)
+  }
+
+  const handlePan = (_e: any, info: PanInfo) => {
+    if (!navRef.current) return
+
+    const rect = navRef.current.getBoundingClientRect()
+    // 计算手指在导航栏内的相对坐标
+    const relativeX = info.point.x - rect.left - 8
+
+    // 限制在容器内
+    const clampedX = Math.max(0, Math.min(CONTAINER_WIDTH - 16, relativeX))
+
+    // “指哪打哪”：根据坐标换算索引
+    const index = Math.floor(clampedX / ITEM_WIDTH)
+    const safeIndex = Math.max(0, Math.min(navItems.length - 1, index))
+
+    if (safeIndex !== currentIndex) {
+      onNavigate(navItems[safeIndex].id)
+    }
+  }
+
   return (
-    // 修复：移除外层背景渐变 (from-white/90 等)，改为完全透明
-    // 仅保留 padding 和 pointer-events 控制
-    <div className="fixed bottom-0 left-0 right-0 z-[60] pb-8 pt-6 px-6 pointer-events-none flex justify-center transition-all duration-300">
-      {/* 导航本体：保留毛玻璃和阴影，确保在任何背景上都清晰可见 */}
-      <nav className="pointer-events-auto bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-[2.5rem] px-2 py-2 flex justify-between items-center w-full max-w-[320px] shadow-[0_8px_32px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-300">
+    <div
+      className="fixed bottom-0 left-0 right-0 z-[60] pb-4 pt-6 px-6 pointer-events-none flex justify-center transition-all duration-300 select-none"
+    >
+      <motion.nav
+        ref={navRef}
+        onPan={handlePan}
+        animate={{
+          // 恢复为之前的玻璃磨砂质感
+          backgroundColor: showSolidBg
+            ? 'rgba(255, 85, 0, 0.15)'
+            : 'rgba(255, 255, 255, 0)',
+          borderColor: showSolidBg
+            ? 'rgba(255, 85, 0, 0.3)'
+            : 'rgba(255, 255, 255, 0)',
+          backdropFilter: showSolidBg ? 'blur(16px)' : 'blur(0px)',
+          boxShadow: showSolidBg
+            ? '0 8px 32px 0 rgba(255, 85, 0, 0.2)'
+            : '0 0px 0px rgba(0,0,0,0)',
+          scale: showSolidBg ? 1.02 : 1,
+          translateY: showSolidBg ? 2 : 0,
+        }}
+        style={{ width: CONTAINER_WIDTH, touchAction: 'none' }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        className="pointer-events-auto border rounded-[2.5rem] px-2 py-2 flex justify-start items-center overflow-visible relative cursor-grab active:cursor-grabbing"
+      >
         {navItems.map((item) => {
           const isActive = activePage === item.id
+
+          // 图标颜色适配 (恢复之前的逻辑)
+          let iconColor = 'rgba(255, 255, 255, 0.6)'
+          if (isActive) {
+            iconColor = isLightPage ? '#1A1A1A' : '#FFFFFF'
+          } else if (isLightPage) {
+            iconColor = showSolidBg ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.25)'
+          } else if (showSolidBg) {
+            iconColor = 'rgba(255, 255, 255, 0.8)'
+          }
+
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`relative flex items-center justify-center w-16 h-12 rounded-full transition-all duration-300 group ${
-                isActive
-                  ? 'bg-gray-100 dark:bg-white/10'
-                  : 'hover:bg-gray-50 dark:hover:bg-white/5'
-              }`}>
-              <div className="flex flex-col items-center gap-0.5">
-                <span
-                  className={`material-symbols-outlined text-[24px] transition-all duration-300 ${
-                    isActive
-                      ? 'text-primary fill-[1] scale-110 drop-shadow-sm'
-                      : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300'
-                  }`}>
+              onPointerDown={handlePointerDown}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              className="relative flex items-center justify-center w-1/4 h-11 rounded-full outline-none z-20"
+            >
+              <div className="flex flex-col items-center gap-0.5 pointer-events-none relative">
+                <motion.span
+                  animate={{
+                    color: iconColor,
+                    scale: isActive ? 1.15 : 1,
+                  }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 30, duration: 0.1 }}
+                  className={`material-symbols-outlined text-[26px] ${isActive ? 'fill-[1]' : ''}`}>
                   {item.icon}
-                </span>
+                </motion.span>
 
-                <div
-                  className={`w-1 h-1 rounded-full bg-primary transition-all duration-300 ${isActive ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`}
-                />
+                {/* 瞬间出现的指示点 - 放在图标容器内部底部 */}
+                {isActive && !showSolidBg && (
+                  <div
+                    className="absolute -bottom-2 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(255,45,85,0.4)]"
+                  />
+                )}
               </div>
             </button>
           )
         })}
-      </nav>
+      </motion.nav>
     </div>
   )
 }

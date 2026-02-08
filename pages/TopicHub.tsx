@@ -25,7 +25,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const [isExiting, setIsExiting] = useState(false)
   const [videoError, setVideoError] = useState(false)
 
-  // 查词相关状态
+  // 查词相关状态 - 从 main 版本恢复
   const [viewingWord, setViewingWord] = useState<string | null>(null)
   const [viewingContext, setViewingContext] = useState<string>('')
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
@@ -237,8 +237,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
     }, 200)
   }
 
-  // --- 修复：异步查词 ---
-  // 先等待结果，再弹窗，避免“控住”用户
+  // --- 恢复单词查询功能 ---
   const handleWordClick = async (word: string, context: string) => {
     // 1. 触发分析 (InteractiveText 组件会自己显示 Loading 状态)
     const result = await triggerAnalysis(word, context)
@@ -254,7 +253,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   return (
     <div
-      className={`h-full flex flex-col bg-background-light dark:bg-background-dark overflow-hidden select-none relative transition-all duration-300 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
+      className={`h-full flex flex-col bg-[#FDFCFB] dark:bg-[#0B0A09] overflow-hidden select-none relative transition-colors duration-500 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
+
+      {/* 单词详情弹窗 - 从 main 版本恢复 */}
       <AnimatePresence>
         {viewingWord && (
           <WordDetailOverlay
@@ -266,12 +267,18 @@ const TopicHub: React.FC<TopicHubProps> = ({
         )}
       </AnimatePresence>
 
-      <div className="absolute inset-0 pointer-events-none">
+      {/* 活力开朗背景体系 (与 Profile 同步) - 从 lixiao 版本保留 */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <div className="frost-overlay" />
+        <div className="blob-pastel -top-20 -left-20 bg-[#FFEDD5] dark:bg-orange-500/20 opacity-60 dark:opacity-40" />
+        <div className="blob-pastel top-1/4 -right-40 bg-[#FED7AA] dark:bg-red-500/10 opacity-60 dark:opacity-30" />
+        <div className="blob-pastel -bottom-20 -left-20 bg-[#FFEDD5] dark:bg-orange-500/10 opacity-60 dark:opacity-30" />
+
+        {/* 图片相关的氛围光晕 */}
         <div
-          className="absolute inset-[-50%] bg-cover bg-center blur-[100px] opacity-30 dark:opacity-40 animate-pulse-slow"
+          className="absolute inset-[-50%] bg-cover bg-center blur-[120px] opacity-10 dark:opacity-20 animate-pulse-slow"
           style={{ backgroundImage: `url("${imageUrl}")` }}
         />
-        <div className="absolute inset-0 bg-white/40 dark:bg-black/60 mix-blend-overlay dark:mix-blend-multiply" />
       </div>
 
       <div className="mx-4 mt-12 h-56 relative z-50">
@@ -285,6 +292,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
             mass: 0.8,
           }}
           className="absolute inset-0 rounded-[2.5rem] border-2 border-white/40 dark:border-white/20 shadow-2xl overflow-hidden transform-gpu z-10 bg-gray-200 dark:bg-[#1C1C1E]">
+
+          {/* 内部容器：承载 HUD 与主媒体 */}
           <motion.div
             initial={{ y: 300 }}
             animate={{ y: 0 }}
@@ -294,33 +303,41 @@ const TopicHub: React.FC<TopicHubProps> = ({
               damping: 22,
               mass: 0.8,
             }}
-            className="absolute inset-0 w-full h-full">
+            className="absolute inset-0 w-full h-full bg-black/10 dark:bg-black/40 flex items-center justify-center overflow-hidden">
+
+            {/* 内容感知增强动态环境光 (Enhanced Content-Aware Ambient) */}
+            <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+              <div
+                className="absolute inset-[-15%] bg-cover bg-center blur-[50px] opacity-60 dark:opacity-70 animate-pulse-slow scale-110 saturate-[1.8]"
+                style={{ backgroundImage: `url("${imageUrl}")` }}
+              />
+              <div className="absolute inset-0 bg-white/10 dark:bg-black/20" />
+            </div>
+
+            {/* 内容感知增强动态环境光 (Enhanced Content-Aware Ambient) */}
+            <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+              <div
+                className="absolute inset-[-15%] bg-cover bg-center blur-[60px] opacity-60 dark:opacity-70 animate-pulse-slow scale-110 saturate-[1.8]"
+                style={{ backgroundImage: `url("${imageUrl}")` }}
+              />
+              <div className="absolute inset-0 bg-white/5 dark:bg-black/20" />
+            </div>
+
+            {/* 主媒体内容 */}
             {hasVideo ? (
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                className="w-full h-full object-cover"
-                loop
-                muted
-                playsInline
-                autoPlay
-              />
+              <video ref={videoRef} src={videoUrl} className="w-full h-full object-cover relative z-10" loop muted playsInline autoPlay />
             ) : (
-              <img
-                src={imageUrl}
-                className="w-full h-full object-contain bg-black/10 dark:bg-black/50"
-                alt=""
-              />
+              <img src={imageUrl} className="max-h-[85%] max-w-[calc(100%-120px)] object-contain relative z-10 shadow-2xl rounded-sm" alt="" />
             )}
           </motion.div>
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/60 dark:to-black/80 rounded-[2.5rem] z-20 pointer-events-none" />
         </motion.div>
 
-        <div className="absolute inset-x-0 bottom-0 p-6 z-[70]">
-          <span className="text-white/80 text-[10px] font-bold uppercase tracking-widest">
+        <div className="absolute inset-x-0 bottom-0 p-6 z-[70] pointer-events-none">
+          <span className="text-white/80 text-[10px] font-bold uppercase tracking-widest drop-shadow-lg">
             {post.subreddit || 'Community'}
           </span>
-          <h1 className="text-white text-xl font-black leading-tight line-clamp-2 mt-1">
+          <h1 className="text-white text-xl font-black leading-tight line-clamp-2 mt-1 drop-shadow-lg">
             {post.titleEn}
           </h1>
         </div>
@@ -380,7 +397,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
                         {activeComment?.upvotes}
                       </span>
                       <span className="flex items-center gap-0.5 ml-2">
-                        <span className="material-symbols-outlined text-[10px] text-blue-500 dark:text-blue-400">
+                        <span className="material-symbols-outlined text-[10px] text-orange-500 dark:text-orange-400">
                           chat_bubble
                         </span>
                         {currentReplyCount}
@@ -419,6 +436,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
                       key={i}
                       className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 p-4 rounded-xl rounded-tl-none border-l-2 border-l-orange-500/50 select-none touch-callout-none"
                       onContextMenu={(e) => e.preventDefault()}>
+                      {/* 恢复 InteractiveText 的点击事件 */}
                       <InteractiveText
                         text={seg.en}
                         contextSentence={seg.en}
@@ -485,7 +503,39 @@ const TopicHub: React.FC<TopicHubProps> = ({
           </div>
         </div>
       </main>
+
+      {/* 底部氛围律动条 (Ambient Ticker) - 从 lixiao 版本保留 */}
+      <div className="h-14 w-full relative z-40 overflow-hidden flex items-center bg-gray-100/50 dark:bg-white/5 backdrop-blur-md border-t border-gray-200 dark:border-white/5 opacity-80">
+        <div className="flex whitespace-nowrap animate-ticker items-center gap-10 px-8">
+          {[1, 2, 3].map((v) => (
+            <div key={v} className="flex items-center gap-12">
+              <span className="text-[10px] font-black text-orange-500 dark:text-orange-300 tracking-[0.15em]">
+                欢 迎 来 到 SCROLLISH · 如 果 遇 到 问 题 请 及 时 向 我 们 反 馈 谢 谢！❤
+              </span>
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+                <span className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                <span className="w-2 h-2 bg-orange-300 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+              </div>
+              <span className="text-[11px] font-black text-orange-500 dark:text-orange-400 tracking-wider font-mono">
+                Welcome to Scrollish!
+              </span>
+              <div className="flex gap-1">
+                {[1, 2, 3].map(i => <div key={i} className="w-1 h-3 bg-white/20 rounded-full rotate-12" />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <style>{`
+        .animate-ticker {
+          animation: ticker 40s linear infinite;
+        }
+        @keyframes ticker {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-33.33%); }
+        }
         .slide-out-left { animation: slideOutLeft 0.3s forwards ease-in; }
         .slide-in-right { animation: slideInRight 0.3s forwards ease-out; }
         .slide-out-right { animation: slideOutRight 0.3s forwards ease-in; }
@@ -495,6 +545,25 @@ const TopicHub: React.FC<TopicHubProps> = ({
         @keyframes slideOutRight { to { transform: translateX(120%) rotate(5deg); opacity: 0; } }
         @keyframes slideInLeft { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .touch-callout-none { -webkit-touch-callout: none; }
+
+        /* 活力开朗背景样式 (Profile 同步) */
+        .blob-pastel {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            filter: blur(100px);
+            border-radius: 50%;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .frost-overlay {
+            position: fixed;
+            inset: 0;
+            background: url('https://grainy-gradients.vercel.app/noise.svg');
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 5;
+        }
       `}</style>
     </div>
   )

@@ -18,6 +18,39 @@ interface ExploreProps {
   onCommunitySelect?: (community: any) => void
 }
 
+/**
+ * [新增] 局部图片加载器组件
+ * Lixiao 分支核心组件：用于解决图片白块问题
+ */
+const SafeImage: React.FC<{ src: string; className?: string; alt?: string; layoutId?: string }> = ({ src, className, alt, layoutId }) => {
+  const [isLoaded, setIsLoaded] = useState(false)
+  return (
+    <div className={`relative ${className} overflow-hidden`}>
+      <motion.img
+        layoutId={layoutId}
+        src={src}
+        alt={alt}
+        onLoad={() => setIsLoaded(true)}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: isLoaded ? 1 : 0 }}
+        transition={{ duration: 0.3 }}
+        className="w-full h-full object-cover"
+      />
+      <AnimatePresence>
+        {!isLoaded && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center bg-white/5 dark:bg-white/5">
+            <div className="w-5 h-5 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 const Explore: React.FC<ExploreProps> = ({
   onNavigate,
   onPostSelect,
@@ -150,12 +183,10 @@ const Explore: React.FC<ExploreProps> = ({
 
   useEffect(() => {
     const fetchData = async () => {
-      // If we already have categories, we don't need the full screen loading
       if (categories.length > 0) {
         setIsLoading(false)
         return
       }
-
       setIsLoading(true)
       await initializeExplore()
       setIsLoading(false)
@@ -309,7 +340,6 @@ const Explore: React.FC<ExploreProps> = ({
   }
 
   const isContentReady = categories.length > 0 && trendingPosts.length > 0
-
   const currentCategoryData = activeCategoryId
     ? categorySubreddits[activeCategoryId] || []
     : []
@@ -333,24 +363,28 @@ const Explore: React.FC<ExploreProps> = ({
 
         {/* Header - Always Visible */}
         <header className="sticky top-0 z-50 bg-white/40 dark:bg-black/40 backdrop-blur-xl border-b border-white/60 dark:border-white/5 transition-all">
-          <div className="flex items-center px-5 pt-12 pb-4 justify-between">
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              className="h-9 w-9 flex items-center justify-center glass-card-premium transition-transform">
-              <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/90">
-                menu
-              </span>
-            </motion.button>
-            <h1 className="text-gray-900 dark:text-white text-[17px] font-black tracking-tight flex-1 text-center">
+          <div className="flex items-center px-5 pt-12 pb-4 justify-between relative">
+            {/* LIXIAO: 锁定状态的菜单按钮 */}
+            <div className="h-9 w-9 flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+              <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/40 blur-[2px]">menu</span>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[14px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]">lock</span>
+              </div>
+            </div>
+
+            <h1 className="text-gray-900 dark:text-white text-[17px] font-black tracking-tight flex-1 text-center font-mono italic">
               Discovery
             </h1>
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              className="h-9 w-9 flex items-center justify-center glass-card-premium transition-transform">
-              <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/90">
-                notifications
-              </span>
-            </motion.button>
+
+            <div className="relative">
+              {/* LIXIAO: 锁定状态的铃铛按钮 */}
+              <div className="h-9 w-9 flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+                <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/40 blur-[2px]">notifications</span>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[14px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]">lock</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Search Bar - Always Visible */}
@@ -390,103 +424,95 @@ const Explore: React.FC<ExploreProps> = ({
               )}
             </div>
 
-            {/* Search Results */}
-            <AnimatePresence>
-              {showResults && searchQuery && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute top-[calc(100%-8px)] left-5 right-5 bg-white/90 dark:bg-[#121111]/95 backdrop-blur-2xl border border-white/60 dark:border-white/10 rounded-2xl shadow-2xl z-[100] max-h-[70vh] overflow-y-auto no-scrollbar">
-                  <div className="p-4 space-y-6">
-                    <section>
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-white/30 mb-3 px-1">
-                        Communities
-                      </h3>
-                      {searchResults.communities.length > 0 ? (
-                        <div className="space-y-1">
-                          {searchResults.communities.map((comm) => (
-                            <motion.div
-                              key={comm.id}
-                              whileTap={{ backgroundColor: 'rgba(0,0,0,0.05)' }}
-                              onClick={() => handleCommunityClick(comm)}
-                              className="flex items-center gap-3 p-2 rounded-xl transition-colors cursor-pointer group">
-                              <div
-                                className={`w-8 h-8 rounded-lg bg-gradient-to-br ${getCommunityGradient(comm.name)} flex items-center justify-center border border-white/10 shadow-md`}>
-                                <span className="text-xs font-black text-white">
-                                  {comm.name.substring(0, 1).toUpperCase()}
-                                </span>
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-bold text-gray-900 dark:text-white/90">
-                                  r/{highlightText(comm.name, searchQuery)}
-                                </span>
-                                <span className="text-[10px] text-gray-500 dark:text-white/30 font-medium">
-                                  {highlightText(
-                                    comm.display_name || '',
-                                    searchQuery,
-                                  )}
-                                </span>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      ) : (
-                        !isSearching && (
-                          <p className="text-[11px] text-gray-400 px-1 italic">
-                            No communities found
-                          </p>
-                        )
-                      )}
-                    </section>
-                    <section>
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-white/30 mb-3 px-1">
-                        Matched Content
-                      </h3>
-                      {searchResults.posts.length > 0 ? (
-                        <div className="space-y-3">
-                          {searchResults.posts.map((post) => (
-                            <motion.div
-                              key={post.id}
-                              layoutId={`post-card-${post.id}`}
-                              whileTap={{ backgroundColor: 'rgba(0,0,0,0.05)' }}
-                              onClick={() => handlePostClick(post)}
-                              className="flex gap-3 p-2 rounded-xl transition-colors cursor-pointer group">
-                              <div className="w-12 h-16 rounded-lg bg-cover bg-center shrink-0 border border-white/40 dark:border-white/10 shadow-md relative overflow-hidden">
-                                <motion.img
-                                  layoutId={`post-image-${post.id}`}
-                                  src={post.image_url}
-                                  loading="lazy"
-                                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                  alt=""
-                                />
-                              </div>
-                              <div className="flex flex-col justify-center gap-1 min-w-0">
-                                <span className="text-[13px] font-black text-gray-900 dark:text-white/90 line-clamp-1 tracking-tight">
-                                  {highlightText(post.title_en, searchQuery)}
-                                </span>
-                                <p className="text-[11px] text-gray-500 dark:text-white/40 line-clamp-1 font-medium">
-                                  {highlightText(post.title_cn || '', searchQuery)}
-                                </p>
-                                <span className="text-[9px] text-orange-500 font-black uppercase tracking-widest mt-0.5">
-                                  r/{post.subreddit}
-                                </span>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      ) : (
-                        !isSearching && (
-                          <p className="text-[11px] text-gray-400 px-1 italic">
-                            No content matching "{searchQuery}"
-                          </p>
-                        )
-                      )}
-                    </section>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Search Results (Lixiao: Removed AnimatePresence wrapper for direct conditional rendering & uses SafeImage) */}
+            {showResults && searchQuery && (
+              <div className="absolute top-[calc(100%-8px)] left-5 right-5 bg-white/90 dark:bg-[#121111]/95 backdrop-blur-2xl border border-white/60 dark:border-white/10 rounded-2xl shadow-2xl z-[100] max-h-[70vh] overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="p-4 space-y-6">
+                  <section>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-white/30 mb-3 px-1">
+                      Communities
+                    </h3>
+                    {searchResults.communities.length > 0 ? (
+                      <div className="space-y-1">
+                        {searchResults.communities.map((comm) => (
+                          <motion.div
+                            key={comm.id}
+                            whileTap={{ backgroundColor: 'rgba(0,0,0,0.05)' }}
+                            onClick={() => handleCommunityClick(comm)}
+                            className="flex items-center gap-3 p-2 rounded-xl transition-colors cursor-pointer group">
+                            <div
+                              className={`w-8 h-8 rounded-lg bg-gradient-to-br ${getCommunityGradient(comm.name)} flex items-center justify-center border border-white/10 shadow-md`}>
+                              <span className="text-xs font-black text-white">
+                                {comm.name.substring(0, 1).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold text-gray-900 dark:text-white/90">
+                                r/{highlightText(comm.name, searchQuery)}
+                              </span>
+                              <span className="text-[10px] text-gray-500 dark:text-white/30 font-medium">
+                                {highlightText(
+                                  comm.display_name || '',
+                                  searchQuery,
+                                )}
+                              </span>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      !isSearching && (
+                        <p className="text-[11px] text-gray-400 px-1 italic">
+                          No communities found
+                        </p>
+                      )
+                    )}
+                  </section>
+                  <section>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-white/30 mb-3 px-1">
+                      Matched Content
+                    </h3>
+                    {searchResults.posts.length > 0 ? (
+                      <div className="space-y-3">
+                        {searchResults.posts.map((post) => (
+                          <motion.div
+                            key={post.id}
+                            layoutId={`post-card-${post.id}`}
+                            whileTap={{ backgroundColor: 'rgba(0,0,0,0.05)' }}
+                            onClick={() => handlePostClick(post)}
+                            className="flex gap-3 p-2 rounded-xl transition-colors cursor-pointer group">
+                            <div className="w-12 h-16 rounded-lg shrink-0 border border-white/40 dark:border-white/10 shadow-md relative overflow-hidden">
+                              <SafeImage
+                                src={post.image_url}
+                                layoutId={`post-image-${post.id}`}
+                                className="absolute inset-0 w-full h-full"
+                              />
+                            </div>
+                            <div className="flex flex-col justify-center gap-1 min-w-0">
+                              <span className="text-[13px] font-black text-gray-900 dark:text-white/90 line-clamp-1 tracking-tight">
+                                {highlightText(post.title_en, searchQuery)}
+                              </span>
+                              <p className="text-[11px] text-gray-500 dark:text-white/40 line-clamp-1 font-medium">
+                                {highlightText(post.title_cn || '', searchQuery)}
+                              </p>
+                              <span className="text-[9px] text-orange-500 font-black uppercase tracking-widest mt-0.5">
+                                r/{post.subreddit}
+                              </span>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      !isSearching && (
+                        <p className="text-[11px] text-gray-400 px-1 italic">
+                          No content matching "{searchQuery}"
+                        </p>
+                      )
+                    )}
+                  </section>
+                </div>
+              </div>
+            )}
           </div>
         </header>
 
@@ -515,132 +541,98 @@ const Explore: React.FC<ExploreProps> = ({
             <div
               ref={trendingContainerRef}
               onScroll={handleTrendingScroll}
-              className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-5 gap-4 pb-8 min-h-[280px]">
-              {!isContentReady ? (
-                // Trending Skeleton
-                [1, 2, 3].map((i) => (
-                  <div key={i} className="shrink-0 w-56 aspect-[3/4.2] rounded-[2rem] bg-gray-200 dark:bg-white/5 animate-pulse border border-white/20 dark:border-white/5 shadow-sm" />
-                ))
-              ) : (
-                trendingPosts.map((post) => (
-                  <div
-                    key={post.id}
-                    className="flex flex-col gap-3 shrink-0 w-56 snap-start transition-all duration-300 relative">
-                    <motion.div
-                      layoutId={`post-card-${post.id}`}
-                      whileTap={{ scale: 0.96 }}
-                      onClick={() => handlePostClick(post)}
-                      className="relative w-full aspect-[3/4.2] rounded-[2rem] overflow-hidden glass-card-premium transition-all cursor-pointer group shadow-lg">
-                      <div className="absolute inset-0">
-                        {post.video_url ? (
-                          <video
-                            src={post.video_url}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                            muted
-                            loop
-                            playsInline
-                            autoPlay
-                          />
-                        ) : (
-                          <img
-                            src={post.image_url}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                            loading="lazy"
-                            alt=""
-                          />
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80" />
-                      </div>
-                      {post.image_type === 'generated' && (
-                        <div className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-2.5 py-1 bg-black/30 backdrop-blur-md rounded-full border border-white/10">
-                          <span className="material-symbols-outlined text-[12px] text-orange-500">
-                            auto_awesome
-                          </span>
-                          <span className="text-[9px] font-black text-white/90 uppercase tracking-tighter">
-                            AI Art
-                          </span>
-                        </div>
+              className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-5 gap-4 pb-8">
+              {trendingPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="flex flex-col gap-3 shrink-0 w-56 snap-start transition-all duration-300 relative">
+                  <motion.div
+                    layoutId={`post-card-${post.id}`}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => handlePostClick(post)}
+                    className="relative w-full aspect-[3/4.2] rounded-[2rem] overflow-hidden glass-card-premium transition-all cursor-pointer group shadow-lg">
+                    <div className="absolute inset-0">
+                      {/* LIXIAO: 使用 SafeImage，移除了视频支持，符合内测版特性 */}
+                      {post.video_url ? (
+                        <video
+                          src={post.video_url}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                          muted
+                          loop
+                          playsInline
+                          autoPlay
+                        />
+                      ) : (
+                        <SafeImage
+                          src={post.image_url}
+                          layoutId={`post-image-${post.id}`}
+                          className="w-full h-full"
+                          alt=""
+                        />
                       )}
-                      <div className="absolute bottom-5 left-5 right-5 z-20">
-                        <p className="text-[14px] font-black text-white leading-snug tracking-tight line-clamp-1 drop-shadow-md">
-                          {post.title_en}
-                        </p>
-                        <p className="text-[11px] font-bold text-white/70 line-clamp-1 mt-0.5">
-                          {post.title_cn}
-                        </p>
-                      </div>
-                    </motion.div>
-                  </div>
-                ))
-              )}
+                    </div>
+                    <div className="absolute bottom-5 left-5 right-5 z-20">
+                      <p className="text-[14px] font-black text-white leading-snug tracking-tight line-clamp-1 drop-shadow-md">
+                        {post.title_en}
+                      </p>
+                      <p className="text-[11px] font-bold text-white/70 line-clamp-1 mt-0.5">
+                        {post.title_cn}
+                      </p>
+                    </div>
+                  </motion.div>
+                </div>
+              ))}
             </div>
           </section>
 
-          {/* Categories Navbar */}
-          <nav className="sticky top-[156px] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all">
-            <div className="flex overflow-x-auto no-scrollbar px-5 gap-8">
-              {!isContentReady ? (
-                // Nav skeleton
-                [1, 2, 3, 4].map(i => (
-                  <div key={i} className="pb-3 pt-4 shrink-0">
-                    <div className="w-16 h-4 bg-gray-200 dark:bg-white/5 rounded animate-pulse" />
-                  </div>
-                ))
-              ) : (
-                categories.map((cat) => (
-                  <motion.button
-                    key={cat.id}
-                    whileTap={{ opacity: 0.6 }}
-                    onClick={() => setActiveCategoryId(cat.id)}
-                    className={`flex flex-col items-center justify-center pb-3 pt-4 shrink-0 transition-all ${activeCategoryId === cat.id ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'}`}>
-                    <span className={`text-[13px] font-black tracking-tight uppercase ${activeCategoryId === cat.id ? 'opacity-100' : 'opacity-80 font-bold'}`}>
-                      {cat.name_en}
-                    </span>
-                    {activeCategoryId === cat.id && (
-                      <motion.div
-                        layoutId="cat-indicator"
-                        className="mt-1 w-5 h-1 bg-orange-500 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.4)]"
-                      />
-                    )}
-                  </motion.button>
-                ))
-              )}
+          {/* Categories Navbar (LIXIAO: Locked & Blurred) */}
+          <nav className="sticky top-[156px] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all relative">
+            <div className="flex overflow-x-auto no-scrollbar px-5 gap-8 opacity-40 blur-[1px]">
+              {categories.map((cat) => (
+                <div
+                  key={cat.id}
+                  className={`flex flex-col items-center justify-center pb-3 pt-4 shrink-0 transition-all ${activeCategoryId === cat.id ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'}`}>
+                  <span className={`text-[13px] font-black tracking-tight uppercase ${activeCategoryId === cat.id ? 'opacity-100' : 'opacity-80 font-bold'}`}>
+                    {cat.name_en}
+                  </span>
+                  {activeCategoryId === cat.id && (
+                    <div
+                      className="mt-1 w-5 h-1 bg-orange-500 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.4)]"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* 分类栏锁定层 */}
+            <div className="absolute inset-0 z-10 bg-white/5 dark:bg-black/10 flex items-center justify-center pointer-events-auto">
+              <span className="material-symbols-outlined text-orange-500 text-sm fill-[1] drop-shadow-[0_0_10px_rgba(249,115,22,0.6)]">lock</span>
             </div>
           </nav>
 
-          {/* Communities List */}
-          <main className="flex-1 p-5 space-y-4 mb-24 min-h-[400px]">
-            {!isContentReady || isListLoading ? (
-              // List Skeleton
-              [1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-center gap-4 glass-card-premium p-4 border-white/60 dark:border-white/5 animate-pulse">
-                  <div className="size-14 rounded-2xl bg-gray-200 dark:bg-white/5 shrink-0" />
-                  <div className="flex-1 space-y-2">
-                    <div className="w-1/3 h-4 bg-gray-200 dark:bg-white/5 rounded" />
-                    <div className="w-1/4 h-3 bg-gray-200 dark:bg-white/5 rounded opacity-50" />
-                  </div>
+          {/* Communities List (LIXIAO: Locked, Blurred & Overlay) */}
+          <main className="flex-1 p-5 space-y-4 mb-24 min-h-[400px] relative overflow-hidden">
+            <div className="space-y-4 blur-[4px] opacity-40 select-none pointer-events-none">
+              {isListLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 opacity-40">
+                  <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-white">
+                    Loading...
+                  </p>
                 </div>
-              ))
-            ) : currentCategoryData.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-white/20">
-                <span className="material-symbols-outlined text-6xl mb-4 opacity-10">
-                  explore_off
-                </span>
-                <p className="text-xs font-black uppercase tracking-[0.2em]">
-                  No Communities Found
-                </p>
-              </div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="space-y-4">
-                {currentCategoryData.map((sub) => (
-                  <motion.div
+              ) : currentCategoryData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-white/20">
+                  <span className="material-symbols-outlined text-6xl mb-4 opacity-10">
+                    explore_off
+                  </span>
+                  <p className="text-xs font-black uppercase tracking-[0.2em]">
+                    No Communities Found
+                  </p>
+                </div>
+              ) : (
+                currentCategoryData.map((sub) => (
+                  <div
                     key={sub.id}
-                    whileTap={{ scale: 0.98, backgroundColor: 'rgba(255,255,255,0.05)' }}
-                    className="flex items-center gap-4 glass-card-premium p-4 border-white/60 dark:border-white/5 transition-all group cursor-pointer"
-                    onClick={() => handleCommunityClick(sub)}>
+                    className="flex items-center gap-4 glass-card-premium p-4 border-white/60 dark:border-white/5 transition-all group">
                     <div
                       className={`size-14 rounded-2xl bg-gradient-to-br ${getCommunityGradient(sub.name)} border border-white/20 flex items-center justify-center shrink-0 text-white shadow-lg overflow-hidden relative`}>
                       <div className="absolute inset-0 bg-black/10"></div>
@@ -663,34 +655,34 @@ const Explore: React.FC<ExploreProps> = ({
                         {sub.sub_category || 'Discussion'}
                       </p>
                       <div className="flex items-center gap-3 mt-3">
-                        <motion.button
-                          whileTap={{ scale: 0.9 }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleJoinClick(e, sub.id)
-                          }}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${isFollowing(sub.id) ? 'bg-gray-900 dark:bg-white text-white dark:text-black border-transparent' : 'bg-transparent text-orange-500 border-orange-500/30 hover:border-orange-500/60'}`}>
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${isFollowing(sub.id) ? 'bg-gray-900 dark:bg-white text-white dark:text-black border-transparent' : 'bg-transparent text-orange-500 border-orange-500/30'}`}>
                           <span className="material-symbols-outlined text-[14px] font-bold">
                             {isFollowing(sub.id) ? 'done' : 'add'}
                           </span>
                           {isFollowing(sub.id) ? 'Joined' : 'Join'}
-                        </motion.button>
+                        </div>
                         <span className="text-[11px] text-gray-400 dark:text-white/20 font-bold tracking-tight">
                           {formatSubscribers(sub.subscriber_count)}
                         </span>
                       </div>
                     </div>
-                    <motion.div
-                      whileTap={{ scale: 0.8 }}
-                      className="size-11 glass-card-premium hover:bg-orange-500 rounded-full flex items-center justify-center border-white/80 dark:border-white/10 transition-all cursor-pointer group hover:text-white">
-                      <span className="material-symbols-outlined text-gray-400 dark:text-white/30 group-hover:text-white transition-colors text-[24px]">
+                    <div className="size-11 glass-card-premium rounded-full flex items-center justify-center border-white/80 dark:border-white/10 transition-all">
+                      <span className="material-symbols-outlined text-gray-400 dark:text-white/30 text-[24px]">
                         chevron_right
                       </span>
-                    </motion.div>
-                  </motion.div>
-                ))}
-              </motion.div>
-            )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* LIXIAO: 全局锁定层：深层模糊 + 背景变色 + 内测提示 */}
+            <div className="absolute inset-0 z-30 backdrop-blur-[15px] bg-white/5 dark:bg-black/10 flex items-center justify-center flex-col gap-4">
+              <div className="w-16 h-16 rounded-3xl bg-white/20 dark:bg-white/5 backdrop-blur-2xl flex items-center justify-center border border-white/20 shadow-2xl animate-pulse">
+                <span className="material-symbols-outlined text-orange-500 text-3xl fill-[1] drop-shadow-[0_0_15px_rgba(249,115,22,0.8)]">lock</span>
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500/60 animate-pulse">Premium Discovery Locked</p>
+            </div>
           </main>
         </div>
       </div>

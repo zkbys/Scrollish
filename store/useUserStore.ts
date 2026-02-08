@@ -1,20 +1,23 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { supabase } from '../supabase'
-import { ProductionPost } from './useAppStore' // 确保路径正确，如果不引用 AppStore 类型可忽略
+import { ProductionPost } from './useAppStore'
+import { DictionaryResult } from './useDictionaryStore' // 保留这个导入
 
 interface UserState {
   likedPosts: ProductionPost[]
-  followedCommunities: string[]
+  starredWords: DictionaryResult[] // 保留单词收藏功能
+  followedCommunities: string[] // 存储关注的社区 ID
   currentUser: any | null
   profile: any | null
   isLoading: boolean
-  // [新增] 水合状态标记
   _hasHydrated: boolean
 
   // Actions
   toggleLike: (post: ProductionPost) => void
   isLiked: (postId: string) => boolean
+  toggleStarWord: (word: DictionaryResult) => void // 保留单词收藏方法
+  isWordStarred: (wordName: string) => boolean // 保留单词收藏检查
   toggleFollowCommunity: (communityId: string) => void
   isFollowing: (communityId: string) => boolean
   login: (user: any) => void
@@ -30,11 +33,12 @@ export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
       likedPosts: [],
+      starredWords: [], // 初始化 starredWords
       followedCommunities: [],
       currentUser: null,
       profile: null,
       isLoading: true,
-      _hasHydrated: false, // 默认未完成
+      _hasHydrated: false,
 
       setHasHydrated: (state) => set({ _hasHydrated: state }),
 
@@ -50,6 +54,21 @@ export const useUserStore = create<UserState>()(
 
       isLiked: (postId: string) => {
         return get().likedPosts.some((p) => p.id === postId)
+      },
+
+      toggleStarWord: (word: DictionaryResult) => {
+        const currentStarred = get().starredWords
+        const exists = currentStarred.find((w) => w.word === word.word)
+
+        if (exists) {
+          set({ starredWords: currentStarred.filter((w) => w.word !== word.word) })
+        } else {
+          set({ starredWords: [word, ...currentStarred] })
+        }
+      },
+
+      isWordStarred: (wordName: string) => {
+        return get().starredWords.some((w) => w.word === wordName)
       },
 
       toggleFollowCommunity: (communityId: string) => {
@@ -78,6 +97,7 @@ export const useUserStore = create<UserState>()(
         set({
           currentUser: null,
           likedPosts: [],
+          starredWords: [], // 登出时清空 starredWords
           followedCommunities: [],
           profile: null,
         })
@@ -115,13 +135,11 @@ export const useUserStore = create<UserState>()(
         }
       },
 
-      // [核心修复] 乐观更新：先更新本地，再同步服务器，防止因网络问题卡在 Onboarding
       updateProfile: async (updates: any) => {
         const user = get().currentUser
         const currentProfile = get().profile
 
         // 1. 立即更新本地 Store (Optimistic Update)
-        // 这样 App 就会检测到 profile.learning_reason 已存在，不会强制跳转回 Onboarding
         const newProfile = { ...(currentProfile || {}), ...updates }
         set({ profile: newProfile })
 
@@ -138,14 +156,12 @@ export const useUserStore = create<UserState>()(
             'Failed to sync profile to DB, but local state updated:',
             error,
           )
-          // 这里不回滚，优先保证用户体验流畅
         }
       },
     }),
     {
       name: 'scrollish-user-storage',
       storage: createJSONStorage(() => localStorage),
-      // [关键] 监听 hydration 完成
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true)
       },

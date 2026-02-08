@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useUserStore } from '../store/useUserStore'
 import {
   DictionaryResult,
   useDictionaryStore,
@@ -13,6 +14,8 @@ interface WordDetailOverlayProps {
   onSave?: (word: string) => void
 }
 
+type Accent = 'US' | 'GB'
+
 const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   word,
   definition,
@@ -20,55 +23,75 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   onClose,
   onSave,
 }) => {
-  const { forgetWord, toggleSaveWord, getInteraction, preferredVoice } =
-    useDictionaryStore()
+  // 从 Store 中获取状态和方法
+  const { toggleStarWord, isWordStarred } = useUserStore()
+  const { forgetWord, getInteraction } = useDictionaryStore()
   const [isSaved, setIsSaved] = useState(false)
+
+  // TTS 声音状态 (来自 lixiao 的重构)
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([])
 
   // 同步收藏状态
   useEffect(() => {
     if (word) {
-      const interaction = getInteraction(word)
-      setIsSaved(interaction.isSaved)
+      // 优先从 UserStore 判断，兼容本地交互数据
+      const starred = isWordStarred(word)
+      setIsSaved(starred)
     }
-  }, [word, getInteraction])
+  }, [word, isWordStarred])
+
+  // 初始化获取声音列表
+  useEffect(() => {
+    const loadVoices = () => {
+      setAvailableVoices(window.speechSynthesis.getVoices())
+    }
+    loadVoices()
+    window.speechSynthesis.onvoiceschanged = loadVoices
+  }, [])
 
   const handleSave = async () => {
-    if (!word) return
+    if (!word || !definition) return
     if (navigator.vibrate) navigator.vibrate(50)
 
     const newState = !isSaved
     setIsSaved(newState)
-    await toggleSaveWord(word, context)
+    
+    // 调用 UserStore 进行收藏/取消收藏
+    toggleStarWord(definition)
 
     if (onSave && newState) onSave(word)
   }
 
-  // --- 修复：发音逻辑 ---
+  // --- 核心修复：更智能的声音匹配逻辑 (来自 lixiao) ---
+  const getBestVoice = (targetAccent: Accent) => {
+    const targetLang = targetAccent === 'US' ? 'en-US' : 'en-GB'
+    const normalize = (lang: string) => lang.replace('_', '-')
+
+    // 优先寻找神经网络/高质量语音
+    const bestVoice = availableVoices.find(
+      (v) =>
+        normalize(v.lang) === targetLang &&
+        (v.name.includes('Natural') || 
+          v.name.includes('Google') || 
+          v.name.includes('Siri') || 
+          v.name.includes('Premium') || 
+          v.name.includes('Enhanced')),
+    )
+    return bestVoice || availableVoices.find((v) => normalize(v.lang) === targetLang)
+  }
+
   const handlePlayAudio = () => {
     if (!word) return
-
     window.speechSynthesis.cancel()
+    
     const utterance = new SpeechSynthesisUtterance(word)
-
-    // 1. 尝试获取声音列表 (Chrome 有时需要重新获取)
-    let voices = window.speechSynthesis.getVoices()
-
-    // 2. 如果设置了首选声音，尝试匹配
-    if (preferredVoice) {
-      const selected = voices.find(
-        (v) => v.name === preferredVoice.name && v.lang === preferredVoice.lang,
-      )
-      if (selected) {
-        utterance.voice = selected
-        // 电脑端某些神经语音语速较快，稍微调慢
-        utterance.rate = 0.9
-      } else {
-        // 如果找不到首选声音，尝试找同语言的
-        const fallback = voices.find((v) => v.lang === preferredVoice.lang)
-        if (fallback) utterance.voice = fallback
-      }
+    // 默认尝试使用美音高质量语音
+    const voice = getBestVoice('US')
+    if (voice) {
+      utterance.voice = voice
+      utterance.rate = 0.9 // 稍微调慢一点，听得更清楚
     }
-
+    
     window.speechSynthesis.speak(utterance)
   }
 
