@@ -5,7 +5,7 @@ interface InteractiveTextProps {
   text: string
   contextSentence?: string
   className?: string
-  externalOnClick?: (word: string) => void // 新增
+  externalOnClick?: (word: string) => void
 }
 
 const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> = ({
@@ -15,7 +15,7 @@ const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> =
   externalOnClick,
   disabled = false,
 }) => {
-  const { triggerAnalysis, isAnalyzing, cachedDefinitions } =
+  const { triggerAnalysis, isAnalyzing, cachedDefinitions, getInteraction } =
     useDictionaryStore()
 
   const segments = useMemo(() => {
@@ -32,16 +32,22 @@ const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> =
     }
   }, [text])
 
-  // 在 InteractiveText 组件内修改 handleWordClick
   const handleWordClick = (word: string) => {
     if (disabled) return
     if (externalOnClick) {
-      externalOnClick(word) // 优先使用外部控制
+      externalOnClick(word)
     } else {
-      // 默认行为
       if (navigator.vibrate) navigator.vibrate(20)
       triggerAnalysis(word, contextSentence || text)
     }
+  }
+
+  // 计算颜色深度的辅助函数
+  const getHighlightClass = (count: number) => {
+    if (count <= 1) return 'decoration-green-400/50' // 第一次查：浅绿
+    if (count <= 3) return 'decoration-green-500' // 2-3次：标准绿
+    if (count <= 5) return 'decoration-green-600 decoration-[3px]' // 4-5次：深绿且加粗
+    return 'decoration-red-500 decoration-[3px]' // >5次：红色警示
   }
 
   return (
@@ -50,7 +56,13 @@ const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> =
         const word = seg.segment
         const isWord = seg.isWordLike
         const isLoading = isAnalyzing(word)
-        const isReady = !!cachedDefinitions[word]
+        const isReady = !!cachedDefinitions[word.toLowerCase()]
+
+        // 获取交互数据
+        const interaction = getInteraction(word)
+        const highlightClass = isReady
+          ? getHighlightClass(interaction.count)
+          : ''
 
         if (isWord) {
           return (
@@ -62,14 +74,19 @@ const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> =
                 handleWordClick(word)
               }}
               className={`
-                relative inline-block ${disabled ? '' : 'cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5 hover:bg-white/10 active:scale-95'}
+                relative inline-block 
+                ${disabled ? '' : 'cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5 hover:bg-white/10 active:scale-95'}
                 ${!disabled && isLoading ? 'animate-pulse text-orange-400/80' : ''} 
-                ${!disabled && isReady ? 'decoration-green-500 decoration-wavy underline underline-offset-4 decoration-2' : ''}
+                ${!disabled && isReady ? `underline underline-offset-4 decoration-wavy ${highlightClass}` : ''}
               `}>
               {word}
-              {/* Loading 状态下的下划线动画 */}
-              {isLoading && (
+              {/* Loading Line */}
+              {!disabled && isLoading && (
                 <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-orange-500/50 animate-progress-line" />
+              )}
+              {/* 收藏标记 */}
+              {interaction.isSaved && (
+                <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-orange-500 rounded-full shadow-sm" />
               )}
             </span>
           )

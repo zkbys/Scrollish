@@ -39,9 +39,10 @@ interface ExploreState {
     resetSearch: () => void
     setScrollPosition: (key: string, pos: number) => void
     setCommunityPostsCache: (communityId: string, posts: any[]) => void
+    initializeExplore: () => Promise<void>
 }
 
-export const useExploreStore = create<ExploreState>((set) => ({
+export const useExploreStore = create<ExploreState>((set, get) => ({
     categories: [],
     trendingPosts: [],
     categorySubreddits: {},
@@ -77,4 +78,68 @@ export const useExploreStore = create<ExploreState>((set) => ({
         scrollPositions: { ...state.scrollPositions, [key]: pos }
     })),
     resetSearch: () => set({ searchQuery: '', searchResults: { communities: [], posts: [] }, showResults: false }),
+
+    initializeExplore: async () => {
+        const { categories, trendingPosts, excludedTrendingIds } = get()
+
+        // If we already have categories, we don't need a full re-initialization
+        // but we might want to refresh trending if it's empty
+        const shouldFetchCategories = categories.length === 0
+        const shouldFetchTrending = trendingPosts.length === 0
+
+        if (!shouldFetchCategories && !shouldFetchTrending) return
+
+        try {
+            const promises: Promise<any>[] = []
+
+            if (shouldFetchCategories) {
+                promises.push(
+                    import('../supabase').then(m =>
+                        m.supabase.from('categories').select('*').order('name_en')
+                    )
+                )
+            }
+
+            if (shouldFetchTrending) {
+                let query = import('../supabase').then(m => {
+                    let q = m.supabase.from('production_posts').select('*')
+                    if (excludedTrendingIds.length > 0) {
+                        const idsToExclude = excludedTrendingIds.slice(-30)
+                        q = q.not('id', 'in', `(${idsToExclude.join(',')})`)
+                    }
+                    return q.order('upvotes', { ascending: false }).limit(8)
+                })
+                promises.push(query)
+            }
+
+            const results = await Promise.all(promises)
+            let resultIdx = 0
+
+            const newState: Partial<ExploreState> = {}
+
+            if (shouldFetchCategories) {
+                const catRes = results[resultIdx++]
+                if (catRes.data) {
+                    newState.categories = catRes.data
+                    if (catRes.data.length > 0 && !get().activeCategoryId) {
+                        newState.activeCategoryId = catRes.data[0].id
+                    }
+                }
+            }
+
+            if (shouldFetchTrending) {
+                const trendRes = results[resultIdx++]
+                if (trendRes.data && trendRes.data.length > 0) {
+                    newState.trendingPosts = [...trendRes.data].sort(() => Math.random() - 0.5)
+                }
+            }
+
+            if (Object.keys(newState).length > 0) {
+                set(newState as any)
+            }
+        } catch (error) {
+            console.error('Error pre-fetching explore data:', error)
+        }
+    }
 }))
+

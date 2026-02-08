@@ -9,118 +9,99 @@ import {
 interface WordDetailOverlayProps {
   word: string | null
   definition?: DictionaryResult | null
+  context?: string
   onClose: () => void
   onSave?: (word: string) => void
 }
 
-type Accent = 'US' | 'UK'
+type Accent = 'US' | 'GB'
 
 const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   word,
   definition,
+  context,
   onClose,
   onSave,
 }) => {
+  // 从 Store 中获取状态和方法
   const { toggleStarWord, isWordStarred } = useUserStore()
-  const isSaved = word ? isWordStarred(word) : false
-  const { forgetWord } = useDictionaryStore()
+  const { forgetWord, getInteraction } = useDictionaryStore()
+  const [isSaved, setIsSaved] = useState(false)
 
-  // TTS 状态
-  const [availableVoices, setAvailableVoices] = useState<
-    SpeechSynthesisVoice[]
-  >([])
-  const [accent, setAccent] = useState<Accent>('US')
-  const [showVoiceSettings, setShowVoiceSettings] = useState(false)
+  // TTS 声音状态 (来自 lixiao 的重构)
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([])
 
-  // 1. 修复电脑端 TTS：异步加载声音列表
+  // 同步收藏状态
+  useEffect(() => {
+    if (word) {
+      // 优先从 UserStore 判断，兼容本地交互数据
+      const starred = isWordStarred(word)
+      setIsSaved(starred)
+    }
+  }, [word, isWordStarred])
+
+  // 初始化获取声音列表
   useEffect(() => {
     const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices()
-      if (voices.length > 0) {
-        setAvailableVoices(voices)
-        // 调试用：看看浏览器到底支持哪些声音
-        console.log(
-          'Available Voices:',
-          voices.map((v) => `${v.name} (${v.lang})`),
-        )
-      }
+      setAvailableVoices(window.speechSynthesis.getVoices())
     }
-
     loadVoices()
-
-    // Chrome/Edge 需要监听此事件才能获取到声音列表
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = loadVoices
-    }
+    window.speechSynthesis.onvoiceschanged = loadVoices
   }, [])
 
-  if (!word) return null
-
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!word || !definition) return
     if (navigator.vibrate) navigator.vibrate(50)
-    if (word && definition) {
-      toggleStarWord(definition)
-    }
+
+    const newState = !isSaved
+    setIsSaved(newState)
+    
+    // 调用 UserStore 进行收藏/取消收藏
+    toggleStarWord(definition)
+
+    if (onSave && newState) onSave(word)
   }
 
-  // --- 核心修复：更智能的声音匹配逻辑 ---
+  // --- 核心修复：更智能的声音匹配逻辑 (来自 lixiao) ---
   const getBestVoice = (targetAccent: Accent) => {
-    // 统一将目标转换为 ISO 格式 (en-US / en-GB)
     const targetLang = targetAccent === 'US' ? 'en-US' : 'en-GB'
-
-    // 辅助函数：标准化语言代码 (把 en_US 变成 en-US)
     const normalize = (lang: string) => lang.replace('_', '-')
 
-    // 1. 第一梯队：高质量神经网络语音 (Edge/Chrome/Safari 高级语音)
-    // 关键词：Natural, Google, Siri, Premium, Enhanced
+    // 优先寻找神经网络/高质量语音
     const bestVoice = availableVoices.find(
       (v) =>
         normalize(v.lang) === targetLang &&
-        (v.name.includes('Natural') || // Edge
-          v.name.includes('Google') || // Chrome
-          v.name.includes('Siri') || // Apple
-          v.name.includes('Premium') || // Apple
-          v.name.includes('Enhanced')), // Apple
+        (v.name.includes('Natural') || 
+          v.name.includes('Google') || 
+          v.name.includes('Siri') || 
+          v.name.includes('Premium') || 
+          v.name.includes('Enhanced')),
     )
-
-    if (bestVoice) return bestVoice
-
-    // 2. 第二梯队：只要语言代码匹配就行
-    const exactLangVoice = availableVoices.find(
-      (v) => normalize(v.lang) === targetLang,
-    )
-    if (exactLangVoice) return exactLangVoice
-
-    // 3. 第三梯队：同语言系的任何声音 (比如找不到 en-GB 就找 en-US 顶替，总比没有好)
-    // 但为了区分口音，这里我们尽量不混用，除非真的找不到
-    return availableVoices.find((v) => normalize(v.lang).startsWith('en'))
+    return bestVoice || availableVoices.find((v) => normalize(v.lang) === targetLang)
   }
 
   const handlePlayAudio = () => {
     if (!word) return
-
     window.speechSynthesis.cancel()
-
+    
     const utterance = new SpeechSynthesisUtterance(word)
-    const voice = getBestVoice(accent)
-
+    // 默认尝试使用美音高质量语音
+    const voice = getBestVoice('US')
     if (voice) {
       utterance.voice = voice
-      // 电脑端某些神经语音语速较快，稍微调慢一点更像字典发音
-      utterance.rate = 0.9
-      console.log(`Using voice: ${voice.name} (${voice.lang})`)
-    } else {
-      console.warn('No suitable voice found, using system default.')
+      utterance.rate = 0.9 // 稍微调慢一点，听得更清楚
     }
-
+    
     window.speechSynthesis.speak(utterance)
   }
 
   const handleForget = () => {
     if (navigator.vibrate) navigator.vibrate(20)
-    forgetWord(word)
+    if (word) forgetWord(word)
     onClose()
   }
+
+  if (!word) return null
 
   return (
     <AnimatePresence>
@@ -134,7 +115,6 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           className="w-full max-w-md bg-white dark:bg-[#1C1C1E] border-t sm:border border-gray-200 dark:border-white/10 sm:rounded-2xl rounded-t-[2rem] p-6 shadow-2xl relative overflow-hidden transition-colors duration-300"
           onClick={(e) => e.stopPropagation()}>
-          {/* 装饰背景 */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 dark:bg-green-500/10 blur-[50px] rounded-full pointer-events-none" />
 
           <div className="flex justify-between items-start mb-6 relative z-10">
@@ -157,57 +137,10 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                 ) : (
                   <span className="animate-pulse">Analyzing...</span>
                 )}
-                {/* 显式显示当前口音，点击可切换 */}
-                <span
-                  className="text-[10px] bg-gray-100 dark:bg-white/5 px-1.5 rounded border border-gray-200 dark:border-white/5 cursor-pointer hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-                  onClick={() => setShowVoiceSettings(!showVoiceSettings)}>
-                  {accent}
-                </span>
               </div>
             </div>
 
             <div className="flex gap-2 relative">
-              {/* 发音设置面板 */}
-              {showVoiceSettings && (
-                <div className="absolute top-12 right-0 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-white/10 rounded-xl p-2 flex flex-col gap-1 shadow-xl animate-in fade-in zoom-in-95 duration-200 z-50 min-w-[100px]">
-                  <button
-                    onClick={() => {
-                      setAccent('US')
-                      setShowVoiceSettings(false)
-                    }}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-between gap-2 ${accent === 'US' ? 'bg-green-600 text-white' : 'text-gray-700 dark:text-white/60 hover:bg-gray-100 dark:hover:bg-white/5'}`}>
-                    <span>🇺🇸 US</span>
-                    {accent === 'US' && (
-                      <span className="material-symbols-outlined text-[10px]">
-                        check
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAccent('UK')
-                      setShowVoiceSettings(false)
-                    }}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-between gap-2 ${accent === 'UK' ? 'bg-green-600 text-white' : 'text-gray-700 dark:text-white/60 hover:bg-gray-100 dark:hover:bg-white/5'}`}>
-                    <span>🇬🇧 UK</span>
-                    {accent === 'UK' && (
-                      <span className="material-symbols-outlined text-[10px]">
-                        check
-                      </span>
-                    )}
-                  </button>
-                </div>
-              )}
-
-              {/* 设置按钮 */}
-              <button
-                onClick={() => setShowVoiceSettings(!showVoiceSettings)}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 border ${showVoiceSettings ? 'bg-gray-200 dark:bg-white/20 border-gray-300 dark:border-white/20 text-gray-900 dark:text-white' : 'bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-white/40 border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/10'}`}>
-                <span className="material-symbols-outlined text-[20px]">
-                  settings_voice
-                </span>
-              </button>
-
               <button
                 onClick={handleForget}
                 className="w-12 h-12 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-white/40 border border-gray-200 dark:border-white/5 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 transition-all active:scale-90">
@@ -218,13 +151,11 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
 
               <button
                 onClick={handleSave}
-                className={`
-                  w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 border
-                  ${isSaved
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 border ${
+                  isSaved
                     ? 'bg-green-600 text-white border-green-600 shadow-[0_0_15px_rgba(34,197,94,0.4)]'
                     : 'bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-white/40 border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/10'
-                  }
-                `}>
+                }`}>
                 <span className="material-symbols-outlined text-[24px] fill-current">
                   {isSaved ? 'bookmark' : 'bookmark_border'}
                 </span>
@@ -232,7 +163,6 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
             </div>
           </div>
 
-          {/* 释义内容区域 */}
           <div className="space-y-4 relative z-10 max-h-[60vh] overflow-y-auto no-scrollbar">
             {definition ? (
               <>
@@ -240,7 +170,7 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-green-600 dark:text-green-500 mb-2 flex items-center gap-1">
                     <span className="material-symbols-outlined text-[12px]">
                       radar
-                    </span>
+                    </span>{' '}
                     Context Meaning
                   </h4>
                   <p className="text-gray-900 dark:text-white text-[16px] font-bold leading-relaxed">
@@ -251,12 +181,26 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                   </p>
                 </div>
 
+                {context && (
+                  <div className="px-4 py-3 rounded-xl bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 mb-1 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[12px]">
+                        format_quote
+                      </span>
+                      Source Context
+                    </h4>
+                    <p className="text-gray-700 dark:text-white/80 text-sm italic font-medium leading-relaxed">
+                      "{context}"
+                    </p>
+                  </div>
+                )}
+
                 {definition.roots && (
                   <div className="px-4 py-3 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/5">
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-white/30 mb-1 flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px]">
                         account_tree
-                      </span>
+                      </span>{' '}
                       Etymology
                     </h4>
                     <p className="text-orange-600 dark:text-orange-300 font-mono text-sm">

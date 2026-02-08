@@ -19,15 +19,15 @@ import { useExploreStore } from './store/useExploreStore'
 import { PAGE_VARIANTS } from './motion'
 import { preloadImage, preloadImages } from './utils/media'
 
-// [新增] 定义页面顺序，用于决定滑动方向
+// [核心重构] 定义页面顺序，用于决定滑动方向
 const getPageRank = (page: Page) => {
   switch (page) {
+    case Page.Login: return -1
     case Page.Home: return 0
     case Page.Explore: return 1
     case Page.Study: return 2
     case Page.Profile: return 3
     case Page.CommunityDetail: return 4
-    case Page.Login: return -1
     default: return 0
   }
 }
@@ -35,7 +35,6 @@ const getPageRank = (page: Page) => {
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.Home)
   const [lastPage, setLastPage] = useState<Page>(Page.Home)
-  // [新增] 记录用户进入详情流的起始 Tab 页（Explore/Home/Profile）
   const [originPage, setOriginPage] = useState<Page>(Page.Home)
   const [transitionDirection, setTransitionDirection] = useState(1)
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
@@ -45,23 +44,38 @@ const App: React.FC = () => {
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [isCommunityFlow, setIsCommunityFlow] = useState(false)
-  const { currentUser, profile, login, logout, setLoading: setAuthLoading, isLoading: isAuthLoading } = useUserStore()
 
-  // [修改] 仅在初始化时确认加载完成
+  // 状态管理
+  const {
+    currentUser,
+    profile,
+    login,
+    logout,
+    setLoading: setAuthLoading,
+    isLoading: isAuthLoading,
+    _hasHydrated,
+  } = useUserStore()
+  const { initializeExplore } = useExploreStore()
+
   useEffect(() => {
     setAuthLoading(false)
+    initializeExplore()
   }, [])
 
-  // [新增] 未登录拦截
+  // [路由守卫优化] 增加对 _hasHydrated 的判断，防止从本地存储加载完成前误跳 Login
   useEffect(() => {
-    if (!isAuthLoading && !currentUser && currentPage !== Page.Login) {
-      setCurrentPage(Page.Login)
+    if (_hasHydrated && !isAuthLoading) {
+      if (!currentUser && currentPage !== Page.Login) {
+        setCurrentPage(Page.Login)
+      } else if (
+        currentUser &&
+        !profile?.learning_reason &&
+        currentPage !== Page.Onboarding
+      ) {
+        setCurrentPage(Page.Onboarding)
+      }
     }
-    // [新增] 如果已登录但未完成引导设置，强制进入 Onboarding
-    if (!isAuthLoading && currentUser && !profile?.learning_reason && currentPage !== Page.Onboarding) {
-      setCurrentPage(Page.Onboarding)
-    }
-  }, [currentUser, currentPage, isAuthLoading, profile])
+  }, [currentUser, currentPage, isAuthLoading, profile, _hasHydrated])
 
   useEffect(() => {
     const fetchAllPosts = async () => {
@@ -100,19 +114,16 @@ const App: React.FC = () => {
         setLoading(false)
       }
     }
-
     fetchAllPosts()
   }, [])
 
-  // [重构] 恢复瞬间导航：移除延迟和遮罩，优先响应速度
+  // [性能重构] 恢复瞬间导航：移除延迟和遮罩，提升 UI 响应反馈
   const navigateTo = (nextPage: Page) => {
     if (currentPage === nextPage) return
-    performNavigation(nextPage)
-  }
-
-  const performNavigation = (nextPage: Page) => {
+    
     const oldRank = getPageRank(currentPage)
     const newRank = getPageRank(nextPage)
+    
     setTransitionDirection(newRank >= oldRank ? 1 : -1)
     setLastPage(currentPage)
 
@@ -120,7 +131,6 @@ const App: React.FC = () => {
     if (mainTabPages.includes(nextPage)) {
       setOriginPage(nextPage)
     }
-
     setCurrentPage(nextPage)
   }
 
@@ -148,7 +158,6 @@ const App: React.FC = () => {
             initialTab={filteredCommunityId ? 'foryou' : undefined}
           />
         )
-
       case Page.Preview:
         return (
           <div className="h-full w-full bg-black">
@@ -157,14 +166,10 @@ const App: React.FC = () => {
               isExiting={false}
               isActive={true}
               onOpenDiscussion={() => navigateTo(Page.TopicHub)}
-              onBack={() => {
-                // [修复] 使用 originPage 确保返回到正确的起始页（通常是 Profile）
-                navigateTo(originPage)
-              }}
+              onBack={() => navigateTo(originPage)}
             />
           </div>
         )
-
       case Page.TopicHub:
         return (
           <TopicHub
@@ -172,18 +177,13 @@ const App: React.FC = () => {
             initialCommentId={selectedCommentId}
             onNavigate={(p) => {
               if (p === Page.Home) {
-                // [智能返回] 优先判断是否处于社区详情流
                 if (isCommunityFlow) {
                   navigateTo(Page.CommunityDetail)
                 } else if (originPage === Page.Explore) {
-                  // 从 Explore 进来的，返回 Explore
                   navigateTo(Page.Explore)
                 } else if (originPage === Page.Profile) {
-                  // 从 Profile 进来的，返回 Preview 中间层
                   navigateTo(Page.Preview)
                 } else {
-                  // 从 Home 进来的，或其他情况，返回 Home
-                  // 只有在没有社区过滤且是真正回到 Home 时，才清理状态
                   if (!filteredCommunityId && originPage === Page.Home) {
                     setViewingPost(null)
                     setSelectedCommentId(null)
@@ -191,28 +191,21 @@ const App: React.FC = () => {
                   navigateTo(originPage)
                 }
               } else {
-                // 其他导航（如进入 ChatRoom）正常处理
                 navigateTo(p)
               }
             }}
             onSelectComment={(commentId) => setSelectedCommentId(commentId)}
           />
         )
-
       case Page.ChatRoom:
         return (
           <ChatRoom
             postId={activePost.id}
             postImage={activePost.image}
             focusCommentId={selectedCommentId}
-            onBack={() => {
-              // ChatRoom 只返回到 TopicHub，不修改 originPage
-              // 确保整个详情流的起始点被锁定
-              navigateTo(Page.TopicHub)
-            }}
+            onBack={() => navigateTo(Page.TopicHub)}
           />
         )
-
       case Page.Explore:
         return (
           <Explore
@@ -258,18 +251,9 @@ const App: React.FC = () => {
           />
         )
       case Page.Onboarding:
-        return (
-          <Onboarding
-            onComplete={() => {
-              // 引导完成，确保 profile 同步后进入首页
-              navigateTo(Page.Home)
-            }}
-          />
-        )
+        return <Onboarding onComplete={() => navigateTo(Page.Home)} />
       default:
-        return (
-          <Home onNavigate={navigateTo} onPostSelect={handlePostClick} />
-        )
+        return <Home onNavigate={navigateTo} onPostSelect={handlePostClick} />
     }
   }
 
@@ -281,12 +265,8 @@ const App: React.FC = () => {
     currentPage === Page.Onboarding ||
     currentPage === Page.Login
 
-  // [移除] 不再在渲染期间实时派生方向，改为使用 navigateTo 显式更新的状态
-  // const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
-  // [移除] 不再在渲染期间实时派生方向，改为使用 navigateTo 显式更新的状态
-  // const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
-
-  if (isAuthLoading) {
+  // [核心修复] 如果持久化存储还没加载完，显示 Loading，防止权限检查异常
+  if (!_hasHydrated || isAuthLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0B0A09]">
         <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
