@@ -384,12 +384,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         addLocalComment(postId, aiAnswerMsg)
 
       } catch (error) {
-        console.error('AI API Error:', error)
+        // Silent error for alpha
       } finally {
         setIsAiLoading(false)
       }
     } else {
-      console.log('Sending normal reply:', inputText)
+      // Normal reply flow
       setInputText('')
     }
   }

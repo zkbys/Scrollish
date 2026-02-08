@@ -20,37 +20,37 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     const visionSlides = [
         {
-            title: "Read What Matters",
-            description: "Dive into trending discussions from Reddit and master English through real-world content.",
-            image: IMAGES.london, // Placeholder for high-quality vision image
+            title: "阅你所爱",
+            description: "深入论坛热门讨论，通过真实内容掌握地道英语。",
+            image: IMAGES.london,
             accent: "from-orange-500 to-red-500"
         },
         {
-            title: "Understand Deeply",
-            description: "Smart translations and AI-powered context analysis help you grasp every nuance.",
+            title: "深度理解",
+            description: "智能翻译与 AI 语义分析，助你捕捉每一处细节。",
             image: IMAGES.avatar1,
             accent: "from-blue-500 to-indigo-600"
         },
         {
-            title: "Effortless Growth",
-            description: "Track your progress, earn XP, and watch your skills level up as you scroll.",
+            title: "持续成长",
+            description: "记录你的点滴进步，在刷帖中见证自我提升。",
             image: IMAGES.london,
             accent: "from-emerald-500 to-teal-600"
         }
     ]
 
     const reasons = [
-        { id: 'career', label: 'Career Growth', icon: 'work' },
-        { id: 'interest', label: 'Pure Interest', icon: 'favorite' },
-        { id: 'exam', label: 'Exam Prep', icon: 'school' },
-        { id: 'travel', label: 'Foreign Travel', icon: 'flight' }
+        { id: 'career', label: '职场提升', icon: 'work' },
+        { id: 'interest', label: '纯粹兴趣', icon: 'favorite' },
+        { id: 'exam', label: '备考深造', icon: 'school' },
+        { id: 'travel', label: '出国旅行', icon: 'flight' }
     ]
 
     const levels = [
-        { id: 'beginner', label: 'Beginner', desc: 'Just starting out' },
-        { id: 'intermediate', label: 'Intermediate', desc: 'Can hold a basic chat' },
-        { id: 'advanced', label: 'Advanced', desc: 'Fluent and confident' },
-        { id: 'native', label: 'Native/Expert', desc: 'Mastering the nuances' }
+        { id: 'beginner', label: '初学者', desc: '刚开始起步' },
+        { id: 'intermediate', label: '中级水平', desc: '能够进行基础交流' },
+        { id: 'advanced', label: '高级水平', desc: '表达流利且自信' },
+        { id: 'native', label: '专家/母语级', desc: '掌握语言精髓' }
     ]
 
     const handleNext = () => {
@@ -103,7 +103,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                             </motion.div>
                             <div className="space-y-3">
                                 <h1 className="text-4xl font-black tracking-tighter italic">
-                                    {visionSlides[step].title}
+                                    <span className="text-primary">{visionSlides[step].title.slice(0, 1)}</span>
+                                    {visionSlides[step].title.slice(1)}
                                 </h1>
                                 <p className="text-white/50 text-base leading-relaxed max-w-[280px] mx-auto font-medium">
                                     {visionSlides[step].description}
@@ -124,7 +125,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 onClick={handleNext}
                                 className={`w-full py-5 rounded-2xl bg-gradient-to-r ${visionSlides[step].accent} text-white font-black text-lg shadow-xl active:scale-95 transition-transform`}
                             >
-                                {step === 2 ? "Let's Start" : "Next"}
+                                {step === 2 ? "立即开始" : "下一步"}
                             </button>
                         </div>
                     </motion.div>
@@ -140,7 +141,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         <div className="space-y-2">
                             <span className="text-primary font-black uppercase tracking-[0.2em] text-[10px]">Onboarding 01</span>
                             <h2 className="text-3xl font-black tracking-tight leading-tight">
-                                Why are you learning <br /><span className="text-primary italic">English?</span>
+                                你学习英语的 <br /><span className="text-primary italic">原因</span> 是？
                             </h2>
                         </div>
 
@@ -172,7 +173,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         <div className="space-y-2">
                             <span className="text-primary font-black uppercase tracking-[0.2em] text-[10px]">Onboarding 02</span>
                             <h2 className="text-3xl font-black tracking-tight leading-tight">
-                                What is your current <br /><span className="text-primary italic">Level?</span>
+                                你目前的 <br /><span className="text-primary italic">英语水平</span> 是？
                             </h2>
                         </div>
 
@@ -200,8 +201,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     >
                         <div className="w-20 h-20 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
                         <div className="text-center space-y-2">
-                            <h3 className="text-2xl font-black tracking-tight italic">Setting up your lab...</h3>
-                            <p className="text-white/30 text-sm font-medium">Tailoring the feed to your style</p>
+                            <h3 className="text-2xl font-black tracking-tight italic">正在创建个性化设置...</h3>
+                            <p className="text-white/30 text-sm font-medium">正在根据你的偏好定制内容</p>
                         </div>
                     </motion.div>
                 )}

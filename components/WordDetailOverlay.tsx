@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useUserStore } from '../store/useUserStore'
 import {
   DictionaryResult,
   useDictionaryStore,
@@ -20,7 +21,8 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   onClose,
   onSave,
 }) => {
-  const [isSaved, setIsSaved] = useState(false)
+  const { toggleStarWord, isWordStarred } = useUserStore()
+  const isSaved = word ? isWordStarred(word) : false
   const { forgetWord } = useDictionaryStore()
 
   // TTS 状态
@@ -56,8 +58,9 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
 
   const handleSave = () => {
     if (navigator.vibrate) navigator.vibrate(50)
-    setIsSaved(!isSaved)
-    if (onSave && !isSaved) onSave(word)
+    if (word && definition) {
+      toggleStarWord(definition)
+    }
   }
 
   // --- 核心修复：更智能的声音匹配逻辑 ---
@@ -217,10 +220,9 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                 onClick={handleSave}
                 className={`
                   w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 border
-                  ${
-                    isSaved
-                      ? 'bg-green-600 text-white border-green-600 shadow-[0_0_15px_rgba(34,197,94,0.4)]'
-                      : 'bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-white/40 border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/10'
+                  ${isSaved
+                    ? 'bg-green-600 text-white border-green-600 shadow-[0_0_15px_rgba(34,197,94,0.4)]'
+                    : 'bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-white/40 border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/10'
                   }
                 `}>
                 <span className="material-symbols-outlined text-[24px] fill-current">

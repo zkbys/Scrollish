@@ -408,7 +408,6 @@ export const FeedItem: React.FC<{
               videoRef.current!.pause()
             }
           } catch (e) {
-            console.log('Playback prevented', e)
           }
         }
         attemptPlay()

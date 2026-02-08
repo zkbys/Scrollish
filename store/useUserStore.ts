@@ -2,9 +2,11 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { supabase } from '../supabase'
 import { ProductionPost } from './useAppStore'
+import { DictionaryResult } from './useDictionaryStore'
 
 interface UserState {
   likedPosts: ProductionPost[]
+  starredWords: DictionaryResult[]
   followedCommunities: string[] // 存储关注的社区 ID
 
   currentUser: any | null
@@ -13,6 +15,8 @@ interface UserState {
   // Actions
   toggleLike: (post: ProductionPost) => void
   isLiked: (postId: string) => boolean
+  toggleStarWord: (word: DictionaryResult) => void
+  isWordStarred: (wordName: string) => boolean
   toggleFollowCommunity: (communityId: string) => void
   isFollowing: (communityId: string) => boolean
   login: (user: any) => void
@@ -27,6 +31,7 @@ export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
       likedPosts: [],
+      starredWords: [],
       followedCommunities: [],
       currentUser: null,
       profile: null,
@@ -45,6 +50,21 @@ export const useUserStore = create<UserState>()(
 
       isLiked: (postId: string) => {
         return get().likedPosts.some((p) => p.id === postId)
+      },
+
+      toggleStarWord: (word: DictionaryResult) => {
+        const currentStarred = get().starredWords
+        const exists = currentStarred.find((w) => w.word === word.word)
+
+        if (exists) {
+          set({ starredWords: currentStarred.filter((w) => w.word !== word.word) })
+        } else {
+          set({ starredWords: [word, ...currentStarred] })
+        }
+      },
+
+      isWordStarred: (wordName: string) => {
+        return get().starredWords.some((w) => w.word === wordName)
       },
 
       toggleFollowCommunity: (communityId: string) => {

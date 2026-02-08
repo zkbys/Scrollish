@@ -383,24 +383,31 @@ const Explore: React.FC<ExploreProps> = ({
 
         {/* Header */}
         <header className="sticky top-0 z-50 bg-white/40 dark:bg-black/40 backdrop-blur-xl border-b border-white/60 dark:border-white/5 transition-all">
-          <div className="flex items-center px-5 pt-12 pb-4 justify-between">
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              className="h-9 w-9 flex items-center justify-center glass-card-premium transition-transform">
-              <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/90">
-                menu
-              </span>
-            </motion.button>
-            <h1 className="text-gray-900 dark:text-white text-[17px] font-black tracking-tight flex-1 text-center">
+          <div className="flex items-center px-5 pt-12 pb-4 justify-between relative">
+            {/* 锁定状态的菜单按钮 */}
+            <div className="h-9 w-9 flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+              {/* 底层 40% 透明度 + 1.2px 模糊的菜单图标 */}
+              <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/40 blur-[2px]">menu</span>
+
+              {/* 核心锁定标志：实心橙色小锁 */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[14px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]">lock</span>
+              </div>
+            </div>
+
+            <h1 className="text-gray-900 dark:text-white text-[17px] font-black tracking-tight flex-1 text-center font-mono italic">
               Discovery
             </h1>
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              className="h-9 w-9 flex items-center justify-center glass-card-premium transition-transform">
-              <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/90">
-                notifications
-              </span>
-            </motion.button>
+
+            <div className="relative">
+              {/* 锁定状态的铃铛按钮 */}
+              <div className="h-9 w-9 flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+                <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/40 blur-[2px]">notifications</span>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[14px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]">lock</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Search Bar */}
@@ -611,102 +618,103 @@ const Explore: React.FC<ExploreProps> = ({
           </section>
 
           {/* Categories Navbar */}
-          <nav className="sticky top-[156px] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all">
-            <div className="flex overflow-x-auto no-scrollbar px-5 gap-8">
+          <nav className="sticky top-[156px] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all relative">
+            <div className="flex overflow-x-auto no-scrollbar px-5 gap-8 opacity-40 blur-[1px]">
               {categories.map((cat) => (
-                <motion.button
+                <div
                   key={cat.id}
-                  whileTap={{ opacity: 0.6 }}
-                  onClick={() => setActiveCategoryId(cat.id)}
                   className={`flex flex-col items-center justify-center pb-3 pt-4 shrink-0 transition-all ${activeCategoryId === cat.id ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'}`}>
                   <span className={`text-[13px] font-black tracking-tight uppercase ${activeCategoryId === cat.id ? 'opacity-100' : 'opacity-80 font-bold'}`}>
                     {cat.name_en}
                   </span>
                   {activeCategoryId === cat.id && (
-                    <motion.div
-                      layoutId="cat-indicator"
+                    <div
                       className="mt-1 w-5 h-1 bg-orange-500 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.4)]"
                     />
                   )}
-                </motion.button>
+                </div>
               ))}
+            </div>
+            {/* 分类栏锁定层 */}
+            <div className="absolute inset-0 z-10 bg-white/5 dark:bg-black/10 flex items-center justify-center pointer-events-auto">
+              <span className="material-symbols-outlined text-orange-500 text-sm fill-[1] drop-shadow-[0_0_10px_rgba(249,115,22,0.6)]">lock</span>
             </div>
           </nav>
 
           {/* Communities List */}
-          <main className="flex-1 p-5 space-y-4 mb-24 min-h-[400px]">
-            {isListLoading ? (
-              <div className="flex flex-col items-center justify-center py-20 opacity-40">
-                <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-white">
-                  Loading...
-                </p>
-              </div>
-            ) : currentCategoryData.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-white/20">
-                <span className="material-symbols-outlined text-6xl mb-4 opacity-10">
-                  explore_off
-                </span>
-                <p className="text-xs font-black uppercase tracking-[0.2em]">
-                  No Communities Found
-                </p>
-              </div>
-            ) : (
-              currentCategoryData.map((sub) => (
-                <motion.div
-                  key={sub.id}
-                  whileTap={{ scale: 0.98, backgroundColor: 'rgba(255,255,255,0.05)' }}
-                  className="flex items-center gap-4 glass-card-premium p-4 border-white/60 dark:border-white/5 transition-all group cursor-pointer"
-                  onClick={() => handleCommunityClick(sub)}>
+          <main className="flex-1 p-5 space-y-4 mb-24 min-h-[400px] relative overflow-hidden">
+            <div className="space-y-4 blur-[4px] opacity-40 select-none pointer-events-none">
+              {isListLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 opacity-40">
+                  <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-white">
+                    Loading...
+                  </p>
+                </div>
+              ) : currentCategoryData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-white/20">
+                  <span className="material-symbols-outlined text-6xl mb-4 opacity-10">
+                    explore_off
+                  </span>
+                  <p className="text-xs font-black uppercase tracking-[0.2em]">
+                    No Communities Found
+                  </p>
+                </div>
+              ) : (
+                currentCategoryData.map((sub) => (
                   <div
-                    className={`size-14 rounded-2xl bg-gradient-to-br ${getCommunityGradient(sub.name)} border border-white/20 flex items-center justify-center shrink-0 text-white shadow-lg overflow-hidden relative`}>
-                    <div className="absolute inset-0 bg-black/10"></div>
-                    <span className="text-lg font-black relative z-10">
-                      {sub.name.substring(0, 1).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-[15px] font-black text-gray-900 dark:text-white truncate tracking-tight">
-                        r/{sub.name}
-                      </h3>
-                      {sub.subscriber_count > 1000000 && (
-                        <span className="material-symbols-outlined text-[14px] text-blue-400" style={{ fontVariationSettings: "'FILL' 1" }}>
-                          verified
-                        </span>
-                      )}
+                    key={sub.id}
+                    className="flex items-center gap-4 glass-card-premium p-4 border-white/60 dark:border-white/5 transition-all group">
+                    <div
+                      className={`size-14 rounded-2xl bg-gradient-to-br ${getCommunityGradient(sub.name)} border border-white/20 flex items-center justify-center shrink-0 text-white shadow-lg overflow-hidden relative`}>
+                      <div className="absolute inset-0 bg-black/10"></div>
+                      <span className="text-lg font-black relative z-10">
+                        {sub.name.substring(0, 1).toUpperCase()}
+                      </span>
                     </div>
-                    <p className="text-[10px] font-bold text-gray-400 dark:text-white/40 uppercase tracking-widest mt-0.5">
-                      {sub.sub_category || 'Discussion'}
-                    </p>
-                    <div className="flex items-center gap-3 mt-3">
-                      <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleJoinClick(e, sub.id)
-                        }}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${isFollowing(sub.id) ? 'bg-gray-900 dark:bg-white text-white dark:text-black border-transparent' : 'bg-transparent text-orange-500 border-orange-500/30 hover:border-orange-500/60'}`}>
-                        <span className="material-symbols-outlined text-[14px] font-bold">
-                          {isFollowing(sub.id) ? 'done' : 'add'}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-[15px] font-black text-gray-900 dark:text-white truncate tracking-tight">
+                          r/{sub.name}
+                        </h3>
+                        {sub.subscriber_count > 1000000 && (
+                          <span className="material-symbols-outlined text-[14px] text-blue-400" style={{ fontVariationSettings: "'FILL' 1" }}>
+                            verified
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-400 dark:text-white/40 uppercase tracking-widest mt-0.5">
+                        {sub.sub_category || 'Discussion'}
+                      </p>
+                      <div className="flex items-center gap-3 mt-3">
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${isFollowing(sub.id) ? 'bg-gray-900 dark:bg-white text-white dark:text-black border-transparent' : 'bg-transparent text-orange-500 border-orange-500/30'}`}>
+                          <span className="material-symbols-outlined text-[14px] font-bold">
+                            {isFollowing(sub.id) ? 'done' : 'add'}
+                          </span>
+                          {isFollowing(sub.id) ? 'Joined' : 'Join'}
+                        </div>
+                        <span className="text-[11px] text-gray-400 dark:text-white/20 font-bold tracking-tight">
+                          {formatSubscribers(sub.subscriber_count)}
                         </span>
-                        {isFollowing(sub.id) ? 'Joined' : 'Join'}
-                      </motion.button>
-                      <span className="text-[11px] text-gray-400 dark:text-white/20 font-bold tracking-tight">
-                        {formatSubscribers(sub.subscriber_count)}
+                      </div>
+                    </div>
+                    <div className="size-11 glass-card-premium rounded-full flex items-center justify-center border-white/80 dark:border-white/10 transition-all">
+                      <span className="material-symbols-outlined text-gray-400 dark:text-white/30 text-[24px]">
+                        chevron_right
                       </span>
                     </div>
                   </div>
-                  <motion.div
-                    whileTap={{ scale: 0.8 }}
-                    className="size-11 glass-card-premium hover:bg-orange-500 rounded-full flex items-center justify-center border-white/80 dark:border-white/10 transition-all cursor-pointer group hover:text-white">
-                    <span className="material-symbols-outlined text-gray-400 dark:text-white/30 group-hover:text-white transition-colors text-[24px]">
-                      chevron_right
-                    </span>
-                  </motion.div>
-                </motion.div>
-              ))
-            )}
+                )
+                ))}
+            </div>
+
+            {/* 全局锁定层：深层模糊 + 背景变色 */}
+            <div className="absolute inset-0 z-30 backdrop-blur-[15px] bg-white/5 dark:bg-black/10 flex items-center justify-center flex-col gap-4">
+              <div className="w-16 h-16 rounded-3xl bg-white/20 dark:bg-white/5 backdrop-blur-2xl flex items-center justify-center border border-white/20 shadow-2xl animate-pulse">
+                <span className="material-symbols-outlined text-orange-500 text-3xl fill-[1] drop-shadow-[0_0_15px_rgba(249,115,22,0.8)]">lock</span>
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500/60 animate-pulse">Premium Discovery Locked</p>
+            </div>
           </main>
         </div>
       </div>
