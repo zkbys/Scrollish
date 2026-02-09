@@ -5,10 +5,12 @@ interface InteractiveTextProps {
   text: string
   contextSentence?: string
   className?: string
-  externalOnClick?: (word: string) => void // 新增
+  externalOnClick?: (word: string) => void
 }
 
-const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> = ({
+const InteractiveText: React.FC<
+  InteractiveTextProps & { disabled?: boolean }
+> = ({
   text,
   contextSentence = '',
   className = '',
@@ -32,13 +34,11 @@ const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> =
     }
   }, [text])
 
-  // 在 InteractiveText 组件内修改 handleWordClick
   const handleWordClick = (word: string) => {
     if (disabled) return
     if (externalOnClick) {
-      externalOnClick(word) // 优先使用外部控制
+      externalOnClick(word)
     } else {
-      // 默认行为
       if (navigator.vibrate) navigator.vibrate(20)
       triggerAnalysis(word, contextSentence || text)
     }
@@ -58,8 +58,14 @@ const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> =
               key={i}
               onClick={(e) => {
                 if (disabled) return
+                // 阻止冒泡，避免触发父级可能的点击事件
                 e.stopPropagation()
                 handleWordClick(word)
+              }}
+              // [核心修复] 阻止原生右键/长按菜单，避免与父组件长按逻辑冲突
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
               }}
               className={`
                 relative inline-block ${disabled ? '' : 'cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5 hover:bg-white/10 active:scale-95'}
@@ -67,7 +73,6 @@ const InteractiveText: React.FC<InteractiveTextProps & { disabled?: boolean }> =
                 ${!disabled && isReady ? 'decoration-green-500 decoration-wavy underline underline-offset-4 decoration-2' : ''}
               `}>
               {word}
-              {/* Loading 状态下的下划线动画 */}
               {isLoading && (
                 <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-orange-500/50 animate-progress-line" />
               )}

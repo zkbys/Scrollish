@@ -12,6 +12,7 @@ import { useCommentStore } from '../store/useCommentStore'
 import { useDictionaryStore } from '../store/useDictionaryStore'
 import MessageBubble from '../components/MessageBubble'
 import WordDetailOverlay from '../components/WordDetailOverlay'
+import { Comment } from '../types'
 
 interface TopicHubProps {
   onNavigate: (page: Page) => void
@@ -37,7 +38,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   // 查词状态
   const [viewingWord, setViewingWord] = useState<string | null>(null)
 
-  // [新增] 卡片是否滚动到底部
+  // 卡片是否滚动到底部
   const [isCardAtBottom, setIsCardAtBottom] = useState(false)
 
   const startPos = useRef({ x: 0, y: 0 })
@@ -117,6 +118,25 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const hasVideo = !!videoUrl && !videoError
   const activeComment = comments[currentIndex] || comments[0]
 
+  // [新增] 递归计算回复数 (所有子孙节点)
+  // 逻辑：ChatRoom 显示的是整个对话树的节点数（包括发起者和所有回复）。
+  // 这里 activeComment 是根，所以我们需要计算 activeComment 的所有后代数量。
+  const countDescendants = (parentId: string, all: Comment[]): number => {
+    const children = all.filter((c) => c.parent_id === parentId)
+    if (children.length === 0) return 0
+    return (
+      children.length +
+      children.reduce((acc, child) => acc + countDescendants(child.id, all), 0)
+    )
+  }
+
+  const activeReplyCount = useMemo(() => {
+    if (activeComment.isOpCard) return 0
+    // 如果想要完全和 ChatRoom 的 "RESPONSES" 数量一致，通常 ChatRoom 是 "Total messages - 1 (Root)"
+    // 所以这里只计算后代数量即可
+    return countDescendants(activeComment.id, allComments)
+  }, [allComments, activeComment])
+
   useEffect(() => {
     if (hasVideo && videoRef.current) {
       videoRef.current.muted = true
@@ -141,7 +161,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
     setViewingWord(word)
   }
 
-  // [新增] 监听卡片内部滚动，判断是否到底部
   const handleCardScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
     // 允许 10px 误差
@@ -160,9 +179,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
       if (Math.abs(diffX) > 50) diffX < 0 ? nextCard() : prevCard()
     } else {
       // 纵向滑动 (进入聊天室)
-      // 只有非 OP 卡片，且在底部，且向上拉动(diffY < 0)时触发
       if (diffY < -50 && !activeComment.isOpCard) {
-        // 如果卡片内容很短（不需要滚动）或者已经滚动到底部
         if (
           isCardAtBottom ||
           (contentRef.current &&
@@ -202,7 +219,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
         <div className="blob-pastel top-1/4 -right-40 bg-[#FED7AA] dark:bg-red-500/10 opacity-60 dark:opacity-30" />
         <div className="blob-pastel -bottom-20 -left-20 bg-[#FFEDD5] dark:bg-orange-500/10 opacity-60 dark:opacity-30" />
         <div
-          className="absolute inset-[-50%] bg-cover bg-center blur-[120px] opacity-10 dark:opacity-20 animate-pulse-slow"
+          className="absolute inset-[-50%] bg-cover bg-center blur-[120px] opacity-40 dark:opacity-30 animate-pulse-slow"
           style={{ backgroundImage: `url("${imageUrl}")` }}
         />
       </div>
@@ -215,6 +232,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
         />
       )}
 
+      {/* 顶部媒体预览 */}
       <div className="mx-4 mt-12 h-56 relative z-50">
         <motion.div
           initial={{ y: -300, opacity: 0 }}
@@ -250,16 +268,17 @@ const TopicHub: React.FC<TopicHubProps> = ({
         </button>
       </div>
 
+      {/* 评论卡片区域 */}
       <main className="flex-1 flex flex-col items-center justify-start pt-6 z-40">
         <div className="w-full px-8 flex justify-between items-center mb-4">
-          <span className="text-gray-500 dark:text-white/40 text-[10px] font-bold uppercase">
+          <span className="text-gray-500 dark:text-white/60 text-[10px] font-bold uppercase drop-shadow-sm">
             {activeComment?.isOpCard
-              ? 'Original Post'
-              : `Opinion ${currentIndex}/${comments.length - 1}`}
+              ? '原帖内容'
+              : `顶级评论 ${currentIndex}/${comments.length - 1}`}
           </span>
-          <div className="h-1 w-16 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
+          <div className="h-1 w-16 bg-white/30 dark:bg-white/10 rounded-full overflow-hidden backdrop-blur-sm">
             <div
-              className="h-full bg-orange-500 transition-all duration-300"
+              className="h-full bg-orange-500 transition-all duration-300 shadow-[0_0_10px_rgba(249,115,22,0.5)]"
               style={{
                 width: `${((currentIndex + 1) / Math.max(comments.length, 1)) * 100}%`,
               }}
@@ -272,9 +291,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}>
           <div
-            className={`absolute inset-x-4 top-0 bottom-0 bg-white/90 dark:bg-[#121212]/80 backdrop-blur-2xl rounded-[2.5rem] border border-gray-200 dark:border-white/10 flex flex-col overflow-hidden transition-all duration-300 shadow-2xl ${animationClass}`}>
+            className={`absolute inset-x-4 top-0 bottom-0 flex flex-col overflow-hidden transition-all duration-300 shadow-2xl rounded-[2.5rem] border border-white/40 dark:border-white/10 ${animationClass} 
+            bg-white/60 dark:bg-[#121212]/60 backdrop-blur-3xl`}>
+            {/* 卡片头部 - 包含用户信息和数据统计 */}
             <div
-              className="h-16 border-b border-gray-100 dark:border-white/5 flex items-center justify-between px-6 shrink-0"
+              className="h-16 border-b border-gray-200/50 dark:border-white/5 flex items-center justify-between px-6 shrink-0"
               onClick={goToChatRoom}>
               <div className="flex items-center gap-3">
                 <div
@@ -285,12 +306,35 @@ const TopicHub: React.FC<TopicHubProps> = ({
                       : activeComment?.author.slice(0, 2).toUpperCase()}
                   </div>
                 </div>
-                <span className="text-gray-900 dark:text-white font-bold text-sm">
-                  {activeComment?.author}
-                </span>
+                {/* 用户信息与数据统计区 */}
+                <div className="flex flex-col justify-center">
+                  <span className="text-gray-900 dark:text-white font-bold text-sm leading-tight">
+                    {activeComment?.author}
+                  </span>
+                  {!activeComment?.isOpCard && (
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[10px] text-orange-500">
+                          favorite
+                        </span>
+                        <span className="text-[9px] font-bold text-gray-500 dark:text-white/60">
+                          {activeComment.upvotes || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[10px] text-blue-400">
+                          chat_bubble
+                        </span>
+                        <span className="text-[9px] font-bold text-gray-500 dark:text-white/60">
+                          {activeReplyCount} replies
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               {!activeComment?.isOpCard && (
-                <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-gray-100/50 dark:bg-white/5 flex items-center justify-center">
                   <span className="material-symbols-outlined text-gray-400 text-[18px]">
                     expand_less
                   </span>
@@ -298,6 +342,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
               )}
             </div>
 
+            {/* 卡片内容 */}
             <div
               ref={contentRef}
               onScroll={handleCardScroll}
@@ -311,58 +356,55 @@ const TopicHub: React.FC<TopicHubProps> = ({
               <div className="h-12" />
             </div>
 
-            {/* [核心修复] 动态交互提示 */}
-            <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white dark:from-[#121212] to-transparent pointer-events-none flex items-end justify-center pb-4 opacity-80">
-              {activeComment?.isOpCard ? (
-                // 0号卡片: 提示右滑
-                <div className="flex flex-col items-center animate-bounce-subtle">
-                  <div className="flex items-center gap-1 text-gray-400 dark:text-white">
-                    <span className="text-[9px] font-black uppercase tracking-widest">
-                      Swipe Left
-                    </span>
-                    <span className="material-symbols-outlined text-[14px]">
-                      arrow_forward
-                    </span>
+            {/* 底部：仅保留交互提示 */}
+            <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white/90 via-white/50 to-transparent dark:from-[#000000] dark:via-[#121212]/50 pointer-events-none flex flex-col justify-end pb-4">
+              <div className="flex justify-center opacity-80">
+                {activeComment?.isOpCard ? (
+                  <div className="flex flex-col items-center animate-bounce-subtle">
+                    <div className="flex items-center gap-1 text-gray-400 dark:text-white/60">
+                      <span className="text-[9px] font-black uppercase tracking-widest">
+                        {/* Swipe Left */}
+                        左滑看观点
+                      </span>
+                      <span className="material-symbols-outlined text-[14px]">
+                        arrow_forward
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                // 其他卡片: 提示上拉 (仅当到底部时变色提示)
-                <div
-                  className={`flex flex-col items-center transition-all duration-300 ${isCardAtBottom ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-50'}`}>
-                  {isCardAtBottom ? (
-                    <>
-                      <span className="material-symbols-outlined text-orange-500 text-[18px] animate-bounce">
-                        keyboard_double_arrow_up
-                      </span>
-                      <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest mt-0.5">
-                        Pull Up to Discuss
-                      </span>
-                    </>
-                  ) : (
-                    <>
+                ) : (
+                  <div
+                    className={`flex flex-col items-center transition-all duration-300 ${isCardAtBottom ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-50'}`}>
+                    {isCardAtBottom ? (
+                      <>
+                        <span className="material-symbols-outlined text-orange-500 text-[18px] animate-bounce">
+                          keyboard_double_arrow_up
+                        </span>
+                        <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest mt-0.5">
+                          {/* Pull Up to Discuss */}
+                          上拉进入讨论
+                        </span>
+                      </>
+                    ) : (
                       <span className="material-symbols-outlined text-gray-300 dark:text-white/30 text-[16px]">
                         keyboard_arrow_down
                       </span>
-                      <span className="text-[8px] font-black text-gray-300 dark:text-white/30 uppercase tracking-widest">
-                        Scroll to Read
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </main>
 
-      {/* [核心修复] 底部滚动字幕回归 */}
-      <div className="h-14 w-full relative z-40 overflow-hidden flex items-center bg-gray-100/50 dark:bg-white/5 backdrop-blur-md border-t border-gray-200 dark:border-white/5 opacity-80">
+      {/* 底部滚动字幕 */}
+      <div className="h-14 w-full relative z-40 overflow-hidden flex items-center bg-gray-100/30 dark:bg-white/5 backdrop-blur-md border-t border-white/20 dark:border-white/5 opacity-80">
         <div className="flex whitespace-nowrap animate-ticker items-center gap-10 px-8">
           {[1, 2, 3].map((v) => (
             <div key={v} className="flex items-center gap-12">
               <span className="text-[10px] font-black text-orange-500 dark:text-orange-300 tracking-[0.15em]">
-                欢 迎 来 到 SCROLLISH · 如 果 遇 到 问 题 请 及 时 向 我 们 反
-                馈 谢 谢！❤
+                欢 迎 来 到 SCROLLISH · 如 果 遇 到 题 请 及 时 向 我 们 反 馈
+                谢 谢！❤
               </span>
               <div className="flex gap-1">
                 <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
@@ -378,14 +420,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
               <span className="text-[11px] font-black text-orange-500 dark:text-orange-400 tracking-wider font-mono">
                 Welcome to Scrollish!
               </span>
-              <div className="flex gap-1">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="w-1 h-3 bg-white/20 rounded-full rotate-12"
-                  />
-                ))}
-              </div>
             </div>
           ))}
         </div>

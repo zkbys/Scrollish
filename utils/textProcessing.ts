@@ -77,13 +77,15 @@ export const getMessageSegments = (
       comment.enrichment.difficulty_variants[difficulty].content || ''
     rawSegments = [{ en: content, zh: comment.content_cn }]
   }
-  // B. OP 消息 (OP卡片底部固定显示翻译，这里段落内不显示)
-  else if (comment.id === 'op-message') {
+  // [已删除] B. OP 消息 (删除此块，让其走下方的默认逻辑，实现 sentence-level 分句)
+  /* else if (comment.id === 'op-message') {
     const content = comment.content || ''
     const paragraphs = content.split(/\n+/)
     rawSegments = paragraphs.map((p) => ({ en: decodeHtmlEntity(p), zh: null }))
   }
-  // C. Enrichment 分句数据 (这是唯一会有段落内翻译的情况)
+  */
+
+  // C. Enrichment 后端分句数据 (Priority 2)
   else if (
     comment.enrichment?.sentence_segments &&
     Array.isArray(comment.enrichment.sentence_segments) &&
@@ -94,32 +96,53 @@ export const getMessageSegments = (
       zh: s.zh,
     }))
   }
-  // D. [核心修复] 降级策略：强制 zh=null
-  // 这样 MessageBubble 就不会在中间渲染翻译，而是触发底部的 content_cn 渲染
+  // D. [核心] 前端智能分句兜底 (TopicHub 和 ChatRoom 现在都走这里)
   else {
-    rawSegments = [{ en: decodeHtmlEntity(comment.content || ''), zh: null }]
+    let content = comment.content || ''
+
+    // 先处理 GIF 语法，防止感叹号打断分句
+    content = parseGiphy(content)
+
+    // 只有当内容不是纯图片URL时才分句
+    if (!isImageUrl(content)) {
+      const sentences = segmentText(content)
+      rawSegments = sentences.map((s) => ({
+        en: decodeHtmlEntity(s),
+        // 逻辑：如果只有一句，显示全文翻译；如果分成了多句，因为没有对应的句级翻译，所以 zh 为 null
+        // 此时 MessageBubble 组件会因为没有 zh 而在底部显示全文翻译 (Full Trans)
+        zh: sentences.length === 1 ? comment.content_cn : null,
+      }))
+    } else {
+      rawSegments = [{ en: decodeHtmlEntity(content), zh: null }]
+    }
   }
 
-  // E. 二次处理：处理 GIF 混排
+  // E. 二次处理：处理 GIF/图片 混排在句子中的情况
   const finalSegments: { en: string; zh: string | null }[] = []
 
   rawSegments.forEach((seg) => {
     const parts = splitContentWithMedia(seg.en)
 
-    parts.forEach((part) => {
-      if (isImageUrl(part)) {
-        finalSegments.push({ en: part, zh: null })
-      } else {
-        if (part.length > 0) {
-          const sentences = segmentText(part)
-          sentences.forEach((s) => {
-            const zh =
-              parts.length === 1 && sentences.length === 1 ? seg.zh : null
-            finalSegments.push({ en: s, zh })
-          })
+    if (parts.length === 1 && parts[0] === seg.en) {
+      finalSegments.push(seg)
+    } else {
+      parts.forEach((part) => {
+        if (isImageUrl(part)) {
+          finalSegments.push({ en: part, zh: null })
+        } else {
+          if (part.length > 0) {
+            // 只有当它是原句子的唯一文本部分时，才继承翻译
+            const textParts = parts.filter((p) => !isImageUrl(p))
+            const shouldKeepTrans =
+              textParts.length === 1 && textParts[0] === part
+            finalSegments.push({
+              en: part,
+              zh: shouldKeepTrans ? seg.zh : null,
+            })
+          }
         }
-      }
-    })
+      })
+    }
   })
 
   return finalSegments
