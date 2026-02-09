@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from './supabase'
 import { Page, Post } from './types'
@@ -22,13 +22,20 @@ import { preloadImage, preloadImages } from './utils/media'
 // [新增] 定义页面顺序，用于决定滑动方向
 const getPageRank = (page: Page) => {
   switch (page) {
-    case Page.Home: return 0
-    case Page.Explore: return 1
-    case Page.Study: return 2
-    case Page.Profile: return 3
-    case Page.CommunityDetail: return 4
-    case Page.Login: return -1
-    default: return 0
+    case Page.Home:
+      return 0
+    case Page.Explore:
+      return 1
+    case Page.Study:
+      return 2
+    case Page.Profile:
+      return 3
+    case Page.CommunityDetail:
+      return 4
+    case Page.Login:
+      return -1
+    default:
+      return 0
   }
 }
 
@@ -40,43 +47,49 @@ const App: React.FC = () => {
   const [transitionDirection, setTransitionDirection] = useState(1)
   const [viewingPost, setViewingPost] = useState<Post | null>(null)
   const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
-  const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(null)
-  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null)
+  const [filteredCommunityId, setFilteredCommunityId] = useState<string | null>(
+    null,
+  )
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(
+    null,
+  )
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [isCommunityFlow, setIsCommunityFlow] = useState(false)
-  const { currentUser, profile, login, logout, setLoading: setAuthLoading, isLoading: isAuthLoading } = useUserStore()
-  const hasCheckedOnboarding = useRef(false)
+  const {
+    currentUser,
+    profile,
+    login,
+    logout,
+    setLoading: setAuthLoading,
+    isLoading: isAuthLoading,
+    _hasHydrated,
+  } = useUserStore()
+  const { initializeExplore } = useExploreStore()
 
-  // [修改] 仅在初始化时确认加载完成
   useEffect(() => {
     setAuthLoading(false)
+    initializeExplore()
+    // 初始化主题
+    import('./store/useThemeStore').then((m) =>
+      m.useThemeStore.getState().initTheme(),
+    )
   }, [])
 
-  // [修复] 未登录拦截 - 移除 currentPage 依赖,避免页面切换时误触发
+  // [路由守卫优化] 增加对 _hasHydrated 的判断
   useEffect(() => {
-    if (!isAuthLoading && !currentUser && currentPage !== Page.Login) {
-      setCurrentPage(Page.Login)
-    }
-  }, [currentUser, isAuthLoading])
-
-  // [完全重写] Onboarding 守卫 - 只在用户首次登录时检查一次
-  useEffect(() => {
-    // 只有当用户已登录、profile 已加载、且之前没有检查过时,才进行检查
-    if (!isAuthLoading && currentUser && profile && !hasCheckedOnboarding.current) {
-      hasCheckedOnboarding.current = true
-
-      // 检查 profile 是否缺少必要字段
-      if (!profile.learning_reason || !profile.target_level) {
-        console.log('[Onboarding Guard] Profile incomplete, redirecting to Onboarding')
+    if (_hasHydrated && !isAuthLoading) {
+      if (!currentUser && currentPage !== Page.Login) {
+        setCurrentPage(Page.Login)
+      } else if (
+        currentUser &&
+        !profile?.learning_reason &&
+        currentPage !== Page.Onboarding
+      ) {
         setCurrentPage(Page.Onboarding)
-      } else {
-        console.log('[Onboarding Guard] Profile complete, allowing navigation')
       }
     }
-  }, [currentUser, isAuthLoading, profile])
-
-
+  }, [currentUser, currentPage, isAuthLoading, profile, _hasHydrated])
 
   useEffect(() => {
     const fetchAllPosts = async () => {
@@ -84,6 +97,7 @@ const App: React.FC = () => {
         const { data, error } = await supabase
           .from('production_posts')
           .select('*')
+          .order('created_at', { ascending: false })
 
         if (error) throw error
 
@@ -114,26 +128,23 @@ const App: React.FC = () => {
         setLoading(false)
       }
     }
-
     fetchAllPosts()
   }, [])
 
-  // [重构] 恢复瞬间导航：移除延迟和遮罩，优先响应速度
-  const navigateTo = (page: Page) => {
-    if (currentPage === page) {
+  // [性能重构] 恢复瞬间导航
+  const navigateTo = (nextPage: Page) => {
+    if (currentPage === nextPage) {
       // [新增] 如果点击的是当前页面且是 Home,则刷新内容
-      if (page === Page.Home) {
+      if (nextPage === Page.Home) {
         const { refreshFeed } = useAppStore.getState()
         refreshFeed() // 重新随机排序
       }
       return
     }
-    performNavigation(page)
-  }
 
-  const performNavigation = (nextPage: Page) => {
     const oldRank = getPageRank(currentPage)
     const newRank = getPageRank(nextPage)
+
     setTransitionDirection(newRank >= oldRank ? 1 : -1)
     setLastPage(currentPage)
 
@@ -141,16 +152,18 @@ const App: React.FC = () => {
     if (mainTabPages.includes(nextPage)) {
       setOriginPage(nextPage)
     }
-
     setCurrentPage(nextPage)
   }
 
+  // 1. 直接进入 TopicHub (用于 Home Feed 点击，Home 本身就是预览流)
   const handlePostClick = (post: Post) => {
     setViewingPost(post)
     navigateTo(Page.TopicHub)
   }
 
-  const handleProfilePostClick = (post: Post) => {
+  // 2. [新增/重命名] 进入预览页 (用于 Explore 和 Profile)
+  // 这实现了"点击进入显示类似于首页那样的页面"的需求
+  const handlePostPreview = (post: Post) => {
     setViewingPost(post)
     navigateTo(Page.Preview)
   }
@@ -169,7 +182,6 @@ const App: React.FC = () => {
             initialTab={filteredCommunityId ? 'foryou' : undefined}
           />
         )
-
       case Page.Preview:
         return (
           <div className="h-full w-full bg-black">
@@ -177,15 +189,11 @@ const App: React.FC = () => {
               post={activePost}
               isExiting={false}
               isActive={true}
-              onOpenDiscussion={() => navigateTo(Page.TopicHub)}
-              onBack={() => {
-                // [修复] 使用 originPage 确保返回到正确的起始页（通常是 Profile）
-                navigateTo(originPage)
-              }}
+              onOpenDiscussion={() => navigateTo(Page.TopicHub)} // 点击 discuss 进入 TopicHub
+              onBack={() => navigateTo(originPage)} // 返回到来源页 (Explore 或 Profile)
             />
           </div>
         )
-
       case Page.TopicHub:
         return (
           <TopicHub
@@ -193,18 +201,16 @@ const App: React.FC = () => {
             initialCommentId={selectedCommentId}
             onNavigate={(p) => {
               if (p === Page.Home) {
-                // [智能返回] 优先判断是否处于社区详情流
+                // 处理 TopicHub 返回逻辑
                 if (isCommunityFlow) {
                   navigateTo(Page.CommunityDetail)
                 } else if (originPage === Page.Explore) {
-                  // 从 Explore 进来的，返回 Explore
-                  navigateTo(Page.Explore)
+                  // [修改] 如果来自 Explore，返回 Preview (保持与 Profile 一致的体验)
+                  navigateTo(Page.Preview)
                 } else if (originPage === Page.Profile) {
-                  // 从 Profile 进来的，返回 Preview 中间层
+                  // 如果来自 Profile，返回 Preview
                   navigateTo(Page.Preview)
                 } else {
-                  // 从 Home 进来的，或其他情况，返回 Home
-                  // 只有在没有社区过滤且是真正回到 Home 时，才清理状态
                   if (!filteredCommunityId && originPage === Page.Home) {
                     setViewingPost(null)
                     setSelectedCommentId(null)
@@ -212,33 +218,26 @@ const App: React.FC = () => {
                   navigateTo(originPage)
                 }
               } else {
-                // 其他导航（如进入 ChatRoom）正常处理
                 navigateTo(p)
               }
             }}
             onSelectComment={(commentId) => setSelectedCommentId(commentId)}
           />
         )
-
       case Page.ChatRoom:
         return (
           <ChatRoom
             postId={activePost.id}
             postImage={activePost.image}
             focusCommentId={selectedCommentId}
-            onBack={() => {
-              // ChatRoom 只返回到 TopicHub，不修改 originPage
-              // 确保整个详情流的起始点被锁定
-              navigateTo(Page.TopicHub)
-            }}
+            onBack={() => navigateTo(Page.TopicHub)}
           />
         )
-
       case Page.Explore:
         return (
           <Explore
             onNavigate={navigateTo}
-            onPostSelect={handlePostClick}
+            onPostSelect={handlePostPreview} // [关键修改] 使用 Preview 模式
             onCommunitySelect={(community) => {
               setSelectedCommunity(community)
               navigateTo(Page.CommunityDetail)
@@ -265,7 +264,7 @@ const App: React.FC = () => {
         return (
           <Profile
             onNavigate={navigateTo}
-            onPostSelect={handleProfilePostClick}
+            onPostSelect={handlePostPreview} // Profile 保持使用 Preview 模式
           />
         )
       case Page.Login:
@@ -279,18 +278,9 @@ const App: React.FC = () => {
           />
         )
       case Page.Onboarding:
-        return (
-          <Onboarding
-            onComplete={() => {
-              // 引导完成，确保 profile 同步后进入首页
-              navigateTo(Page.Home)
-            }}
-          />
-        )
+        return <Onboarding onComplete={() => navigateTo(Page.Home)} />
       default:
-        return (
-          <Home onNavigate={navigateTo} onPostSelect={handlePostClick} />
-        )
+        return <Home onNavigate={navigateTo} onPostSelect={handlePostClick} />
     }
   }
 
@@ -302,12 +292,7 @@ const App: React.FC = () => {
     currentPage === Page.Onboarding ||
     currentPage === Page.Login
 
-  // [移除] 不再在渲染期间实时派生方向，改为使用 navigateTo 显式更新的状态
-  // const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
-  // [移除] 不再在渲染期间实时派生方向，改为使用 navigateTo 显式更新的状态
-  // const direction = getPageRank(currentPage) >= getPageRank(lastPage) ? 1 : -1
-
-  if (isAuthLoading) {
+  if (!_hasHydrated || isAuthLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0B0A09]">
         <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
@@ -326,8 +311,7 @@ const App: React.FC = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="absolute inset-0 h-full w-full"
-            >
+              className="absolute inset-0 h-full w-full">
               {renderPage()}
             </motion.div>
           </AnimatePresence>

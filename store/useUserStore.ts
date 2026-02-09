@@ -13,13 +13,15 @@ export interface ViewHistoryItem {
 interface UserState {
   likedPosts: ProductionPost[]
   starredWords: DictionaryResult[]
-  followedCommunities: string[] // 存储关注的社区 ID
-  viewedPostIds: string[] // 已浏览帖子的 ID 列表
-  viewHistory: ViewHistoryItem[] // 完整的浏览历史
+  followedCommunities: string[]
+  viewedPostIds: string[]
+  viewHistory: ViewHistoryItem[]
 
   currentUser: any | null
   profile: any | null
   isLoading: boolean
+  _hasHydrated: boolean // [新增] 用于标识持久化存储是否已加载完成
+
   // Actions
   toggleLike: (post: ProductionPost) => void
   isLiked: (postId: string) => boolean
@@ -37,6 +39,7 @@ interface UserState {
   updateXP: (amount: number) => Promise<void>
   updateProfile: (updates: any) => Promise<void>
   setProfile: (profile: any) => void
+  setHasHydrated: (state: boolean) => void // [新增] 设置加载完成状态
 }
 
 export const useUserStore = create<UserState>()(
@@ -50,11 +53,11 @@ export const useUserStore = create<UserState>()(
       currentUser: null,
       profile: null,
       isLoading: true,
+      _hasHydrated: false, // [新增] 初始状态为 false
 
       toggleLike: (post: ProductionPost) => {
         const currentLikes = get().likedPosts
         const exists = currentLikes.find((p) => p.id === post.id)
-
         if (exists) {
           set({ likedPosts: currentLikes.filter((p) => p.id !== post.id) })
         } else {
@@ -69,9 +72,10 @@ export const useUserStore = create<UserState>()(
       toggleStarWord: (word: DictionaryResult) => {
         const currentStarred = get().starredWords
         const exists = currentStarred.find((w) => w.word === word.word)
-
         if (exists) {
-          set({ starredWords: currentStarred.filter((w) => w.word !== word.word) })
+          set({
+            starredWords: currentStarred.filter((w) => w.word !== word.word),
+          })
         } else {
           set({ starredWords: [word, ...currentStarred] })
         }
@@ -84,10 +88,11 @@ export const useUserStore = create<UserState>()(
       toggleFollowCommunity: (communityId: string) => {
         const currentFollows = get().followedCommunities
         const isFollowing = currentFollows.includes(communityId)
-
         if (isFollowing) {
           set({
-            followedCommunities: currentFollows.filter((id) => id !== communityId),
+            followedCommunities: currentFollows.filter(
+              (id) => id !== communityId,
+            ),
           })
         } else {
           set({ followedCommunities: [...currentFollows, communityId] })
@@ -100,21 +105,15 @@ export const useUserStore = create<UserState>()(
 
       addViewHistory: (post: ProductionPost) => {
         const { viewedPostIds, viewHistory } = get()
-
-        // 如果已经浏览过,不重复添加
-        if (viewedPostIds.includes(post.id)) {
-          return
-        }
-
+        if (viewedPostIds.includes(post.id)) return
         const newHistoryItem: ViewHistoryItem = {
           postId: post.id,
           viewedAt: new Date().toISOString(),
-          post: post
+          post: post,
         }
-
         set({
           viewedPostIds: [...viewedPostIds, post.id],
-          viewHistory: [newHistoryItem, ...viewHistory] // 最新的在前面
+          viewHistory: [newHistoryItem, ...viewHistory],
         })
       },
 
@@ -141,13 +140,11 @@ export const useUserStore = create<UserState>()(
       fetchProfile: async () => {
         const user = get().currentUser
         if (!user) return
-
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single()
-
         if (data) {
           set({ profile: data })
         }
@@ -157,20 +154,14 @@ export const useUserStore = create<UserState>()(
         const user = get().currentUser
         const currentProfile = get().profile
         if (!user || !currentProfile) return
-
         const newXP = (currentProfile.total_xp || 0) + amount
-
-        // 简单等级计算：LV = floor(sqrt(XP / 100)) + 1
-        const newLevel = Math.floor(Math.sqrt(newXP / 100)) + 1
-
         const { error } = await supabase
           .from('profiles')
           .update({
             total_xp: newXP,
-            study_days: currentProfile.study_days + (amount > 0 ? 1 : 0) // 临时演示：加 XP 就视为打卡
+            study_days: currentProfile.study_days + (amount > 0 ? 1 : 0),
           })
           .eq('id', user.id)
-
         if (!error) {
           set({ profile: { ...currentProfile, total_xp: newXP } })
         }
@@ -180,12 +171,10 @@ export const useUserStore = create<UserState>()(
         const user = get().currentUser
         const currentProfile = get().profile
         if (!user) return
-
         const { error } = await supabase
           .from('profiles')
           .update(updates)
           .eq('id', user.id)
-
         if (!error) {
           set({ profile: { ...(currentProfile || {}), ...updates } })
         } else {
@@ -196,10 +185,21 @@ export const useUserStore = create<UserState>()(
       setProfile: (profile: any) => {
         set({ profile })
       },
+
+      // [新增] 状态更新方法
+      setHasHydrated: (state) => {
+        set({ _hasHydrated: state })
+      },
     }),
     {
-      name: 'scrollish-user-storage', // LocalStorage Key
+      name: 'scrollish-user-storage',
       storage: createJSONStorage(() => localStorage),
+      // [新增] 监听 Hydration 完成
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.setHasHydrated(true)
+        }
+      },
     },
   ),
 )

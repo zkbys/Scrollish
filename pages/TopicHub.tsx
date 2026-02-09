@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useLayoutEffect,
+} from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../supabase'
 import { Page } from '../types'
@@ -28,7 +34,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
     null,
   )
 
+  // 查词状态
   const [viewingWord, setViewingWord] = useState<string | null>(null)
+
+  // [新增] 卡片是否滚动到底部
+  const [isCardAtBottom, setIsCardAtBottom] = useState(false)
 
   const startPos = useRef({ x: 0, y: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
@@ -37,6 +47,14 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const { fetchComments, getComments, isLoading } = useCommentStore()
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
+
+  // 每次切换卡片时重置底部状态
+  useEffect(() => {
+    setIsCardAtBottom(false)
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0
+    }
+  }, [currentIndex])
 
   useEffect(() => {
     if (post?.id) {
@@ -123,14 +141,37 @@ const TopicHub: React.FC<TopicHubProps> = ({
     setViewingWord(word)
   }
 
+  // [新增] 监听卡片内部滚动，判断是否到底部
+  const handleCardScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
+    // 允许 10px 误差
+    const isBottom = scrollTop + clientHeight >= scrollHeight - 10
+    setIsCardAtBottom(isBottom)
+  }
+
   const handleTouchStart = (e: React.TouchEvent) =>
     (startPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })
   const handleTouchEnd = (e: React.TouchEvent) => {
     const diffX = e.changedTouches[0].clientX - startPos.current.x
     const diffY = e.changedTouches[0].clientY - startPos.current.y
+
+    // 横向滑动优先 (切换卡片)
     if (Math.abs(diffX) > Math.abs(diffY)) {
       if (Math.abs(diffX) > 50) diffX < 0 ? nextCard() : prevCard()
-    } else if (diffY < -50 && !activeComment.isOpCard) goToChatRoom()
+    } else {
+      // 纵向滑动 (进入聊天室)
+      // 只有非 OP 卡片，且在底部，且向上拉动(diffY < 0)时触发
+      if (diffY < -50 && !activeComment.isOpCard) {
+        // 如果卡片内容很短（不需要滚动）或者已经滚动到底部
+        if (
+          isCardAtBottom ||
+          (contentRef.current &&
+            contentRef.current.scrollHeight <= contentRef.current.clientHeight)
+        ) {
+          goToChatRoom()
+        }
+      }
+    }
   }
 
   const nextCard = () => {
@@ -259,8 +300,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
             <div
               ref={contentRef}
-              className="flex-1 p-6 overflow-y-auto no-scrollbar">
-              {/* [核心修复] 直接使用组件默认样式，不覆盖 */}
+              onScroll={handleCardScroll}
+              className="flex-1 p-6 overflow-y-auto no-scrollbar scroll-smooth">
               <MessageBubble
                 comment={activeComment}
                 isUser={false}
@@ -269,12 +310,100 @@ const TopicHub: React.FC<TopicHubProps> = ({
               />
               <div className="h-12" />
             </div>
+
+            {/* [核心修复] 动态交互提示 */}
+            <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white dark:from-[#121212] to-transparent pointer-events-none flex items-end justify-center pb-4 opacity-80">
+              {activeComment?.isOpCard ? (
+                // 0号卡片: 提示右滑
+                <div className="flex flex-col items-center animate-bounce-subtle">
+                  <div className="flex items-center gap-1 text-gray-400 dark:text-white">
+                    <span className="text-[9px] font-black uppercase tracking-widest">
+                      Swipe Left
+                    </span>
+                    <span className="material-symbols-outlined text-[14px]">
+                      arrow_forward
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                // 其他卡片: 提示上拉 (仅当到底部时变色提示)
+                <div
+                  className={`flex flex-col items-center transition-all duration-300 ${isCardAtBottom ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-50'}`}>
+                  {isCardAtBottom ? (
+                    <>
+                      <span className="material-symbols-outlined text-orange-500 text-[18px] animate-bounce">
+                        keyboard_double_arrow_up
+                      </span>
+                      <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest mt-0.5">
+                        Pull Up to Discuss
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-gray-300 dark:text-white/30 text-[16px]">
+                        keyboard_arrow_down
+                      </span>
+                      <span className="text-[8px] font-black text-gray-300 dark:text-white/30 uppercase tracking-widest">
+                        Scroll to Read
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </main>
-      <style>{`.slide-out-left { animation: slideOutLeft 0.3s forwards ease-in; } .slide-in-right { animation: slideInRight 0.3s forwards ease-out; } .slide-out-right { animation: slideOutRight 0.3s forwards ease-in; } .slide-in-left { animation: slideInLeft 0.3s forwards ease-out; } @keyframes slideOutLeft { to { transform: translateX(-120%) rotate(-5deg); opacity: 0; } } @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } @keyframes slideOutRight { to { transform: translateX(120%) rotate(5deg); opacity: 0; } } @keyframes slideInLeft { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-      .blob-pastel { position: absolute; width: 500px; height: 500px; filter: blur(100px); border-radius: 50%; z-index: 0; pointer-events: none; }
-      .frost-overlay { position: fixed; inset: 0; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.03; pointer-events: none; z-index: 5; }
+
+      {/* [核心修复] 底部滚动字幕回归 */}
+      <div className="h-14 w-full relative z-40 overflow-hidden flex items-center bg-gray-100/50 dark:bg-white/5 backdrop-blur-md border-t border-gray-200 dark:border-white/5 opacity-80">
+        <div className="flex whitespace-nowrap animate-ticker items-center gap-10 px-8">
+          {[1, 2, 3].map((v) => (
+            <div key={v} className="flex items-center gap-12">
+              <span className="text-[10px] font-black text-orange-500 dark:text-orange-300 tracking-[0.15em]">
+                欢 迎 来 到 SCROLLISH · 如 果 遇 到 问 题 请 及 时 向 我 们 反
+                馈 谢 谢！❤
+              </span>
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+                <span
+                  className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"
+                  style={{ animationDelay: '0.2s' }}
+                />
+                <span
+                  className="w-2 h-2 bg-orange-300 rounded-full animate-pulse"
+                  style={{ animationDelay: '0.4s' }}
+                />
+              </div>
+              <span className="text-[11px] font-black text-orange-500 dark:text-orange-400 tracking-wider font-mono">
+                Welcome to Scrollish!
+              </span>
+              <div className="flex gap-1">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="w-1 h-3 bg-white/20 rounded-full rotate-12"
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <style>{`
+        .animate-ticker { animation: ticker 40s linear infinite; }
+        @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-33.33%); } }
+        .slide-out-left { animation: slideOutLeft 0.3s forwards ease-in; } 
+        .slide-in-right { animation: slideInRight 0.3s forwards ease-out; } 
+        .slide-out-right { animation: slideOutRight 0.3s forwards ease-in; } 
+        .slide-in-left { animation: slideInLeft 0.3s forwards ease-out; } 
+        @keyframes slideOutLeft { to { transform: translateX(-120%) rotate(-5deg); opacity: 0; } } 
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } 
+        @keyframes slideOutRight { to { transform: translateX(120%) rotate(5deg); opacity: 0; } } 
+        @keyframes slideInLeft { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .blob-pastel { position: absolute; width: 500px; height: 500px; filter: blur(100px); border-radius: 50%; z-index: 0; pointer-events: none; }
+        .frost-overlay { position: fixed; inset: 0; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.03; pointer-events: none; z-index: 5; }
       `}</style>
     </div>
   )

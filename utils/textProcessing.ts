@@ -1,6 +1,5 @@
 /**
  * utils/textProcessing.ts
- * 包含文本清洗、Giphy 解析、HTML 实体解码等通用逻辑
  */
 
 // 1. HTML 实体解码
@@ -25,7 +24,7 @@ export const parseGiphy = (text: string): string => {
   })
 }
 
-// 3. 判断是否为图片 URL (支持 Giphy CDN)
+// 3. 判断是否为图片 URL
 export const isImageUrl = (text: string): boolean => {
   if (!text) return false
   const cleanText = text.trim()
@@ -37,16 +36,11 @@ export const isImageUrl = (text: string): boolean => {
   )
 }
 
-// 4. [新增] 智能拆分器：将混合了 GIF 的文本拆分为 [文本, 图片URL, 文本]
+// 4. 智能拆分器
 const splitContentWithMedia = (text: string): string[] => {
-  // 先把 Giphy 语法替换成 URL
   const textWithUrls = parseGiphy(text)
-
-  // 如果全是 URL，直接返回
   if (isImageUrl(textWithUrls)) return [textWithUrls]
 
-  // 使用正则拆分 URL (匹配 http/https 开头的图片链接)
-  // 这个正则会捕获 URL 作为分隔符的一部分
   const urlRegex =
     /(https?:\/\/[^\s]+?\.(?:jpeg|jpg|gif|png|webp)(?:\?[^\s]*)?|https:\/\/media\.giphy\.com\/media\/[a-zA-Z0-9]+\/giphy\.gif)/gi
 
@@ -56,7 +50,7 @@ const splitContentWithMedia = (text: string): string[] => {
     .filter((s) => s.length > 0)
 }
 
-// 5. 通用分句器 (用于纯文本部分)
+// 5. 通用分句器
 export const segmentText = (text: string): string[] => {
   try {
     // @ts-ignore
@@ -74,58 +68,51 @@ export const getMessageSegments = (
 ) => {
   let rawSegments: { en: string; zh: string | null }[] = []
 
-  // A. 来源选择策略
+  // A. 难度变体
   if (
     difficulty !== 'Original' &&
     comment.enrichment?.difficulty_variants?.[difficulty]
   ) {
-    // 策略 1: 难度变体
     const content =
       comment.enrichment.difficulty_variants[difficulty].content || ''
     rawSegments = [{ en: content, zh: comment.content_cn }]
-  } else if (comment.id === 'op-message') {
-    // 策略 2: OP 消息 (强制拆分以防过长)
+  }
+  // B. OP 消息 (OP卡片底部固定显示翻译，这里段落内不显示)
+  else if (comment.id === 'op-message') {
     const content = comment.content || ''
-    // 先按换行符粗分，防止大段文本
     const paragraphs = content.split(/\n+/)
     rawSegments = paragraphs.map((p) => ({ en: decodeHtmlEntity(p), zh: null }))
-  } else if (
+  }
+  // C. Enrichment 分句数据 (这是唯一会有段落内翻译的情况)
+  else if (
     comment.enrichment?.sentence_segments &&
     Array.isArray(comment.enrichment.sentence_segments) &&
     comment.enrichment.sentence_segments.length > 0
   ) {
-    // 策略 3: 使用数据库现成的分句 (Enrichment)
     rawSegments = comment.enrichment.sentence_segments.map((s: any) => ({
       en: decodeHtmlEntity(s.en),
       zh: s.zh,
     }))
-  } else {
-    // 策略 4: 降级到原始内容
-    rawSegments = [
-      { en: decodeHtmlEntity(comment.content || ''), zh: comment.content_cn },
-    ]
+  }
+  // D. [核心修复] 降级策略：强制 zh=null
+  // 这样 MessageBubble 就不会在中间渲染翻译，而是触发底部的 content_cn 渲染
+  else {
+    rawSegments = [{ en: decodeHtmlEntity(comment.content || ''), zh: null }]
   }
 
-  // B. 二次处理：处理 GIF/图片混排 + 分句
+  // E. 二次处理：处理 GIF 混排
   const finalSegments: { en: string; zh: string | null }[] = []
 
   rawSegments.forEach((seg) => {
-    // 1. 拆分图片和文本
     const parts = splitContentWithMedia(seg.en)
 
     parts.forEach((part) => {
       if (isImageUrl(part)) {
-        // 如果是图片，直接作为一个段落
         finalSegments.push({ en: part, zh: null })
       } else {
-        // 如果是文本，进行分句处理 (如果之前已经是 sentence_segments 则不需要再分，但为了保险起见，这里只对长文本再次分句)
-        // 这里的逻辑是：如果来源是 enrichment，通常已经是句子了；如果是 raw content，则需要分句。
-        // 为简单起见，我们对非 URL 的部分统一做一次清洗
         if (part.length > 0) {
-          // 如果本来就是短句（Enrichment来源），segmentText 会直接返回原样，所以这里安全
           const sentences = segmentText(part)
-          sentences.forEach((s, idx) => {
-            // 尝试尽量保留中文翻译的对应关系（只有当只有一个句子时才附带中文，否则中文放在最后）
+          sentences.forEach((s) => {
             const zh =
               parts.length === 1 && sentences.length === 1 ? seg.zh : null
             finalSegments.push({ en: s, zh })
