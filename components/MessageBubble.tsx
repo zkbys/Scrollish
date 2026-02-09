@@ -108,7 +108,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       ) : (
         /* 3. 内容渲染循环 */
-        <div className="text-[15px] leading-relaxed font-medium space-y-1">
+        <div className="text-[15px] leading-relaxed font-medium space-y-1 overflow-visible">
           {segments.length > 0 ? (
             segments.map((seg, i) => {
               // 3.1 [修复] GIF/图片渲染

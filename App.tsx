@@ -131,17 +131,35 @@ const App: React.FC = () => {
     fetchAllPosts()
   }, [])
 
-  // [性能重构] 恢复瞬间导航
+  // [重构] 恢复瞬间导航：移除延迟和遮罩，优先响应速度
   const navigateTo = (nextPage: Page) => {
     if (currentPage === nextPage) {
-      // [新增] 如果点击的是当前页面且是 Home,则刷新内容
+      // [修改] 只在用户点击底部导航栏的 Home 时才刷新
       if (nextPage === Page.Home) {
         const { refreshFeed } = useAppStore.getState()
-        refreshFeed() // 重新随机排序
+        refreshFeed()
       }
       return
     }
 
+    // [新增] 离开 Home 页时保存当前位置
+    if (currentPage === Page.Home && nextPage !== Page.Home) {
+      useAppStore.getState().saveCurrentPosition()
+    }
+
+    // [新增] 返回 Home 页时恢复保存的位置
+    if (nextPage === Page.Home && currentPage !== Page.Home) {
+      const store = useAppStore.getState()
+      store.setIsRestoring(true)
+      store.restoreSavedPosition()
+
+      // 在导航完成后，延迟关闭恢复状态，等待 DOM 渲染和滚动锁定。
+      setTimeout(() => {
+        useAppStore.getState().setIsRestoring(false)
+      }, 500)
+    }
+
+    // 处理实际导航和滑动方向
     const oldRank = getPageRank(currentPage)
     const newRank = getPageRank(nextPage)
 

@@ -26,7 +26,7 @@ const RoundedStar = ({ className = "size-6", fill = "currentColor" }) => (
 );
 
 const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
-  const { likedPosts, starredWords, viewHistory, profile, fetchProfile, updateProfile } = useUserStore()
+  const { likedPosts, starredWords, viewHistory, profile, fetchProfile, updateProfile, logout } = useUserStore()
   const { scrollPos, setScrollPos } = useProfileStore()
   const { theme, toggleTheme } = useThemeStore()
   const [activeTab, setActiveTab] = useState<'favorites' | 'history'>('favorites')
@@ -151,12 +151,24 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute top-0 right-0 bottom-0 w-72 z-[90] p-6 shadow-2xl bg-white/80 dark:bg-[#1C1C1E]/90 backdrop-blur-2xl border-l border-white/40 dark:border-white/5"
+              className="absolute top-0 right-0 bottom-0 w-72 z-[90] p-6 shadow-2xl bg-white/80 dark:bg-[#1C1C1E]/90 backdrop-blur-2xl border-l border-white/40 dark:border-white/5 overflow-y-auto no-scrollbar"
               onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-xl font-black mb-8 flex items-center gap-2">
-                <span className="material-symbols-outlined text-orange-500">settings</span>
-                Settings
-              </h2>
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-black flex items-center gap-2">
+                  <span className="material-symbols-outlined text-orange-500">settings</span>
+                  Settings
+                </h2>
+                <button
+                  onClick={() => {
+                    logout()
+                    setShowSettings(false)
+                  }}
+                  className="h-10 w-10 flex items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 active:scale-90 transition-all hover:bg-red-500 hover:text-white shadow-sm translate-y-1.5 group"
+                  title="Logout"
+                >
+                  <span className="material-symbols-outlined text-[20px] group-hover:rotate-12 transition-transform">logout</span>
+                </button>
+              </div>
 
               <div className="space-y-6">
                 <div>
@@ -177,6 +189,8 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                     </div>
                   </button>
                 </div>
+
+
 
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">Wechatroom</h3>
@@ -217,6 +231,8 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                     </div>
                   </div>
                 </div>
+
+
 
               </div>
             </motion.div>

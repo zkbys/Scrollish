@@ -364,7 +364,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-[#FDFCFB] dark:bg-[#0B0A09] max-w-[100vw] overflow-x-hidden select-none overscroll-none"
+      className="fixed inset-0 z-[60] flex flex-col bg-[#FDFCFB] dark:bg-[#0B0A09] max-w-[100vw] overflow-x-hidden select-none"
       onTouchStart={handleBgTouchStart}
       onTouchMove={handleBgTouchMove}
       onTouchEnd={handleBgTouchEnd}
@@ -511,7 +511,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
       <main
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-5 py-6 space-y-8 no-scrollbar relative z-10">
+        className="flex-1 overflow-y-auto px-5 py-6 pb-[90px] space-y-8 no-scrollbar relative z-10 overflow-x-visible overscroll-contain">
         {messages.map((msg, index) => {
           const isOP = msg.id === 'op-message'
           const isRoot = index === 1
@@ -522,7 +522,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               id={`msg-${msg.id}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''} ${highlightedId === msg.id ? 'bg-orange-500/10 -mx-3 px-3 py-2 rounded-2xl' : ''}`}>
+              className={`flex gap-3 overflow-visible ${isUser ? 'flex-row-reverse' : ''} ${highlightedId === msg.id ? 'bg-orange-500/10 -mx-3 px-3 py-2 rounded-2xl' : ''}`}>
               <div className="shrink-0">
                 <div
                   className={`w-9 h-9 rounded-xl flex items-center justify-center border shadow-sm ${isOP ? 'bg-orange-500 text-white border-orange-600' : 'bg-white dark:bg-white/5 border-gray-100 dark:border-white/10 text-gray-400'}`}>
@@ -539,7 +539,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                 </div>
               </div>
               <div
-                className={`flex flex-col gap-1.5 max-w-[85%] ${isUser ? 'items-end' : ''}`}>
+                className={`flex flex-col gap-1.5 max-w-[85%] overflow-visible ${isUser ? 'items-end' : ''}`}>
                 <span className="text-[11px] font-black text-gray-400 dark:text-white/30 uppercase">
                   {msg.isLocalAi ? 'Dopa' : msg.author}
                 </span>
@@ -579,7 +579,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             </motion.div>
           )
         })}
-        <div className="h-32" />
       </main>
 
       <div className="fixed bottom-6 left-4 right-4 z-50 pointer-events-auto">

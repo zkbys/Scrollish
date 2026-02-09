@@ -15,6 +15,7 @@ import { IMAGES } from '../constants'
 import { STAGGER_CONTAINER, STAGGER_ITEM, BUTTON_SPRING, SPRING_GENTLE } from '../motion'
 import JellyLikeButton from '../components/JellyLikeButton'
 import JellyCommentButton from '../components/JellyCommentButton'
+import JellyFollowButton from '../components/JellyFollowButton'
 
 interface HomeProps {
   onNavigate: (page: Page) => void
@@ -40,10 +41,12 @@ const Home: React.FC<HomeProps> = ({
     isLoadingMore,
     currentPostIndex,
     setCurrentPostIndex,
+    homeActiveTab,
+    setHomeActiveTab,
+    isRestoring,
   } = useAppStore()
 
   const { followedCommunities } = useUserStore()
-  const [activeTab, setActiveTab] = useState<'following' | 'foryou'>(initialTab)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const [isReady, setIsReady] = useState(() => {
@@ -55,38 +58,52 @@ const Home: React.FC<HomeProps> = ({
   const touchStartRef = useRef(0)
 
   const getFilters = useCallback(() => {
-    if (activeTab === 'following') {
+    if (homeActiveTab === 'following') {
       return { followedIds: followedCommunities }
     }
     if (filteredCommunityId) {
       return { communityId: filteredCommunityId }
     }
     return {}
-  }, [activeTab, followedCommunities, filteredCommunityId])
+  }, [homeActiveTab, followedCommunities, filteredCommunityId])
 
   useEffect(() => {
     initFeed(getFilters())
-    // 切换 Tab 时重置索引并滚动回顶端，解决首个帖子 UI 不显示的问题
-    setCurrentPostIndex(0)
-    scrollContainerRef.current?.scrollTo({ top: 0 })
-  }, [activeTab, filteredCommunityId, followedCommunities.length])
+  }, [homeActiveTab, filteredCommunityId, followedCommunities.length])
 
   useLayoutEffect(() => {
-    if (
-      posts.length > 0 &&
-      currentPostIndex > 0 &&
-      scrollContainerRef.current
-    ) {
-      const container = scrollContainerRef.current
-      const rowHeight = container.clientHeight || window.innerHeight
-      container.scrollTop = currentPostIndex * rowHeight
+    const container = scrollContainerRef.current
+    if (!container) {
       setIsReady(true)
-    } else {
-      setIsReady(true)
+      return
     }
+
+    const restoreScroll = () => {
+      if (posts.length > 0 && currentPostIndex > 0) {
+        const rowHeight = container.clientHeight
+        if (rowHeight > 0) {
+          container.scrollTop = currentPostIndex * rowHeight
+          // 额外检查一下是否滚动到位了，CSS Snap 可能会干扰
+          if (Math.abs(container.scrollTop - currentPostIndex * rowHeight) > 5) {
+            container.scrollTo({ top: currentPostIndex * rowHeight })
+          }
+          setIsReady(true)
+        } else {
+          // 如果高度还没准备好，下一帧再试
+          requestAnimationFrame(restoreScroll)
+        }
+      } else {
+        setIsReady(true)
+      }
+    }
+
+    restoreScroll()
   }, [])
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    // [关键] 正在恢复位置或未就绪时，忽略滚动事件
+    if (isRestoring || !isReady) return
+
     const container = e.currentTarget
     const rowHeight = container.clientHeight
     if (rowHeight === 0) return
@@ -119,11 +136,10 @@ const Home: React.FC<HomeProps> = ({
   )
 
   const handleForYouClick = () => {
-    if (activeTab === 'foryou') {
-      scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-      setCurrentPostIndex(0)
-    } else {
-      setActiveTab('foryou')
+    if (homeActiveTab !== 'foryou') {
+      setHomeActiveTab('foryou')
+      setCurrentPostIndex(0) // 切换 Tab 时重置
+      scrollContainerRef.current?.scrollTo({ top: 0 })
     }
   }
 
@@ -172,7 +188,7 @@ const Home: React.FC<HomeProps> = ({
   }
 
   const renderEmptyState = () => {
-    if (activeTab === 'following' && followedCommunities.length === 0) {
+    if (homeActiveTab === 'following' && followedCommunities.length === 0) {
       return (
         <div className="h-full w-full flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-500">
           <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-white/5 flex items-center justify-center mb-6">
@@ -225,7 +241,7 @@ const Home: React.FC<HomeProps> = ({
 
   return (
     <div className="relative h-full w-full bg-background-light dark:bg-background-dark overflow-hidden transition-colors duration-300">
-      {filteredCommunityId && activeTab === 'foryou' && (
+      {filteredCommunityId && homeActiveTab === 'foryou' && (
         <div className="absolute top-[100px] left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top-4 duration-300">
           <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/20 backdrop-blur-md border border-primary/30 rounded-full">
             <span className="text-[10px] font-black text-primary uppercase tracking-wider">
@@ -258,13 +274,19 @@ const Home: React.FC<HomeProps> = ({
           {/* Tab 切换器：柑橘气泡 (回归简洁：无滑块) */}
           <div className="flex p-1.5 bg-black/40 backdrop-blur-2xl rounded-[2.5rem] border-2 border-white/5 shadow-2xl relative pointer-events-auto">
             <button
-              onClick={() => setActiveTab('following')}
-              className={`px-6 py-2.5 rounded-[2rem] text-[14px] font-black transition-all duration-300 ${activeTab === 'following' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
+              onClick={() => {
+                if (homeActiveTab !== 'following') {
+                  setHomeActiveTab('following')
+                  setCurrentPostIndex(0)
+                  scrollContainerRef.current?.scrollTo({ top: 0 })
+                }
+              }}
+              className={`px-6 py-2.5 rounded-[2rem] text-[14px] font-black transition-all duration-300 ${homeActiveTab === 'following' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
               Following
             </button>
             <button
               onClick={handleForYouClick}
-              className={`px-6 py-2.5 rounded-[2rem] text-[14px] font-black transition-all duration-300 ${activeTab === 'foryou' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
+              className={`px-6 py-2.5 rounded-[2rem] text-[14px] font-black transition-all duration-300 ${homeActiveTab === 'foryou' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
               For You
             </button>
           </div>
@@ -548,20 +570,34 @@ export const FeedItem: React.FC<{
                 <div className="flex flex-col drop-shadow-xl">
                   <span className="text-white font-black text-[15px] leading-tight flex items-center gap-1.5">
                     r/{subreddit}
-                    <span className="material-symbols-outlined text-[14px] text-blue-400 fill-[1]">verified</span>
+                    <AnimatePresence>
+                      {isSubscribed && (
+                        <motion.button
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{
+                            scale: 1.5,
+                            opacity: 0,
+                            transition: { duration: 0.2 }
+                          }}
+                          transition={{
+                            type: "spring",
+                            damping: 10,
+                            stiffness: 300
+                          }}
+                          onClick={handleToggleSub}
+                          className="material-symbols-outlined text-[14px] fill-[1] text-orange-500 cursor-pointer active:scale-75 transition-transform"
+                        >
+                          verified
+                        </motion.button>
+                      )}
+                    </AnimatePresence>
                   </span>
                   <div className="flex items-center gap-1 mt-0.5 opacity-60">
                     <span className="text-white text-[10px] font-black uppercase tracking-widest">Active Community</span>
                   </div>
                 </div>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={CITRUS_SQUISH}
-                  onClick={handleToggleSub}
-                  className={`backdrop-blur-xl border-2 text-[11px] font-black px-4 py-2 rounded-[1.2rem] ml-1 transition-all pointer-events-auto ${isSubscribed ? 'bg-orange-400/20 border-orange-400/40 text-orange-400' : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'}`}>
-                  {isSubscribed ? 'Following' : 'Subscribe'}
-                </motion.button>
+
               </motion.div>
 
               <motion.div
@@ -605,6 +641,12 @@ export const FeedItem: React.FC<{
                 isLiked={isLiked}
                 onClick={handleLike}
                 count={likes}
+              />
+
+              {/* 关注 */}
+              <JellyFollowButton
+                isFollowing={isSubscribed}
+                onClick={handleToggleSub}
               />
             </motion.div>
           </motion.div>

@@ -166,7 +166,19 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
             }
         } catch (err: any) {
             console.error('Auth error:', err);
-            setError(err.message || '登录过程中发生错误');
+
+            // [优化] 提供更友好的错误提示
+            if (err.message?.includes('Email not confirmed')) {
+                setError('邮箱未验证。请查收验证邮件,或联系管理员关闭邮箱验证功能。');
+            } else if (err.message?.includes('email rate limit exceeded')) {
+                setError('操作过于频繁,请稍后再试(建议等待 5-10 分钟)。');
+            } else if (err.message?.includes('Invalid login credentials')) {
+                setError('邮箱或密码错误,请检查后重试。');
+            } else if (err.message?.includes('User already registered')) {
+                setError('该邮箱已被注册,请直接登录。');
+            } else {
+                setError(err.message || '登录过程中发生错误');
+            }
         } finally {
             setLoading(false);
         }
@@ -375,7 +387,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0 }}
-                            className="mt-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-black text-center tracking-tight"
+                            className="mt-6 p-5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-black text-center tracking-tight"
                         >
                             <div className="flex items-center justify-center gap-2">
                                 <span className="material-symbols-outlined text-sm">error</span>

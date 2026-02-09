@@ -22,12 +22,20 @@ interface AppState {
   isLoading: boolean
   isLoadingMore: boolean
   currentPostIndex: number
+  savedPostIndex: number
+  currentFilters: { communityId?: string; followedIds?: string[] } | null
+  homeActiveTab: 'following' | 'foryou' // [新增]
+  isRestoring: boolean // [新增]
 
   // Actions
   initFeed: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
   refreshFeed: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
   loadMore: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
   setCurrentPostIndex: (index: number) => void
+  setHomeActiveTab: (tab: 'following' | 'foryou') => void // [新增]
+  setIsRestoring: (status: boolean) => void // [新增]
+  saveCurrentPosition: () => void
+  restoreSavedPosition: () => void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -36,13 +44,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   isLoading: false,
   isLoadingMore: false,
   currentPostIndex: 0,
+  savedPostIndex: 0,
+  currentFilters: null,
+  homeActiveTab: 'foryou',
+  isRestoring: false,
 
   initFeed: async (filters) => {
-    // 缓存策略：如果有过滤器或者是首次加载
+    // 缓存策略：如果过滤器没变，且已经有数据，就不重复初始化
     const isFiltered = !!(filters?.communityId || filters?.followedIds?.length)
-    if (!isFiltered && get().hasLoaded && get().posts.length > 0) return
+    const currentFilters = get().currentFilters
 
-    set({ isLoading: true })
+    // 简单的深度比较（针对 ID 列表）
+    const filtersChanged = JSON.stringify(filters || {}) !== JSON.stringify(currentFilters || {})
+
+    if (!filtersChanged && get().posts.length > 0) return
+
+    set({ isLoading: true, currentFilters: filters || {} })
     try {
       let data, error
 
@@ -167,7 +184,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           finalPosts = [...shuffledUnviewed, ...shuffledViewed]
         }
 
-        set({ posts: finalPosts, currentPostIndex: 0 })
+        set({ posts: finalPosts }) // [修改] 不重置 currentPostIndex,保持当前位置
       }
     } catch (err) {
       console.error('Feed refresh failed:', err)
@@ -224,4 +241,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setCurrentPostIndex: (index: number) => set({ currentPostIndex: index }),
+
+  setHomeActiveTab: (tab) => set({ homeActiveTab: tab }),
+
+  setIsRestoring: (status) => set({ isRestoring: status }),
+
+  // [新增] 保存当前位置
+  saveCurrentPosition: () => {
+    set({ savedPostIndex: get().currentPostIndex })
+  },
+
+  // [新增] 恢复保存的位置
+  restoreSavedPosition: () => {
+    const saved = get().savedPostIndex
+    if (saved >= 0 && saved < get().posts.length) {
+      set({ currentPostIndex: saved })
+    }
+  },
 }))
