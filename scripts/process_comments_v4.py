@@ -380,4 +380,4 @@ async def main(post_limit: Optional[int] = None):
 
 if __name__ == "__main__":
     # >>> 修改此处：设置为 2 个帖子进行测试 <<<
-    asyncio.run(main(post_limit=1))
+    asyncio.run(main(post_limit=2))

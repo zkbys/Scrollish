@@ -13,9 +13,7 @@ interface MessageBubbleProps {
     comment: Comment,
   ) => void
   showTranslation?: boolean
-  highlightedId?: string | null
-  className?: string
-  difficulty?: string
+  onNoteClick?: (notes: any[]) => void
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -27,6 +25,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   highlightedId,
   className = '',
   difficulty = 'Original',
+  onNoteClick,
 }) => {
   const isHighlighted = highlightedId === comment.id
 
@@ -156,87 +155,96 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
       ) : /* 内容渲染循环 */
-      segments.length > 0 ? (
-        segments.map((seg, i) => {
-          // 图片
-          if (isImageUrl(seg.en)) {
+        segments.length > 0 ? (
+          segments.map((seg, i) => {
+            // 图片... (省略图片渲染逻辑)
+            if (isImageUrl(seg.en)) {
+              return (
+                <div
+                  key={i}
+                  className="rounded-xl overflow-hidden border border-white/10 shadow-sm max-w-full"
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
+                  onTouchMove={handleTouchMove}
+                  onMouseDown={handleTouchStart}
+                  onMouseUp={handleTouchEnd}
+                  onMouseLeave={handleTouchEnd}
+                  onContextMenu={(e) => e.preventDefault()}>
+                  <img
+                    src={seg.en}
+                    alt="content"
+                    className="w-full h-auto object-cover min-h-[60px] max-h-[300px] bg-gray-100 dark:bg-white/5"
+                    loading="lazy"
+                  />
+                </div>
+              )
+            }
+
+            // 文本
+            const isQuote = seg.en.trim().startsWith('>')
+            const displayText = isQuote ? seg.en.replace(/^>\s?/, '') : seg.en
+
+            // 计算本分句包含的注记
+            const segmentNotes =
+              comment.enrichment?.cultural_notes?.filter((note) =>
+                seg.en.toLowerCase().includes(note.trigger_word.toLowerCase()),
+              ) || []
+
             return (
               <div
                 key={i}
-                className="rounded-xl overflow-hidden border border-white/10 shadow-sm max-w-full"
+                className={`relative px-4 py-2.5 transition-all duration-300 max-w-full ${getBubbleClass(false)} ${highlightClass}`}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
-                onTouchCancel={handleTouchEnd} // 增加 Cancel 处理
+                onTouchCancel={handleTouchEnd}
                 onTouchMove={handleTouchMove}
                 onMouseDown={handleTouchStart}
                 onMouseUp={handleTouchEnd}
                 onMouseLeave={handleTouchEnd}
                 onContextMenu={(e) => e.preventDefault()}>
-                <img
-                  src={seg.en}
-                  alt="content"
-                  className="w-full h-auto object-cover min-h-[60px] max-h-[300px] bg-gray-100 dark:bg-white/5"
-                  loading="lazy"
-                />
-              </div>
-            )
-          }
-
-          // 文本
-          const isQuote = seg.en.trim().startsWith('>')
-          const displayText = isQuote ? seg.en.replace(/^>\s?/, '') : seg.en
-
-          return (
-            <div
-              key={i}
-              className={`relative px-4 py-2.5 transition-all duration-300 max-w-full ${getBubbleClass(false)} ${highlightClass}`}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
-              onTouchCancel={handleTouchEnd} // 增加 Cancel 处理
-              onTouchMove={handleTouchMove}
-              onMouseDown={handleTouchStart}
-              onMouseUp={handleTouchEnd}
-              onMouseLeave={handleTouchEnd}
-              onContextMenu={(e) => e.preventDefault()}>
-              {/* 句级注记 */}
-              {i === 0 &&
-                comment.enrichment?.cultural_notes &&
-                comment.enrichment.cultural_notes.length > 0 && (
-                  <div className="absolute -top-2 -right-2 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg border border-white dark:border-[#0B0A09] z-10">
+                {/* 分句对应的注记灯泡 */}
+                {segmentNotes.length > 0 && (
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (onNoteClick) onNoteClick(segmentNotes)
+                    }}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg border border-white dark:border-[#0B0A09] z-[15] cursor-pointer hover:scale-110 active:scale-90 transition-transform">
                     <span className="material-symbols-outlined text-[10px] text-black font-black">
                       lightbulb
                     </span>
                   </div>
                 )}
 
-              <div
-                className={`text-[15px] leading-relaxed font-medium ${isQuote ? 'italic opacity-90 border-l-2 border-current pl-2' : ''}`}>
-                <InteractiveText
-                  text={displayText}
-                  contextSentence={seg.en}
-                  externalOnClick={(w) => handleInteractiveClick(w, seg.en)}
-                  disabled={isUser}
-                />
-              </div>
+                <div
+                  className={`text-[15px] leading-relaxed font-medium ${isQuote ? 'italic opacity-90 border-l-2 border-current pl-2' : ''}`}>
+                  <InteractiveText
+                    text={displayText}
+                    contextSentence={seg.en}
+                    externalOnClick={(w) => handleInteractiveClick(w, seg.en)}
+                    disabled={isUser}
+                  />
+                </div>
 
-              {/* 句级翻译 */}
-              <AnimatePresence>
-                {showTranslation && seg.zh && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="text-[13px] opacity-70 italic mt-1.5 pt-1.5 border-t border-white/10 leading-snug">
-                    {seg.zh}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )
-        })
-      ) : (
-        <span className="text-red-500 text-xs">No content</span>
-      )}
+                {/* 句级翻译 */}
+                <AnimatePresence>
+                  {showTranslation && seg.zh && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="text-[13px] opacity-70 italic mt-1.5 pt-1.5 border-t border-white/10 leading-snug">
+                      {seg.zh}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )
+          })
+        ) : (
+          <span className="text-red-500 text-xs">No content</span>
+        )}
 
       {/* 全文翻译兜底 */}
       <AnimatePresence>
