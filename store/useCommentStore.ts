@@ -34,7 +34,7 @@ export const useCommentStore = create<CommentState>((set, get) => ({
           `
           *,
           enrichment:comments_enrichment (
-            corrected_content,
+            native_polished,
             sentence_segments,
             difficulty_variants,
             cultural_notes

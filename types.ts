@@ -60,7 +60,7 @@ export interface CulturalNote {
  */
 export interface EnrichmentData {
   comment_id: string
-  corrected_content: string
+  native_polished: string
   sentence_segments: { en: string; zh: string }[]
   difficulty_variants: {
     Mixed?: Variant
