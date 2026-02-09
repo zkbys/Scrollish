@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useLayoutEffect,
 } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../supabase'
 import { Page } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
@@ -37,11 +37,18 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   // 查词状态
   const [viewingWord, setViewingWord] = useState<string | null>(null)
-
-  // 卡片是否滚动到底部
+  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
+  const [scale, setScale] = useState(1)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [isGesturing, setIsGesturing] = useState(false)
   const [isCardAtBottom, setIsCardAtBottom] = useState(false)
 
   const startPos = useRef({ x: 0, y: 0 })
+  const initialDistanceRef = useRef<number | null>(null)
+  const lastScaleRef = useRef(1)
+  const lastTapRef = useRef(0)
+  const initialTouchPosRef = useRef({ x: 0, y: 0 })
+  const initialOffsetRef = useRef({ x: 0, y: 0 })
   const contentRef = useRef<HTMLDivElement>(null)
   const hasRestoredPosition = useRef(false)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -140,7 +147,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   useEffect(() => {
     if (hasVideo && videoRef.current) {
       videoRef.current.muted = true
-      videoRef.current.play().catch(() => {})
+      videoRef.current.play().catch(() => { })
     }
   }, [hasVideo])
 
@@ -166,6 +173,64 @@ const TopicHub: React.FC<TopicHubProps> = ({
     // 允许 10px 误差
     const isBottom = scrollTop + clientHeight >= scrollHeight - 10
     setIsCardAtBottom(isBottom)
+  }
+
+  // --- 图片缩放手势逻辑 ---
+  const getDistance = (t1: React.Touch, t2: React.Touch) => {
+    return Math.sqrt(
+      Math.pow(t2.clientX - t1.clientX, 2) +
+      Math.pow(t2.clientY - t1.clientY, 2),
+    )
+  }
+
+  const handlePreviewTouchStart = (e: React.TouchEvent) => {
+    setIsGesturing(true)
+    if (e.touches.length === 1) {
+      initialTouchPosRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      }
+      initialOffsetRef.current = { ...offset }
+    } else if (e.touches.length === 2) {
+      initialDistanceRef.current = getDistance(e.touches[0], e.touches[1])
+      lastScaleRef.current = scale
+    }
+    // 双击检测
+    const now = Date.now()
+    if (now - lastTapRef.current < 300) {
+      setIsGesturing(false) // 双击切换使用弹性动画
+      const targetScale = scale > 1 ? 1 : 2
+      setScale(targetScale)
+      if (targetScale === 1) setOffset({ x: 0, y: 0 })
+      e.preventDefault()
+    }
+    lastTapRef.current = now
+  }
+
+  const handlePreviewTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1 && scale > 1) {
+      const dx = e.touches[0].clientX - initialTouchPosRef.current.x
+      const dy = e.touches[0].clientY - initialTouchPosRef.current.y
+      setOffset({
+        x: initialOffsetRef.current.x + dx,
+        y: initialOffsetRef.current.y + dy,
+      })
+    } else if (e.touches.length === 2 && initialDistanceRef.current !== null) {
+      const currentDistance = getDistance(e.touches[0], e.touches[1])
+      const newScale =
+        (currentDistance / initialDistanceRef.current) * lastScaleRef.current
+      setScale(Math.min(Math.max(newScale, 1), 5))
+    }
+  }
+
+  const handlePreviewTouchEnd = () => {
+    initialDistanceRef.current = null
+    setIsGesturing(false)
+    // 缩放回 1 时自动复位
+    if (scale <= 1.01) {
+      setScale(1)
+      setOffset({ x: 0, y: 0 })
+    }
   }
 
   const handleTouchStart = (e: React.TouchEvent) =>
@@ -232,12 +297,68 @@ const TopicHub: React.FC<TopicHubProps> = ({
         />
       )}
 
+      {/* 图片全屏预览 Overlay */}
+      <AnimatePresence>
+        {isImagePreviewOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              if (scale === 1) setIsImagePreviewOpen(false)
+              else {
+                setScale(1)
+                setOffset({ x: 0, y: 0 })
+              }
+            }}
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 overflow-hidden"
+          >
+            <motion.img
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{
+                scale: scale,
+                x: offset.x,
+                y: offset.y,
+                opacity: 1
+              }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={isGesturing ? { type: 'tween', duration: 0 } : { type: 'spring', damping: 25, stiffness: 300 }}
+              src={imageUrl}
+              className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl"
+              style={{ touchAction: 'none' }} // 禁止浏览器默认行为
+              alt="Full Preview"
+              onClick={(e) => e.stopPropagation()} // 防止点击图片关闭预览（留给背景）
+              onTouchStart={handlePreviewTouchStart}
+              onTouchMove={handlePreviewTouchMove}
+              onTouchEnd={handlePreviewTouchEnd}
+            />
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsImagePreviewOpen(false)
+                setScale(1)
+                setOffset({ x: 0, y: 0 })
+              }}
+              className="absolute top-10 right-10 text-white/50 hover:text-white transition-colors"
+            >
+              <span className="material-symbols-outlined text-4xl">close</span>
+            </button>
+            {scale > 1 && (
+              <div className="absolute bottom-10 px-4 py-2 bg-white/10 backdrop-blur rounded-full text-white/60 text-[10px] font-bold uppercase tracking-widest">
+                {scale.toFixed(1)}x Zoom
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 顶部媒体预览 */}
       <div className="mx-4 mt-12 h-56 relative z-50">
         <motion.div
           initial={{ y: -300, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="absolute inset-0 rounded-[2.5rem] border-2 border-white/40 dark:border-white/20 shadow-2xl overflow-hidden bg-gray-200 dark:bg-[#1C1C1E]">
+          onClick={() => !hasVideo && setIsImagePreviewOpen(true)}
+          className={`absolute inset-0 rounded-[2.5rem] border-2 border-white/40 dark:border-white/20 shadow-2xl overflow-hidden bg-gray-200 dark:bg-[#1C1C1E] ${!hasVideo ? 'cursor-zoom-in active:scale-[0.98]' : ''} transition-transform duration-200`}>
           {hasVideo ? (
             <video
               ref={videoRef}

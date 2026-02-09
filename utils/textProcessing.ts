@@ -68,24 +68,35 @@ export const getMessageSegments = (
 ) => {
   let rawSegments: { en: string; zh: string | null }[] = []
 
-  // A. 难度变体
-  if (
-    difficulty !== 'Original' &&
-    comment.enrichment?.difficulty_variants?.[difficulty]
-  ) {
-    const content =
-      comment.enrichment.difficulty_variants[difficulty].content || ''
-    rawSegments = [{ en: content, zh: comment.content_cn }]
-  }
-  // [已删除] B. OP 消息 (删除此块，让其走下方的默认逻辑，实现 sentence-level 分句)
-  /* else if (comment.id === 'op-message') {
-    const content = comment.content || ''
-    const paragraphs = content.split(/\n+/)
-    rawSegments = paragraphs.map((p) => ({ en: decodeHtmlEntity(p), zh: null }))
-  }
-  */
+  // A. 难度变体处理 (适配新版数组 & 旧版对象/字符串)
+  const variant = comment.enrichment?.difficulty_variants?.[difficulty]
 
-  // C. Enrichment 后端分句数据 (Priority 2)
+  if (difficulty !== 'Original' && variant) {
+    // 情况 1: 新版数组结构 (DifficultySegment[])
+    if (Array.isArray(variant)) {
+      rawSegments = variant.map((v: any) => {
+        // 尝试从原句分段中寻找对应的翻译 (基于 index)
+        const originalSeg = comment.enrichment.sentence_segments?.find(
+          (s: any) => s.index === v.index || s.en === v.original,
+        )
+        return {
+          en: decodeHtmlEntity(v.rewritten),
+          zh: originalSeg?.zh || null, // 尽量对齐翻译
+        }
+      })
+    }
+    // 情况 2: 旧版对象结构 ({ content: string })
+    else if (typeof variant === 'object' && 'content' in variant) {
+      rawSegments = [
+        { en: decodeHtmlEntity(variant.content), zh: comment.content_cn },
+      ]
+    }
+    // 情况 3: 旧版纯字符串结构
+    else if (typeof variant === 'string') {
+      rawSegments = [{ en: decodeHtmlEntity(variant), zh: comment.content_cn }]
+    }
+  }
+  // B. Enrichment 后端分句数据 (Priority 2)
   else if (
     comment.enrichment?.sentence_segments &&
     Array.isArray(comment.enrichment.sentence_segments) &&
@@ -96,20 +107,15 @@ export const getMessageSegments = (
       zh: s.zh,
     }))
   }
-  // D. [核心] 前端智能分句兜底 (TopicHub 和 ChatRoom 现在都走这里)
+  // C. 前端智能分句兜底
   else {
     let content = comment.content || ''
-
-    // 先处理 GIF 语法，防止感叹号打断分句
     content = parseGiphy(content)
 
-    // 只有当内容不是纯图片URL时才分句
     if (!isImageUrl(content)) {
       const sentences = segmentText(content)
       rawSegments = sentences.map((s) => ({
         en: decodeHtmlEntity(s),
-        // 逻辑：如果只有一句，显示全文翻译；如果分成了多句，因为没有对应的句级翻译，所以 zh 为 null
-        // 此时 MessageBubble 组件会因为没有 zh 而在底部显示全文翻译 (Full Trans)
         zh: sentences.length === 1 ? comment.content_cn : null,
       }))
     } else {

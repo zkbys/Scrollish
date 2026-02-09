@@ -39,13 +39,16 @@ export interface Highlight {
   meaning: string
 }
 
-/**
- * 难度等级内容
- */
-export interface Variant {
-  content: string
-  highlights: Highlight[]
+export interface DifficultySegment {
+  index: number
+  original: string
+  rewritten: string
 }
+
+/**
+ * 难度等级内容 (适配旧版对象结构与新版数组结构)
+ */
+export type Variant = string | { content: string; highlights?: Highlight[] } | DifficultySegment[]
 
 /**
  * 文化背景或俚语解析
@@ -64,12 +67,9 @@ export interface EnrichmentData {
   sentence_segments: { en: string; zh: string }[]
   difficulty_variants: {
     Mixed?: Variant
-    PrimarySchool?: Variant
-    MiddleSchool?: Variant
-    HighSchool?: Variant
-    CET4?: Variant
-    CET6?: Variant
-    IELTS?: Variant
+    Basic?: Variant
+    Intermediate?: Variant
+    Expert?: Variant
     [key: string]: Variant | undefined
   }
   cultural_notes: CulturalNote[]
