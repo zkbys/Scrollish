@@ -16,15 +16,7 @@ interface ChatRoomProps {
   onBack: () => void
 }
 
-type DifficultyLevel =
-  | 'Original'
-  | 'Mixed'
-  | 'IELTS'
-  | 'CET6'
-  | 'CET4'
-  | 'HighSchool'
-  | 'MiddleSchool'
-  | 'PrimarySchool'
+type DifficultyLevel = 'Original' | 'Mixed' | 'Basic' | 'Intermediate' | 'Expert'
 
 const ChatRoom: React.FC<ChatRoomProps> = ({
   postId,
@@ -394,6 +386,79 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             Hold to Translate
           </motion.div>
         )}
+
+        {/* 难度设置侧边栏 */}
+        {showSettings && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSettings(false)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[120]"
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed top-0 right-0 bottom-0 w-[280px] bg-white dark:bg-[#1C1C1E] z-[121] shadow-2xl p-6 flex flex-col pt-[env(safe-area-inset-top)]">
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h3 className="text-xl font-black dark:text-white">Settings</h3>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                    Difficulty Level
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-white/5 rounded-full text-gray-400">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              <div className="flex-1 space-y-3 overflow-y-auto no-scrollbar">
+                {[
+                  { id: 'Original', label: 'Original', desc: '原汁原味 Reddit 评论' },
+                  { id: 'Mixed', label: 'Mixed', desc: '入门级：中英混排，保留核心词' },
+                  { id: 'Basic', label: 'Basic', desc: '基础级：词汇量 2000 以内' },
+                  { id: 'Intermediate', label: 'Intermediate', desc: '进阶级：英语四六级水平' },
+                  { id: 'Expert', label: 'Expert', desc: '精通级：雅思/母语级表达' },
+                ].map((level) => (
+                  <button
+                    key={level.id}
+                    onClick={() => {
+                      setDifficulty(level.id as DifficultyLevel)
+                      setShowSettings(false)
+                      if (navigator.vibrate) navigator.vibrate(50)
+                    }}
+                    className={`w-full p-4 rounded-2xl text-left transition-all border ${difficulty === level.id
+                      ? 'bg-orange-500 border-orange-600 shadow-lg shadow-orange-500/20'
+                      : 'bg-gray-50 dark:bg-white/5 border-transparent hover:border-gray-200 dark:hover:border-white/10'
+                      }`}>
+                    <div
+                      className={`font-black text-sm mb-1 ${difficulty === level.id ? 'text-white' : 'dark:text-white'
+                        }`}>
+                      {level.label}
+                    </div>
+                    <div
+                      className={`text-[11px] leading-tight ${difficulty === level.id ? 'text-white/80' : 'text-gray-400'
+                        }`}>
+                      {level.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-6 p-4 bg-orange-500/5 rounded-2xl border border-orange-500/10">
+                <p className="text-[10px] leading-relaxed text-orange-600 font-medium">
+                  💡 Tips: Level adjustments are powered by DeepSeek-V3 to make learning more efficient.
+                </p>
+              </div>
+            </motion.div>
+          </>
+        )}
+
         {returnToId && (
           <motion.button
             initial={{ scale: 0 }}
