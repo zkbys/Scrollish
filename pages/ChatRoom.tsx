@@ -672,7 +672,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                       handleJumpToWithReturn(msg.parent_id, msg.id)
                     }
                     className="text-[10px] text-gray-400 border-l-2 border-orange-500/30 pl-2 mb-1 cursor-pointer line-clamp-1">
-                    穿透到 @{msg.replyToName}: {msg.replyText}
+                    @{msg.replyToName}: {msg.replyText}
                   </div>
                 )}
 
@@ -682,14 +682,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                   isUser={isUser}
                   onWordClick={(w, ctx) => {
                     handleWordClick(w, ctx)
-                    if (!msg.isLocal) {
-                      setQuotedMessage({
-                        id: msg.id,
-                        author: msg.author,
-                        content: ctx,
-                      })
-                      setIsAiMode(true)
-                    }
                   }}
                   onLongPress={handleBubbleLongPress}
                   onNoteClick={setViewingNote}

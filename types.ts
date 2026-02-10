@@ -105,11 +105,30 @@ export interface Comment {
 
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant'
-  content: string
+  user?: string
+  avatar?: string
+  contentEn?: string
+  contentZh?: string
+  level?: number
+  role?: 'user' | 'assistant'
+  content?: string
+  isAi?: boolean
   analysis?: {
     keyword: string
     type: string
     explanation: string
   }
+  replyTo?: string
+  replyContent?: string
+}
+
+export interface GroupChat {
+  id: string
+  user: string
+  avatar: string
+  lastMessage: string
+  time: string
+  isActive?: boolean
+  isAi?: boolean
+  previewMessages: { text: string; isMe: boolean }[]
 }

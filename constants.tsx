@@ -21,6 +21,9 @@ export const IMAGES = {
     'https://lh3.googleusercontent.com/aida-public/AB6AXuASTleqh_PHC98OfDRB4sMamFWgNQxE1ka153bTUyAWQG45bqlgDhcNRT5zZEHEc71lzhPzOcnxGlosrZaGVBtJZdy2bbksIxozLgmbblB6wf75q7l2pip4lyDvfis2MlZT26TaxZnWKav1EWtGR7oOI2E2aw1rS1a2Jjd5NA_nBtL7OX8dWz-l9AuiXz3UkiMwQ7at5XyppzkJGzGgFObYo_zpxRda1eqAP5Y8c8T14ghQ5tmihUQ3NUAt5LeeNAi-JJIxqaZYRfg-',
   vinyl:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuCRj1icx8VPNxHntTvx58OGort1b-EY7PO3t-xJXZnjzVY25xjfumYlkbJjTvUx2_kcRPgnmRgqy9CiJzvXSsFJKmkj8boSSBXYRYyHQdL5pDrBTJkQqmvX_VZHgiOAA9ePy4YXkf3M7-VDqMORToWY9fkvOyJNoh9DnhBSfF09ehwQH1YH6E2gSN4DID-ZHDh4rBE-CbpSAI4SIsjOf_Kt5GPJ3Ii80tjrBANeDsZF3QNjy9KpBf9ED5EjD-LHGeJX-Om2ePNinGrf',
+  onboarding1: '/引导页.png',
+  onboarding2: '/汽橙.jpg',
+  onboarding3: '/哆吧1.png',
 }
 
 export const POSTS: Post[] = [
@@ -32,6 +35,7 @@ export const POSTS: Post[] = [
     titleZh: '伦敦旅行必备口语：如何优雅地乘坐红色巴士？🚌',
     hashtags: ['EnglishLearning', 'LondonTravel'],
     image: IMAGES.london,
+    videoUrl: null,
     likes: '12.4k',
     stars: '4.2k',
     comments: 856,
@@ -44,6 +48,7 @@ export const POSTS: Post[] = [
     titleZh: '掌握英语规则，告别中式翻译。',
     hashtags: ['Grammar', 'StudyTips'],
     image: IMAGES.grammar,
+    videoUrl: null,
     likes: '8.1k',
     stars: '2.5k',
     comments: 432,
@@ -56,6 +61,7 @@ export const POSTS: Post[] = [
     titleZh: '厨房常用英文：这些厨具你都叫得出名字吗？🍳',
     hashtags: ['Cooking', 'Vocabulary'],
     image: IMAGES.cooking,
+    videoUrl: null,
     likes: '5.2k',
     stars: '1.8k',
     comments: 241,
@@ -68,6 +74,7 @@ export const POSTS: Post[] = [
     titleZh: '地道美国俚语：别再说 "Very happy" 了！',
     hashtags: ['Slang', 'Speaking'],
     image: IMAGES.casual,
+    videoUrl: null,
     likes: '19.8k',
     stars: '9.3k',
     comments: 1502,

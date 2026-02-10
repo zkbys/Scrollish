@@ -74,7 +74,7 @@ def make_ios_icon_full_bleed(img, size):
 
 def generate_pwa_assets():
     # ================= 配置 =================
-    image_filename = "Gemini_Generated_Image_rwflkarwflkarwfl.png"
+    image_filename = "汽橙.jpg"
     # 裁剪容差
     CROP_TOLERANCE = 50
     # =======================================
