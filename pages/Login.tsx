@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Page } from '../types';
 
 import { supabase } from '../supabase';
-import { IMAGES } from '../constants';
+import { IMAGES, getAssetPath } from '../constants';
 import { SPRING_GENTLE, BUTTON_SPRING } from '../motion';
 import { preloadImages } from '../utils/media';
 import { useUserStore } from '../store/useUserStore';
@@ -68,7 +68,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 IMAGES.london,
                                 IMAGES.avatar1,
                                 IMAGES.grammar,
-                                '/哆吧1.png'
+                                getAssetPath('/哆吧1.png')
                             ]),
                             fetchProfilePromise,
                             minLoadingTime
@@ -143,7 +143,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 IMAGES.london,
                                 IMAGES.avatar1,
                                 IMAGES.grammar,
-                                '/哆吧1.png'
+                                getAssetPath('/哆吧1.png')
                             ]),
                             fetchProfilePromise,
                             minLoadingTime
@@ -233,7 +233,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                         className="inline-flex items-center justify-center w-22 h-22 bg-transparent rounded-3xl mb-4 shadow-2xl border border-white/10 overflow-hidden"
                     >
                         <img
-                            src="/哆吧1.png"
+                            src={getAssetPath('/哆吧1.png')}
                             alt="Logo"
                             className="w-full h-full object-cover"
                         />
@@ -424,7 +424,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
 
                             <div className="w-full aspect-square bg-white p-2 rounded-3xl shadow-[0_20px_40px_rgba(0,0,0,0.3)] relative group">
                                 <img
-                                    src="/客服.png"
+                                    src={getAssetPath('/客服.png')}
                                     alt="QR Code"
                                     style={{ WebkitTouchCallout: 'default' } as any}
                                     className="w-full h-full object-contain relative z-10"
@@ -439,7 +439,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 <button
                                     onClick={() => {
                                         const link = document.createElement('a');
-                                        link.href = '/客服.png';
+                                        link.href = getAssetPath('/客服.png');
                                         link.download = 'Scrollish_Support_QR.png';
                                         link.click();
                                     }}

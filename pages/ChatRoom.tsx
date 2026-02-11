@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import { useCommentStore } from '../store/useCommentStore'
 import { useDictionaryStore } from '../store/useDictionaryStore'
 import { Comment, CulturalNote } from '../types'
+import { getAssetPath, IMAGES } from '../constants'
 import WordDetailOverlay from '../components/WordDetailOverlay'
 import MessageBubble from '../components/MessageBubble' // 使用统一组件
 
@@ -352,7 +353,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   }
 
   const DROPLET_SHAPE = '50% 50% 50% 50% / 60% 60% 43% 43%'
-  const AI_AVATAR_PATH = '/ai_dopa.png'
+  const AI_AVATAR_PATH = getAssetPath(IMAGES.aiDopa)
 
   return (
     <div

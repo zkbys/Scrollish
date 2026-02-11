@@ -381,49 +381,45 @@ const Explore: React.FC<ExploreProps> = ({
         onScroll={handleMainScroll}
         className="relative z-10 h-full flex flex-col overflow-y-auto no-scrollbar scroll-smooth">
 
-        {/* Header */}
+        {/* Header: 响应式缩放适配 - 矮屏极限收缩，长屏维持标准 */}
         <header className="sticky top-0 z-50 bg-white/40 dark:bg-black/40 backdrop-blur-xl border-b border-white/60 dark:border-white/5 transition-all">
-          <div className="flex items-center px-5 pt-12 pb-4 justify-between relative">
-            {/* 锁定状态的菜单按钮 */}
-            <div className="h-9 w-9 flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
-              {/* 底层 40% 透明度 + 1.2px 模糊的菜单图标 */}
-              <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/40 blur-[2px]">menu</span>
-
-              {/* 核心锁定标志：实心橙色小锁 */}
+          <div className="flex items-center px-5 pt-[clamp(0.4rem,20dvh-7.5rem,3.5rem)] pb-[clamp(0.4rem,1.5dvh,1rem)] justify-between relative max-w-lg mx-auto">
+            {/* 锁定状态的菜单按钮 - 随高度缩放 */}
+            <div className="h-[clamp(2.1rem,5dvh,2.5rem)] w-[clamp(2.1rem,5dvh,2.5rem)] flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+              <span className="material-symbols-outlined text-[clamp(18px,2.2dvh,20px)] text-gray-700 dark:text-white/40 blur-[2px]">menu</span>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="material-symbols-outlined text-[14px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]">lock</span>
+                <span className="material-symbols-outlined text-[clamp(12px,1.5dvh,14px)] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]">lock</span>
               </div>
             </div>
 
-            <h1 className="text-gray-900 dark:text-white text-[17px] font-black tracking-tight flex-1 text-center font-mono italic">
+            <h1 className="text-gray-900 dark:text-white text-[clamp(15px,2dvh,17px)] font-black tracking-tight flex-1 text-center font-mono italic">
               Discovery
             </h1>
 
             <div className="relative">
-              {/* 锁定状态的铃铛按钮 */}
-              <div className="h-9 w-9 flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
-                <span className="material-symbols-outlined text-[20px] text-gray-700 dark:text-white/40 blur-[2px]">notifications</span>
+              <div className="h-[clamp(2.1rem,5dvh,2.5rem)] w-[clamp(2.1rem,5dvh,2.5rem)] flex items-center justify-center bg-white/10 dark:bg-white/5 backdrop-blur-xl rounded-xl border border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+                <span className="material-symbols-outlined text-[clamp(18px,2.2dvh,20px)] text-gray-700 dark:text-white/40 blur-[2px]">notifications</span>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-[14px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]">lock</span>
+                  <span className="material-symbols-outlined text-[clamp(12px,1.5dvh,14px)] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]">lock</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Search Bar */}
-          <div className="px-5 pb-4 relative">
-            <div className="flex w-full items-center rounded-2xl h-11 bg-white/60 dark:bg-white/5 border border-white/80 dark:border-white/5 focus-within:border-orange-500/50 focus-within:bg-white dark:focus-within:bg-[#1C1C1E] px-4 gap-3 transition-all shadow-sm">
+          {/* Search Bar - 随高度缩放 */}
+          <div className="px-5 pb-[clamp(0.5rem,1.5dvh,1rem)] relative max-w-lg mx-auto">
+            <div className="flex w-full items-center rounded-2xl h-[clamp(2.4rem,6dvh,2.75rem)] bg-white/60 dark:bg-white/5 border border-white/80 dark:border-white/5 focus-within:border-orange-500/50 focus-within:bg-white dark:focus-within:bg-[#1C1C1E] px-4 gap-3 transition-all shadow-sm">
               {isSearching ? (
                 <div className="w-5 h-5 flex items-center justify-center">
                   <div className="w-3.5 h-3.5 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div>
                 </div>
               ) : (
-                <span className="material-symbols-outlined text-[20px] text-gray-400 dark:text-white/40">
+                <span className="material-symbols-outlined text-[clamp(18px,2.2dvh,20px)] text-gray-400 dark:text-white/40">
                   search
                 </span>
               )}
               <input
-                className="flex-1 bg-transparent border-none focus:ring-0 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-white/30 text-sm font-bold"
+                className="flex-1 bg-transparent border-none focus:ring-0 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-white/30 text-[clamp(12px,1.6dvh,14px)] font-bold"
                 placeholder="Search items..."
                 value={searchQuery}
                 onFocus={() => {
@@ -504,7 +500,7 @@ const Explore: React.FC<ExploreProps> = ({
                             whileTap={{ backgroundColor: 'rgba(0,0,0,0.05)' }}
                             onClick={() => handlePostClick(post)}
                             className="flex gap-3 p-2 rounded-xl transition-colors cursor-pointer group">
-                            <div className="w-12 h-16 rounded-lg shrink-0 border border-white/40 dark:border-white/10 shadow-md relative overflow-hidden">
+                            <div className="w-[clamp(2.5rem,8dvh,3rem)] h-[clamp(3.5rem,11dvh,4rem)] rounded-lg shrink-0 border border-white/40 dark:border-white/10 shadow-md relative overflow-hidden">
                               <SafeImage
                                 src={post.image_url}
                                 layoutId={`post-image-${post.id}`}
@@ -541,10 +537,10 @@ const Explore: React.FC<ExploreProps> = ({
 
         <div
           className={`relative z-10 transition-all duration-300 ${showResults ? 'blur-md opacity-40 translate-y-2' : 'blur-0 opacity-100'}`}>
-          {/* Trending */}
-          <section className="mt-2 text-gray-900 dark:text-gray-100">
-            <div className="flex items-center justify-between px-5 pb-3 pt-4">
-              <h2 className="text-gray-900 dark:text-white text-xl font-black tracking-tight">
+          {/* Trending - 随高度缩放 */}
+          <section className="mt-2 text-gray-900 dark:text-gray-100 max-w-lg mx-auto">
+            <div className="flex items-center justify-between px-5 pb-[clamp(0.5rem,1.5dvh,0.75rem)] pt-4">
+              <h2 className="text-gray-900 dark:text-white text-[clamp(18px,2.5dvh,21px)] font-black tracking-tight">
                 Trending Today
               </h2>
               <div className="flex items-center gap-2">
@@ -554,7 +550,7 @@ const Explore: React.FC<ExploreProps> = ({
                 <motion.span
                   whileTap={{ scale: 0.9 }}
                   onClick={() => fetchTrending()}
-                  className="text-orange-500 text-xs font-black uppercase tracking-widest cursor-pointer hover:opacity-80 transition-all">
+                  className="text-orange-500 text-[clamp(10px,1.4dvh,11px)] font-black uppercase tracking-widest cursor-pointer hover:opacity-80 transition-all">
                   Refresh
                 </motion.span>
               </div>
@@ -563,16 +559,16 @@ const Explore: React.FC<ExploreProps> = ({
             <div
               ref={trendingContainerRef}
               onScroll={handleTrendingScroll}
-              className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-5 gap-4 pb-8">
+              className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-5 gap-4 pb-6">
               {trendingPosts.map((post) => (
                 <div
                   key={post.id}
-                  className="flex flex-col gap-3 shrink-0 w-56 snap-start transition-all duration-300 relative">
+                  className="flex flex-col gap-2 shrink-0 w-[clamp(8rem,37dvw,20rem)] snap-start transition-all duration-300 relative">
                   <motion.div
                     layoutId={`post-card-${post.id}`}
                     whileTap={{ scale: 0.96 }}
                     onClick={() => handlePostClick(post)}
-                    className="relative w-full aspect-[3/4.2] rounded-[2rem] overflow-hidden glass-card-premium transition-all cursor-pointer group shadow-lg">
+                    className="relative w-full aspect-[3/4.2] rounded-[clamp(1.2rem,3.2dvh,2rem)] overflow-hidden glass-card-premium transition-all cursor-pointer group shadow-lg">
                     <div className="absolute inset-0">
                       {post.video_url ? (
                         <video
@@ -604,10 +600,10 @@ const Explore: React.FC<ExploreProps> = ({
                       </div>
                     )}
                     <div className="absolute bottom-5 left-5 right-5 z-20">
-                      <p className="text-[14px] font-black text-white leading-snug tracking-tight line-clamp-1 drop-shadow-md">
+                      <p className="text-[clamp(13px,1.9dvh,15px)] font-black text-white leading-snug tracking-tight line-clamp-1 drop-shadow-md">
                         {post.title_en}
                       </p>
-                      <p className="text-[11px] font-bold text-white/70 line-clamp-1 mt-0.5">
+                      <p className="text-[clamp(10px,1.5dvh,12px)] font-bold text-white/70 line-clamp-1 mt-0.5">
                         {post.title_cn}
                       </p>
                     </div>
@@ -617,14 +613,14 @@ const Explore: React.FC<ExploreProps> = ({
             </div>
           </section>
 
-          {/* Categories Navbar */}
-          <nav className="sticky top-[156px] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all relative">
-            <div className="flex overflow-x-auto no-scrollbar px-5 gap-8 opacity-40 blur-[1px]">
+          {/* Categories Navbar - 响应式高度适配 (配合 Header 缩放) */}
+          <nav className="sticky top-[clamp(4.2rem,18dvh-3rem,9.5rem)] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all relative max-w-lg mx-auto">
+            <div className="flex overflow-x-auto no-scrollbar px-5 gap-[clamp(1.5rem,5.5dvw,2rem)] opacity-40 blur-[1px]">
               {categories.map((cat) => (
                 <div
                   key={cat.id}
-                  className={`flex flex-col items-center justify-center pb-3 pt-4 shrink-0 transition-all ${activeCategoryId === cat.id ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'}`}>
-                  <span className={`text-[13px] font-black tracking-tight uppercase ${activeCategoryId === cat.id ? 'opacity-100' : 'opacity-80 font-bold'}`}>
+                  className={`flex flex-col items-center justify-center pb-[clamp(0.5rem,1.5dvh,0.75rem)] pt-4 shrink-0 transition-all ${activeCategoryId === cat.id ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'}`}>
+                  <span className={`text-[clamp(11px,1.6dvh,13px)] font-black tracking-tight uppercase ${activeCategoryId === cat.id ? 'opacity-100' : 'opacity-80 font-bold'}`}>
                     {cat.name_en}
                   </span>
                   {activeCategoryId === cat.id && (
@@ -635,9 +631,8 @@ const Explore: React.FC<ExploreProps> = ({
                 </div>
               ))}
             </div>
-            {/* 分类栏锁定层 */}
             <div className="absolute inset-0 z-10 bg-white/5 dark:bg-black/10 flex items-center justify-center pointer-events-auto">
-              <span className="material-symbols-outlined text-orange-500 text-sm fill-[1] drop-shadow-[0_0_10px_rgba(249,115,22,0.6)]">lock</span>
+              <span className="material-symbols-outlined text-orange-500 text-[clamp(12px,1.6dvh,14px)] fill-[1] drop-shadow-[0_0_10px_rgba(249,115,22,0.6)]">lock</span>
             </div>
           </nav>
 
@@ -666,9 +661,9 @@ const Explore: React.FC<ExploreProps> = ({
                     key={sub.id}
                     className="flex items-center gap-4 glass-card-premium p-4 border-white/60 dark:border-white/5 transition-all group">
                     <div
-                      className={`size-14 rounded-2xl bg-gradient-to-br ${getCommunityGradient(sub.name)} border border-white/20 flex items-center justify-center shrink-0 text-white shadow-lg overflow-hidden relative`}>
+                      className={`size-[clamp(2.8rem,7.5dvh,3.5rem)] rounded-[clamp(1rem,2.5dvh,1.5rem)] bg-gradient-to-br ${getCommunityGradient(sub.name)} border border-white/20 flex items-center justify-center shrink-0 text-white shadow-lg overflow-hidden relative`}>
                       <div className="absolute inset-0 bg-black/10"></div>
-                      <span className="text-lg font-black relative z-10">
+                      <span className="text-[clamp(16px,2dvh,20px)] font-black relative z-10">
                         {sub.name.substring(0, 1).toUpperCase()}
                       </span>
                     </div>
@@ -708,12 +703,12 @@ const Explore: React.FC<ExploreProps> = ({
                 ))}
             </div>
 
-            {/* 全局锁定层：深层模糊 + 背景变色 */}
-            <div className="absolute inset-0 z-30 backdrop-blur-[15px] bg-white/5 dark:bg-black/10 flex items-center justify-center flex-col gap-4">
-              <div className="w-16 h-16 rounded-3xl bg-white/20 dark:bg-white/5 backdrop-blur-2xl flex items-center justify-center border border-white/20 shadow-2xl animate-pulse">
-                <span className="material-symbols-outlined text-orange-500 text-3xl fill-[1] drop-shadow-[0_0_15px_rgba(249,115,22,0.8)]">lock</span>
+            {/* 全局锁定层：图标文字随高度缩放 */}
+            <div className="absolute inset-0 z-30 backdrop-blur-[15px] bg-white/5 dark:bg-black/10 flex items-center justify-center flex-col gap-[clamp(0.75rem,2dvh,1.5rem)]">
+              <div className="w-[clamp(3.5rem,8.5dvh,4.5rem)] h-[clamp(3.5rem,8.5dvh,4.5rem)] rounded-[clamp(1.2rem,2.8dvh,1.6rem)] bg-white/20 dark:bg-white/5 backdrop-blur-2xl flex items-center justify-center border border-white/20 shadow-2xl animate-pulse">
+                <span className="material-symbols-outlined text-orange-500 text-[clamp(24px,3.8dvh,32px)] fill-[1] drop-shadow-[0_0_15px_rgba(249,115,22,0.8)]">lock</span>
               </div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500/60 animate-pulse">Premium Discovery Locked</p>
+              <p className="text-[clamp(8px,1.2dvh,10px)] font-black uppercase tracking-[0.3em] text-orange-500/60 animate-pulse">Premium Discovery Locked</p>
             </div>
           </main>
         </div>

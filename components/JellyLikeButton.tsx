@@ -66,16 +66,16 @@ const JellyLikeButton: React.FC<JellyLikeButtonProps> = ({ isLiked, onClick, cou
                 } : { scale: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
                 className="flex items-center justify-center transition-all duration-300 relative z-10 bg-transparent shadow-none"
-                style={{ width: '46px', height: '46px' }}
+                style={{ width: 'clamp(2.5rem,6.5dvh,3rem)', height: 'clamp(2.5rem,6.5dvh,3rem)' }}
             >
                 <span
-                    className={`material-symbols-outlined text-[32px] transition-all duration-300 ${isLiked ? 'text-orange-500 fill-[1] drop-shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'text-white/70 hover:text-white'}`}>
+                    className={`material-symbols-outlined text-[clamp(26px,3.8dvh,32px)] transition-all duration-300 ${isLiked ? 'text-orange-500 fill-[1] drop-shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'text-white/70 hover:text-white'}`}>
                     favorite
                 </span>
             </motion.button>
 
             {count !== undefined && (
-                <span className={`text-[12px] font-black drop-shadow-md transition-colors ${isLiked ? 'text-orange-400' : 'text-white/50'}`}>
+                <span className={`text-[clamp(10px,1.4dvh,12px)] font-black drop-shadow-md transition-colors ${isLiked ? 'text-orange-400' : 'text-white/50'}`}>
                     {count}
                 </span>
             )}

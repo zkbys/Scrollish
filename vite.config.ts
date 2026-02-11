@@ -6,6 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa' // [新增] 引入插件
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '')
   return {
+    base: '/scrollish/',
     server: {
       port: 3000,
       host: '0.0.0.0',

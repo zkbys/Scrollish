@@ -24,6 +24,16 @@ export const IMAGES = {
   onboarding1: '/引导页.png',
   onboarding2: '/汽橙.jpg',
   onboarding3: '/哆吧1.png',
+  aiDopa: '/ai_dopa.png',
+}
+
+// 辅助函数：确保在生产环境（子路径部署）下路径正确
+export const getAssetPath = (path: string) => {
+  if (path.startsWith('http')) return path
+  // 在当前 CentOS 部署环境下，强制使用 /scrollish 前缀
+  const base = '/scrollish'
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  return `${base}${cleanPath}`.replace(/\/+/g, '/')
 }
 
 export const POSTS: Post[] = [

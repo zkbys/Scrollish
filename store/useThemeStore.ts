@@ -23,7 +23,7 @@ const updateDom = (theme: Theme) => {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: 'dark', // 默认为暗色
+      theme: 'light', // 默认为亮色
 
       toggleTheme: () => {
         const newTheme = get().theme === 'dark' ? 'light' : 'dark'

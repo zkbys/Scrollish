@@ -4,7 +4,7 @@ import { Page, Post } from '../types'
 import { useUserStore } from '../store/useUserStore'
 import { useProfileStore } from '../store/useProfileStore'
 import { useThemeStore } from '../store/useThemeStore'
-import { IMAGES } from '../constants'
+import { IMAGES, getAssetPath } from '../constants'
 import { STAGGER_CONTAINER, STAGGER_ITEM, SPRING_GENTLE } from '../motion'
 import WordDetailOverlay from '../components/WordDetailOverlay'
 
@@ -116,7 +116,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              src={fullscreenImage}
+              src={getAssetPath(fullscreenImage)}
               alt="QR Preview"
               className="max-w-full max-h-[80vh] object-contain rounded-3xl shadow-2xl border border-white/10"
               onClick={(e) => e.stopPropagation()}
@@ -199,7 +199,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                       onClick={() => setFullscreenImage('/内侧交流群.jpg')}
                       className="w-full aspect-square max-w-[220px] bg-white dark:bg-white/10 rounded-2xl border border-orange-500/20 flex items-center justify-center relative group overflow-hidden shadow-lg p-3 cursor-zoom-in active:scale-95 transition-transform">
                       <img
-                        src="/内侧交流群.jpg"
+                        src={getAssetPath('/内侧交流群.jpg')}
                         alt="Wechatroom QR Code"
                         className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                       />
@@ -219,7 +219,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                       onClick={() => setFullscreenImage('/客服.png')}
                       className="w-full aspect-square max-w-[190px] bg-white dark:bg-white/10 rounded-2xl border border-orange-500/20 flex items-center justify-center relative group overflow-hidden shadow-lg p-3 cursor-zoom-in active:scale-95 transition-transform">
                       <img
-                        src="/客服.png"
+                        src={getAssetPath('/客服.png')}
                         alt="Customer Service QR Code"
                         className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                       />
@@ -240,19 +240,19 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         )}
       </AnimatePresence>
 
-      <header className="relative z-50 flex items-center justify-between px-5 pt-12 pb-6 shrink-0 transition-all duration-500">
+      <header className="relative z-50 flex items-center justify-between px-5 pt-[clamp(0.5rem,20dvh-7.5rem,3.5rem)] pb-[clamp(0.5rem,1.5dvh,0.75rem)] shrink-0 transition-all duration-500 max-w-lg mx-auto w-full">
         <button
           onClick={() => onNavigate?.(Page.Home)}
-          className="h-11 w-11 flex items-center justify-center bg-gray-100 dark:bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
-          <span className="material-symbols-outlined text-[22px] text-gray-800 dark:text-white/90 group-hover:text-orange-400">arrow_back</span>
+          className="h-[clamp(2.2rem,5.5dvh,2.75rem)] w-[clamp(2.2rem,5.5dvh,2.75rem)] flex items-center justify-center bg-gray-100 dark:bg-white/10 backdrop-blur-xl rounded-[clamp(0.8rem,1.8dvh,1.2rem)] border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
+          <span className="material-symbols-outlined text-[clamp(18px,2.2dvh,22px)] text-gray-800 dark:text-white/90 group-hover:text-orange-400">arrow_back</span>
         </button>
 
-        <h2 className="text-gray-900 dark:text-white text-[18px] font-black tracking-tight">Profile</h2>
+        <h2 className="text-gray-900 dark:text-white text-[clamp(16px,2dvh,18px)] font-black tracking-tight">Profile</h2>
 
         <button
           onClick={() => setShowSettings(true)}
-          className="h-11 w-11 flex items-center justify-center bg-gray-100 dark:bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
-          <span className="material-symbols-outlined text-[22px] text-gray-800 dark:text-white/90 group-hover:text-orange-400">settings</span>
+          className="h-[clamp(2.2rem,5.5dvh,2.75rem)] w-[clamp(2.2rem,5.5dvh,2.75rem)] flex items-center justify-center bg-gray-100 dark:bg-white/10 backdrop-blur-xl rounded-[clamp(0.8rem,1.8dvh,1.2rem)] border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
+          <span className="material-symbols-outlined text-[clamp(18px,2.2dvh,22px)] text-gray-800 dark:text-white/90 group-hover:text-orange-400">settings</span>
         </button>
       </header>
 
@@ -264,125 +264,125 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         animate="animate"
         className="relative z-10 flex-1 overflow-y-auto no-scrollbar scroll-smooth">
 
-        {/* Profile Info */}
-        <motion.div variants={STAGGER_ITEM} className="flex p-4 flex-col items-center mt-2">
+        {/* Profile Info - 响应式缩放 */}
+        <motion.div variants={STAGGER_ITEM} className="flex p-4 flex-col items-center mt-2 max-w-lg mx-auto">
           <div className="relative">
             <div className="p-1 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-red-600 shadow-xl ring-4 ring-white/30 dark:ring-white/5">
               <div
-                className="bg-center bg-no-repeat aspect-square bg-cover rounded-full h-24 w-24 border-[3px] border-white dark:border-[#1C1C1E] shadow-inner"
+                className="bg-center bg-no-repeat aspect-square bg-cover rounded-full h-[clamp(4.5rem,11dvh,6.5rem)] w-[clamp(4.5rem,11dvh,6.5rem)] border-[3px] border-white dark:border-[#1C1C1E] shadow-inner"
                 style={{ backgroundImage: `url("${IMAGES.avatar1}")` }}>
               </div>
             </div>
-            <div className="absolute -bottom-1 -right-1 bg-orange-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full border-2 border-white dark:border-[#1C1C1E] shadow-lg">
+            <div className="absolute -bottom-1 -right-1 bg-orange-500 text-white text-[clamp(8px,1.2dvh,10px)] font-black px-[clamp(0.4rem,1dvh,0.6rem)] py-[clamp(0.2rem,0.4dvh,0.3rem)] rounded-full border-2 border-white dark:border-[#1C1C1E] shadow-lg">
               LVL {userLevel}
             </div>
           </div>
-          <div className="flex flex-col items-center mt-5 gap-1.5">
+          <div className="flex flex-col items-center mt-[clamp(0.75rem,2dvh,1.25rem)] gap-1.5">
             <div className="flex items-center gap-2">
-              <p className="text-gray-900 dark:text-white text-2xl font-black tracking-tight">{profile?.display_name || 'My Space'}</p>
-              <span className="material-symbols-outlined text-orange-500 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+              <p className="text-gray-900 dark:text-white text-[clamp(18px,2.8dvh,24px)] font-black tracking-tight">{profile?.display_name || 'My Space'}</p>
+              <span className="material-symbols-outlined text-orange-500 text-[clamp(16px,2.2dvh,20px)]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
             </div>
             <div className="flex items-center gap-1.5 glass-card-premium px-3 py-1 border-white/80 dark:border-white/10">
-              <span className="material-symbols-outlined text-orange-500 text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
-              <p className="text-orange-600 dark:text-orange-400 text-[10px] font-extrabold uppercase tracking-widest">Premium Member</p>
+              <span className="material-symbols-outlined text-orange-500 text-[clamp(11px,1.4dvh,14px)]" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
+              <p className="text-orange-600 dark:text-orange-400 text-[clamp(8px,1.1dvh,10px)] font-extrabold uppercase tracking-widest">Premium Member</p>
             </div>
           </div>
         </motion.div>
 
-        {/* Stats Matrix */}
-        <motion.div variants={STAGGER_ITEM} className="grid grid-cols-2 gap-3.5 p-4">
+        {/* Stats Matrix - 响应式卡片 */}
+        <motion.div variants={STAGGER_ITEM} className="grid grid-cols-2 gap-[clamp(0.5rem,1.5dvh,0.875rem)] p-4 max-w-lg mx-auto">
           <div
             onClick={() => setShowVocabularyOverlay(true)}
-            className="glass-card-premium p-4 flex items-center justify-between transition-transform active:scale-[0.98] cursor-pointer hover:bg-orange-500/5 group">
+            className="glass-card-premium p-[clamp(0.75rem,2dvh,1rem)] flex items-center justify-between transition-transform active:scale-[0.98] cursor-pointer hover:bg-orange-500/5 group">
             <div>
-              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Vocabulary</p>
-              <p className="text-gray-900 dark:text-white text-2xl font-black group-hover:text-orange-500 transition-colors">{starredWords.length}</p>
+              <p className="text-gray-400 dark:text-white/40 text-[clamp(8px,1.1dvh,10px)] font-bold uppercase tracking-widest mb-1">Vocabulary</p>
+              <p className="text-gray-900 dark:text-white text-[clamp(18px,2.6dvh,24px)] font-black group-hover:text-orange-500 transition-colors">{starredWords.length}</p>
             </div>
-            <div className="size-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-all">
-              <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>book</span>
+            <div className="size-[clamp(2rem,5dvh,2.5rem)] rounded-[clamp(0.6rem,1.5dvh,0.8rem)] bg-orange-500/10 flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-all">
+              <span className="material-symbols-outlined text-[clamp(18px,2.2dvh,22px)]" style={{ fontVariationSettings: "'FILL' 1" }}>book</span>
             </div>
           </div>
-          <div className="glass-card-premium p-4 flex items-center justify-between relative overflow-hidden group">
+          <div className="glass-card-premium p-[clamp(0.75rem,2dvh,1rem)] flex items-center justify-between relative overflow-hidden group">
             <div className="flex flex-col blur-[4px]">
-              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">History</p>
-              <p className="text-gray-900 dark:text-white text-2xl font-black">{profile?.words_count || 0}</p>
+              <p className="text-gray-400 dark:text-white/40 text-[clamp(8px,1.1dvh,10px)] font-bold uppercase tracking-widest mb-1">History</p>
+              <p className="text-gray-900 dark:text-white text-[clamp(18px,2.6dvh,24px)] font-black">{profile?.words_count || 0}</p>
             </div>
-            <div className="size-10 rounded-xl bg-purple-500/10 flex items-center justify-center blur-[4px]">
-              <span className="material-symbols-outlined text-purple-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>history</span>
+            <div className="size-[clamp(2rem,5dvh,2.5rem)] rounded-[clamp(0.6rem,1.5dvh,0.8rem)] bg-purple-500/10 flex items-center justify-center blur-[4px]">
+              <span className="material-symbols-outlined text-purple-500 text-[clamp(18px,2.2dvh,22px)]" style={{ fontVariationSettings: "'FILL' 1" }}>history</span>
             </div>
             {/* 终极锁定层 */}
             <div className="absolute inset-0 z-10 backdrop-blur-[15px] bg-white/10 dark:bg-black/40 flex items-center justify-center border-0">
-              <span className="material-symbols-outlined text-orange-500 text-xl fill-[1] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">lock</span>
+              <span className="material-symbols-outlined text-orange-500 text-[clamp(16px,2dvh,20px)] fill-[1] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">lock</span>
             </div>
           </div>
-          <div className="glass-card-premium p-4 flex items-center justify-between relative overflow-hidden group">
+          <div className="glass-card-premium p-[clamp(0.75rem,2dvh,1rem)] flex items-center justify-between relative overflow-hidden group">
             <div className="flex flex-col blur-[4px]">
-              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">XP</p>
-              <p className="text-gray-900 dark:text-white text-2xl font-black">
+              <p className="text-gray-400 dark:text-white/40 text-[clamp(8px,1.1dvh,10px)] font-bold uppercase tracking-widest mb-1">XP</p>
+              <p className="text-gray-900 dark:text-white text-[clamp(18px,2.6dvh,24px)] font-black">
                 {currentXP > 1000 ? `${(currentXP / 1000).toFixed(1)}k` : currentXP}
               </p>
             </div>
-            <div className="size-10 rounded-xl bg-orange-500/10 flex items-center justify-center blur-[4px]">
-              <RoundedStar className="size-6 text-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]" fill="currentColor" />
+            <div className="size-[clamp(2rem,5dvh,2.5rem)] rounded-[clamp(0.6rem,1.5dvh,0.8rem)] bg-orange-500/10 flex items-center justify-center blur-[4px]">
+              <RoundedStar className="size-[clamp(16px,2dvh,20px)] text-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]" fill="currentColor" />
             </div>
             {/* 终极锁定层 */}
             <div className="absolute inset-0 z-10 backdrop-blur-[15px] bg-white/10 dark:bg-black/40 flex items-center justify-center border-0">
-              <span className="material-symbols-outlined text-orange-500 text-xl fill-[1] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">lock</span>
+              <span className="material-symbols-outlined text-orange-500 text-[clamp(16px,2dvh,20px)] fill-[1] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">lock</span>
             </div>
           </div>
-          <div className="glass-card-premium p-4 flex items-center justify-between relative overflow-hidden group">
+          <div className="glass-card-premium p-[clamp(0.75rem,2dvh,1rem)] flex items-center justify-between relative overflow-hidden group">
             <div className="flex flex-col blur-[4px]">
-              <p className="text-gray-400 dark:text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Streak</p>
-              <p className="text-gray-900 dark:text-white text-2xl font-black">{profile?.current_streak || 0}</p>
+              <p className="text-gray-400 dark:text-white/40 text-[clamp(8px,1.1dvh,10px)] font-bold uppercase tracking-widest mb-1">Streak</p>
+              <p className="text-gray-900 dark:text-white text-[clamp(18px,2.6dvh,24px)] font-black">{profile?.current_streak || 0}</p>
             </div>
-            <div className="size-10 rounded-xl bg-yellow-500/10 flex items-center justify-center blur-[4px]">
-              <span className="material-symbols-outlined text-yellow-500 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
+            <div className="size-[clamp(2rem,5dvh,2.5rem)] rounded-[clamp(0.6rem,1.5dvh,0.8rem)] bg-yellow-500/10 flex items-center justify-center blur-[4px]">
+              <span className="material-symbols-outlined text-yellow-500 text-[clamp(18px,2.2dvh,22px)]" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
             </div>
             {/* 终极锁定层 */}
             <div className="absolute inset-0 z-10 backdrop-blur-[15px] bg-white/10 dark:bg-black/40 flex items-center justify-center border-0">
-              <span className="material-symbols-outlined text-orange-500 text-xl fill-[1] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">lock</span>
+              <span className="material-symbols-outlined text-orange-500 text-[clamp(16px,2dvh,20px)] fill-[1] drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]">lock</span>
             </div>
           </div>
         </motion.div>
 
-        {/* Level Progress */}
-        <motion.div variants={STAGGER_ITEM} className="mx-4 mb-6 p-5 glass-card-premium">
-          <div className="flex justify-between items-end mb-3">
+        {/* Level Progress - 紧凑化适配 */}
+        <motion.div variants={STAGGER_ITEM} className="mx-[clamp(0.5rem,1.2dvh,1rem)] mb-6 p-[clamp(0.75rem,2dvh,1.25rem)] glass-card-premium max-w-lg md:mx-auto">
+          <div className="flex justify-between items-end mb-2.5">
             <div className="flex flex-col">
-              <p className="text-gray-900 dark:text-white text-sm font-black">Progress to Level {userLevel + 1}</p>
-              <p className="text-gray-500 dark:text-white/40 text-[11px] font-medium">Keep it up! {nextLevelXP - currentXP} XP to go.</p>
+              <p className="text-gray-900 dark:text-white text-[clamp(12px,1.6dvh,14px)] font-black">Progress to Level {userLevel + 1}</p>
+              <p className="text-gray-500 dark:text-white/40 text-[clamp(9px,1.2dvh,11px)] font-medium">Keep it up! {nextLevelXP - currentXP} XP to go.</p>
             </div>
-            <p className="text-orange-600 dark:text-orange-400 text-xs font-black">{currentXP.toLocaleString()} / {nextLevelXP.toLocaleString()} XP</p>
+            <p className="text-orange-600 dark:text-orange-400 text-[clamp(10px,1.4dvh,12px)] font-black">{currentXP.toLocaleString()} / {nextLevelXP.toLocaleString()} XP</p>
           </div>
-          <div className="h-3.5 rounded-full bg-gray-100/50 dark:bg-black/20 inner-glow overflow-hidden p-0.5 border border-white/50 dark:border-white/5">
+          <div className="h-[clamp(0.6rem,1.5dvh,0.85rem)] rounded-full bg-gray-100/50 dark:bg-black/20 inner-glow overflow-hidden p-[2px] border border-white/50 dark:border-white/5">
             <div className="h-full rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 shadow-sm transition-all" style={{ width: `${progressPercent}%` }}></div>
           </div>
         </motion.div>
 
-        {/* Sticky Tabs */}
-        <div className="sticky top-0 z-20 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5">
+        {/* Sticky Tabs - 响应式高度适配 */}
+        <div className="sticky top-0 z-20 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 max-w-lg mx-auto w-full">
           <div className="flex px-4">
             <button
               onClick={() => setActiveTab('favorites')}
-              className={`flex flex-col items-center justify-center border-b-2 ${activeTab === 'favorites' ? 'border-orange-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-white/40'} pb-3 pt-4 flex-1 transition-colors`}>
-              <p className="text-xs font-black tracking-tight uppercase">Favorites</p>
+              className={`flex flex-col items-center justify-center border-b-2 ${activeTab === 'favorites' ? 'border-orange-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-white/40'} pb-[clamp(0.5rem,1.25dvh,0.75rem)] pt-4 flex-1 transition-colors`}>
+              <p className="text-[clamp(10px,1.4dvh,12px)] font-black tracking-tight uppercase">Favorites</p>
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`flex flex-col items-center justify-center border-b-2 ${activeTab === 'history' ? 'border-orange-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-white/40'} pb-3 pt-4 flex-1 transition-colors`}>
-              <p className="text-xs font-black tracking-tight uppercase">History</p>
+              className={`flex flex-col items-center justify-center border-b-2 ${activeTab === 'history' ? 'border-orange-500 text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-white/40'} pb-[clamp(0.5rem,1.25dvh,0.75rem)] pt-4 flex-1 transition-colors`}>
+              <p className="text-[clamp(10px,1.4dvh,12px)] font-black tracking-tight uppercase">History</p>
             </button>
-            <button disabled className="flex flex-col items-center justify-center border-b-2 border-transparent text-gray-400 dark:text-white/40 pb-3 pt-4 flex-1 relative group cursor-not-allowed">
+            <button disabled className="flex flex-col items-center justify-center border-b-2 border-transparent text-gray-400 dark:text-white/40 pb-[clamp(0.5rem,1.25dvh,0.75rem)] pt-4 flex-1 relative group cursor-not-allowed">
               <div className="flex items-center gap-1 opacity-20 blur-[6px]">
-                <p className="text-xs font-bold tracking-tight uppercase">Awards</p>
+                <p className="text-[clamp(10px,1.4dvh,12px)] font-bold tracking-tight uppercase">Awards</p>
               </div>
-              <span className="material-symbols-outlined text-[16px] text-orange-500 absolute top-1/2 -translate-y-1/2 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">lock</span>
+              <span className="material-symbols-outlined text-[clamp(14px,1.8dvh,18px)] text-orange-500 absolute top-1/2 -translate-y-1/2 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">lock</span>
             </button>
           </div>
         </div>
 
-        {/* Content Grid */}
-        <div className="p-4 pb-32">
+        {/* Content Grid - 间距适配 */}
+        <div className="p-4 pb-32 max-w-lg mx-auto">
           {activeTab === 'favorites' ? (
             likedPosts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-gray-300 dark:text-white/20">
@@ -390,7 +390,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                 <p className="text-xs font-bold uppercase tracking-widest text-center">No stars yet<br /><span className="text-[10px] lowercase font-medium opacity-50">Starred items will appear here</span></p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-[clamp(0.5rem,1.5dvh,1rem)]">
                 {likedPosts.map((post) => (
                   <motion.div
                     key={post.id}
@@ -405,23 +405,23 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                       {post.video_url && (
-                        <div className="absolute top-2 right-2 w-7 h-7 bg-white/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/60">
-                          <span className="material-symbols-outlined text-white text-lg font-bold">play_arrow</span>
+                        <div className="absolute top-2 right-2 size-[clamp(1.5rem,3.5dvh,1.75rem)] bg-white/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/60">
+                          <span className="material-symbols-outlined text-white text-[clamp(14px,1.8dvh,18px)] font-bold">play_arrow</span>
                         </div>
                       )}
                     </div>
-                    <div className="p-3 flex flex-col justify-between flex-grow">
+                    <div className="p-[clamp(0.5rem,1.2dvh,0.75rem)] flex flex-col justify-between flex-grow">
                       <div>
-                        <span className="inline-block px-2 py-0.5 rounded-md bg-orange-100/60 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[9px] font-black uppercase mb-1.5 border border-orange-200/50 dark:border-orange-500/20">
+                        <span className="inline-block px-1.5 py-0.5 rounded-md bg-orange-100/60 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[clamp(8px,1dvh,9.5px)] font-black uppercase mb-1 border border-orange-200/50 dark:border-orange-500/20">
                           r/{post.subreddit || 'Reddit'}
                         </span>
-                        <p className="text-gray-900 dark:text-white text-[11px] font-extrabold leading-snug line-clamp-2">
+                        <p className="text-gray-900 dark:text-white text-[clamp(10px,1.3dvh,12px)] font-extrabold leading-snug line-clamp-2">
                           {post.title_en}
                         </p>
                       </div>
-                      <p className="text-gray-400 dark:text-white/30 text-[9px] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">
-                        <RoundedStar className="size-3 text-orange-500" fill="currentColor" />
-                        Starred recently
+                      <p className="text-gray-400 dark:text-white/30 text-[clamp(8px,1dvh,9px)] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">
+                        <RoundedStar className="size-[clamp(10px,1.2dvh,12px)] text-orange-500" fill="currentColor" />
+                        Starred
                       </p>
                     </div>
                   </motion.div>
@@ -436,7 +436,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                 <p className="text-xs font-bold uppercase tracking-widest text-center">No history yet<br /><span className="text-[10px] lowercase font-medium opacity-50">Posts you view will appear here</span></p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-[clamp(0.5rem,1.5dvh,1rem)]">
                 {viewHistory.map((item) => (
                   <motion.div
                     key={item.postId}
@@ -452,22 +452,22 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                       {item.post.video_url && (
-                        <div className="absolute top-2 right-2 w-7 h-7 bg-white/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/60">
-                          <span className="material-symbols-outlined text-white text-lg font-bold">play_arrow</span>
+                        <div className="absolute top-2 right-2 size-[clamp(1.5rem,3.5dvh,1.75rem)] bg-white/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/60">
+                          <span className="material-symbols-outlined text-white text-[clamp(14px,1.8dvh,18px)] font-bold">play_arrow</span>
                         </div>
                       )}
                     </div>
-                    <div className="p-3 flex flex-col justify-between flex-grow">
+                    <div className="p-[clamp(0.5rem,1.2dvh,0.75rem)] flex flex-col justify-between flex-grow">
                       <div>
-                        <span className="inline-block px-2 py-0.5 rounded-md bg-purple-100/60 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 text-[9px] font-black uppercase mb-1.5 border border-purple-200/50 dark:border-purple-500/20">
+                        <span className="inline-block px-1.5 py-0.5 rounded-md bg-purple-100/60 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 text-[clamp(8px,1dvh,9.5px)] font-black uppercase mb-1 border border-purple-200/50 dark:border-purple-500/20">
                           r/{item.post.subreddit || 'Reddit'}
                         </span>
-                        <p className="text-gray-900 dark:text-white text-[11px] font-extrabold leading-snug line-clamp-2">
+                        <p className="text-gray-900 dark:text-white text-[clamp(10px,1.3dvh,12px)] font-extrabold leading-snug line-clamp-2">
                           {item.post.title_en}
                         </p>
                       </div>
-                      <p className="text-gray-400 dark:text-white/30 text-[9px] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">
-                        <span className="material-symbols-outlined text-[12px] text-purple-500">history</span>
+                      <p className="text-gray-400 dark:text-white/30 text-[clamp(8px,1dvh,9px)] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">
+                        <span className="material-symbols-outlined text-[clamp(11px,1.3dvh,13px)] text-purple-500">history</span>
                         {new Date(item.viewedAt).toLocaleDateString()}
                       </p>
                     </div>

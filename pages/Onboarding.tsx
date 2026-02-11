@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Page } from '../types'
-import { IMAGES } from '../constants'
+import { IMAGES, getAssetPath } from '../constants'
 import { useUserStore } from '../store/useUserStore'
 
 interface OnboardingProps {
@@ -22,19 +22,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         {
             title: "阅你所爱",
             description: "深入论坛热门讨论，通过真实内容掌握地道英语。",
-            image: IMAGES.onboarding1,
+            image: getAssetPath(IMAGES.onboarding1),
             accent: "from-orange-500 to-red-500"
         },
         {
             title: "深度理解",
             description: "智能翻译与 AI 语义分析，助你捕捉每一处细节。",
-            image: IMAGES.onboarding2,
+            image: getAssetPath(IMAGES.onboarding2),
             accent: "from-blue-500 to-indigo-600"
         },
         {
             title: "持续成长",
             description: "记录你的点滴进步，在刷帖中见证自我提升。",
-            image: IMAGES.onboarding3,
+            image: getAssetPath(IMAGES.onboarding3),
             accent: "from-emerald-500 to-teal-600"
         }
     ]

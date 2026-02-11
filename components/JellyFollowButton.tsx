@@ -38,13 +38,13 @@ const JellyFollowButton: React.FC<JellyFollowButtonProps> = ({
                         whileTap={{ scale: 0.8 }}
                         onClick={onClick}
                         className="flex items-center justify-center transition-all duration-300 relative z-10 bg-transparent shadow-none"
-                        style={{ width: '40px', height: '40px' }}>
-                        <span className="material-symbols-outlined text-[24px] text-white/70 hover:text-white">
+                        style={{ width: 'clamp(2.1rem,5.5dvh,2.5rem)', height: 'clamp(2.1rem,5.5dvh,2.5rem)' }}>
+                        <span className="material-symbols-outlined text-[clamp(20px,2.8dvh,24px)] text-white/70 hover:text-white">
                             person_add
                         </span>
                     </motion.button>
 
-                    <span className="text-[10px] font-black drop-shadow-md text-white/50">
+                    <span className="text-[clamp(8px,1.2dvh,10px)] font-black drop-shadow-md text-white/50">
                         {label}
                     </span>
                 </motion.div>

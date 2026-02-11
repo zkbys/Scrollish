@@ -74,7 +74,7 @@ def make_ios_icon_full_bleed(img, size):
 
 def generate_pwa_assets():
     # ================= 配置 =================
-    image_filename = "汽橙.jpg"
+    image_filename = "哆吧1.png"
     # 裁剪容差
     CROP_TOLERANCE = 50
     # =======================================
@@ -99,7 +99,7 @@ def generate_pwa_assets():
             cropped_img = aggressive_crop(img, tolerance=CROP_TOLERANCE)
             
             # ==========================================
-            # 任务 A: Android/PWA (透明圆角) - 保持不变
+            # 任务 A: Android/PWA (透明圆角) - 保持一致
             # ==========================================
             pwa_sizes = [192, 512]
             for size in pwa_sizes:
@@ -109,20 +109,21 @@ def generate_pwa_assets():
                 icon.save(os.path.join(output_dir, filename), "PNG")
 
             # ==========================================
-            # 任务 B: 【修正】iOS 专用 (不透明正方形，充满)
+            # 任务 B: iOS 专用 (为了统一感，我们也给它加一个背景色)
             # ==========================================
             filename = "apple-touch-icon.png"
-            print(f"🍎 生成 {filename} (iOS满屏正方形)...")
-            # 使用新的 full_bleed 函数
+            print(f"🍎 生成 {filename} (iOS专用)...")
+            # iOS 不支持透明，我们直接生成高质量正方形
             ios_icon = make_ios_icon_full_bleed(cropped_img, 180)
             ios_icon.save(os.path.join(output_dir, filename), "PNG")
 
             # ==========================================
-            # 任务 C: Favicon (透明圆角 .ico) - 保持不变
+            # 任务 C: Favicon (透明圆角 .ico) - 统一为圆角样式
             # ==========================================
             filename = "favicon.ico"
-            print(f"🌐 生成 {filename}...")
+            print(f"🌐 生成 {filename} (圆角版本)...")
             fav_icon = apply_squircle_mask(cropped_img, 64)
+            # 转为 RGB 以便存为 ICO，或者保留 RGBA
             fav_icon.save(os.path.join(output_dir, filename), format='ICO', sizes=[(64, 64)])
 
             print(f"\n✅ 修复完成！文件已保存在: {output_dir}")

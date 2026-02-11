@@ -258,21 +258,18 @@ const Home: React.FC<HomeProps> = ({
         </div>
       )}
 
-      {/* Header: 柑橘元气风重绘 */}
-      <header className="absolute top-0 left-0 right-0 z-50 flex flex-col items-center px-5 pt-12 pb-10 bg-gradient-to-b from-black/80 via-black/20 to-transparent pointer-events-none transition-all duration-500">
-        <div className="w-full flex items-center justify-between pointer-events-auto">
-          <button disabled className="h-11 w-11 flex items-center justify-center bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
-            {/* 增加模糊程度的菜单残影 */}
-            <span className="material-symbols-outlined text-[22px] text-white/20 blur-[1.2px]">menu</span>
-
-            {/* 顶层叠加的实心锁定图标 */}
+      {/* Header: 响应式缩放适配 - 矮屏极限收缩，长屏维持标准 */}
+      <header className="absolute top-0 left-0 right-0 z-50 flex flex-col items-center px-5 pt-[clamp(0.4rem,20dvh-7.5rem,3.5rem)] pb-[clamp(1rem,5.5dvh,2.5rem)] bg-gradient-to-b from-black/80 via-black/20 to-transparent pointer-events-none transition-all duration-500">
+        <div className="w-full flex items-center justify-between pointer-events-auto max-w-lg mx-auto">
+          <button disabled className="h-[clamp(2.5rem,5.5dvh,3.5rem)] w-[clamp(2.5rem,5.5dvh,3.5rem)] flex items-center justify-center bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 opacity-60 cursor-not-allowed relative overflow-hidden group">
+            <span className="material-symbols-outlined text-[clamp(18px,2.5dvh,24px)] text-white/20 blur-[1.2px]">menu</span>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="material-symbols-outlined text-[18px] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">lock</span>
+              <span className="material-symbols-outlined text-[clamp(16px,2dvh,20px)] text-orange-500 fill-[1] drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">lock</span>
             </div>
           </button>
 
-          {/* Tab 切换器：柑橘气泡 (回归简洁：无滑块) */}
-          <div className="flex p-1.5 bg-black/40 backdrop-blur-2xl rounded-[2.5rem] border-2 border-white/5 shadow-2xl relative pointer-events-auto">
+          {/* Tab 切换器：随高度缩放 */}
+          <div className="flex p-1 bg-black/40 backdrop-blur-2xl rounded-[2.5rem] border-2 border-white/5 shadow-2xl relative pointer-events-auto">
             <button
               onClick={() => {
                 if (homeActiveTab !== 'following') {
@@ -281,20 +278,20 @@ const Home: React.FC<HomeProps> = ({
                   scrollContainerRef.current?.scrollTo({ top: 0 })
                 }
               }}
-              className={`px-6 py-2.5 rounded-[2rem] text-[14px] font-black transition-all duration-300 ${homeActiveTab === 'following' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
+              className={`px-[clamp(0.75rem,3dvw,1.5rem)] py-[clamp(0.4rem,1.2dvh,0.75rem)] rounded-[2rem] text-[clamp(12px,1.6dvh,14px)] font-black transition-all duration-300 ${homeActiveTab === 'following' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
               Following
             </button>
             <button
               onClick={handleForYouClick}
-              className={`px-6 py-2.5 rounded-[2rem] text-[14px] font-black transition-all duration-300 ${homeActiveTab === 'foryou' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
+              className={`px-[clamp(0.75rem,3dvw,1.5rem)] py-[clamp(0.4rem,1.2dvh,0.75rem)] rounded-[2rem] text-[clamp(12px,1.6dvh,14px)] font-black transition-all duration-300 ${homeActiveTab === 'foryou' ? 'bg-gradient-to-br from-orange-400 to-orange-500 text-white shadow-lg shadow-orange-500/30' : 'text-white/50 hover:text-white'}`}>
               For You
             </button>
           </div>
 
           <button
             onClick={() => onNavigate(Page.Explore)}
-            className="h-11 w-11 flex items-center justify-center bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
-            <span className="material-symbols-outlined text-[22px] text-white/90 group-hover:text-orange-400">search</span>
+            className="h-[clamp(2.5rem,5.5dvh,3.5rem)] w-[clamp(2.5rem,5.5dvh,3.5rem)] flex items-center justify-center bg-white/10 backdrop-blur-xl rounded-2xl border-2 border-orange-400/20 active:scale-90 transition-transform shadow-lg group">
+            <span className="material-symbols-outlined text-[clamp(18px,2.5dvh,24px)] text-white/90 group-hover:text-orange-400">search</span>
           </button>
         </div>
       </header>
@@ -556,37 +553,29 @@ export const FeedItem: React.FC<{
             exit="exit"
             inherit={false}
             className="absolute inset-0 z-[120] pointer-events-none">
-            <div className="absolute bottom-0 left-0 w-[85%] p-5 pb-24 flex flex-col items-start gap-4">
+            <div className="absolute bottom-0 left-0 w-[85%] p-[clamp(1rem,4dvh,1.5rem)] pb-[clamp(1rem,9.5dvh,6rem)] flex flex-col items-start gap-[clamp(0.5rem,1.5dvh,1rem)]">
               <motion.div variants={STAGGER_ITEM} className="flex items-center gap-2.5 pointer-events-auto">
                 <div
-                  className="w-10 h-10 border-2 border-orange-400/30 bg-black/60 backdrop-blur-xl flex items-center justify-center overflow-hidden shadow-lg relative"
+                  className="w-[clamp(2.1rem,5dvh,2.5rem)] h-[clamp(2.1rem,5dvh,2.5rem)] border-2 border-orange-400/30 bg-black/60 backdrop-blur-xl flex items-center justify-center overflow-hidden shadow-lg relative"
                   style={{ borderRadius: DROPLET_SHAPE }}>
                   {/* 元气绿色小叶子 */}
                   <div className="absolute top-1 right-1.5 w-3.5 h-2 bg-green-500/60 rounded-full rotate-[-35deg] blur-[0.3px] pointer-events-none" />
-                  <span className="text-orange-400 font-black text-[16px]">
+                  <span className="text-orange-400 font-black text-[clamp(14px,1.8dvh,16px)]">
                     {subreddit.substring(0, 1).toUpperCase()}
                   </span>
                 </div>
                 <div className="flex flex-col drop-shadow-xl">
-                  <span className="text-white font-black text-[15px] leading-tight flex items-center gap-1.5">
+                  <span className="text-white font-black text-[clamp(13px,1.6dvh,15px)] leading-tight flex items-center gap-1.5">
                     r/{subreddit}
                     <AnimatePresence>
                       {isSubscribed && (
                         <motion.button
                           initial={{ scale: 0, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
-                          exit={{
-                            scale: 1.5,
-                            opacity: 0,
-                            transition: { duration: 0.2 }
-                          }}
-                          transition={{
-                            type: "spring",
-                            damping: 10,
-                            stiffness: 300
-                          }}
+                          exit={{ scale: 1.5, opacity: 0, transition: { duration: 0.2 } }}
+                          transition={{ type: "spring", damping: 10, stiffness: 300 }}
                           onClick={handleToggleSub}
-                          className="material-symbols-outlined text-[14px] fill-[1] text-orange-500 cursor-pointer active:scale-75 transition-transform"
+                          className="material-symbols-outlined text-[clamp(12px,1.4dvh,14px)] fill-[1] text-orange-500 cursor-pointer active:scale-75 transition-transform"
                         >
                           verified
                         </motion.button>
@@ -594,40 +583,39 @@ export const FeedItem: React.FC<{
                     </AnimatePresence>
                   </span>
                   <div className="flex items-center gap-1 mt-0.5 opacity-60">
-                    <span className="text-white text-[10px] font-black uppercase tracking-widest">Active Community</span>
+                    <span className="text-white text-[clamp(8px,1dvh,10px)] font-black uppercase tracking-widest">Active Community</span>
                   </div>
                 </div>
-
               </motion.div>
 
               <motion.div
                 variants={STAGGER_ITEM}
-                className="pointer-events-auto p-6 bg-black/40 backdrop-blur-2xl border-2 border-white/5 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+                className="pointer-events-auto p-[clamp(0.75rem,2.5dvh,1.51rem)] bg-black/60 backdrop-blur-3xl border-2 border-white/5 rounded-[clamp(1.5rem,4dvh,2.5rem)] shadow-2xl relative overflow-hidden group max-w-[95%]">
                 <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl group-hover:bg-orange-500/20 transition-all duration-700" />
-                <h1 className="text-white text-[20px] font-black leading-tight drop-shadow-2xl mb-2">
+                <h1 className="text-white text-[clamp(16px,2.2dvh,20px)] font-black leading-tight drop-shadow-2xl mb-1.5">
                   {titleEn}
                 </h1>
-                <p className="text-white/70 text-[15px] font-bold leading-relaxed line-clamp-2">
+                <p className="text-white/70 text-[clamp(13px,1.8dvh,15px)] font-bold leading-relaxed line-clamp-2">
                   {titleCn}
                 </p>
               </motion.div>
             </div>
 
-            <motion.div variants={STAGGER_ITEM} className="absolute bottom-24 right-2.5 flex flex-col-reverse items-center gap-6 pointer-events-auto w-14">
-              {/* 分享：太阳造型 */}
-              <div className="flex flex-col items-center gap-1.5">
+            <motion.div variants={STAGGER_ITEM} className="absolute bottom-[clamp(4.5rem,10dvh,6.5rem)] right-2 flex flex-col-reverse items-center gap-[clamp(0.75rem,2dvh,1.5rem)] pointer-events-auto w-[clamp(3rem,8dvw,3.5rem)]">
+              {/* 阳光分享按钮 */}
+              <div className="flex flex-col items-center gap-1">
                 <motion.button
                   whileHover={{ scale: 1.1, y: -2 }}
                   whileTap={{ scale: 0.9 }}
                   transition={CITRUS_SQUISH}
                   onClick={handleShare}
-                  className="w-12 h-12 bg-transparent flex items-center justify-center transition-colors relative transition-all overflow-hidden"
-                  style={{ borderRadius: DROPLET_SHAPE, width: '46px', height: '46px' }}>
-                  <span className="material-symbols-outlined text-[24px] text-white">
+                  className="flex items-center justify-center transition-all overflow-hidden bg-transparent"
+                  style={{ borderRadius: DROPLET_SHAPE, width: 'clamp(2.5rem,6dvh,3rem)', height: 'clamp(2.5rem,6dvh,3rem)' }}>
+                  <span className="material-symbols-outlined text-[clamp(20px,2.8dvh,24px)] text-white">
                     sunny
                   </span>
                 </motion.button>
-                <span className="text-white/50 text-[9px] font-black tracking-[0.2em] uppercase drop-shadow-md">Share</span>
+                <span className="text-white/50 text-[clamp(8px,1dvh,9px)] font-black tracking-[0.15em] uppercase drop-shadow-md">Share</span>
               </div>
 
               {/* 评论 */}

@@ -65,7 +65,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-[60] pb-4 pt-6 px-6 pointer-events-none flex justify-center transition-all duration-300 select-none"
+      className="fixed bottom-0 left-0 right-0 z-[60] pb-[clamp(0.5rem,1.5dvh,1.5rem)] pt-6 px-6 pointer-events-none flex justify-center transition-all duration-300 select-none"
     >
       <motion.nav
         ref={navRef}
@@ -87,7 +87,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
         }}
         style={{ width: CONTAINER_WIDTH, touchAction: 'none' }}
         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-        className="pointer-events-auto border rounded-[2.5rem] px-2 py-2 flex justify-start items-center overflow-visible relative cursor-grab active:cursor-grabbing"
+        className="pointer-events-auto border rounded-[clamp(1.5rem,4dvh,2.5rem)] px-1.5 py-1.5 flex justify-start items-center overflow-visible relative cursor-grab active:cursor-grabbing"
       >
         {navItems.map((item) => {
           const isActive = activePage === item.id
@@ -110,7 +110,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
               onPointerUp={handlePointerUp}
               onPointerLeave={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              className="relative flex items-center justify-center w-1/4 h-11 rounded-full outline-none z-20"
+              className="relative flex items-center justify-center w-1/4 h-[clamp(2.4rem,6dvh,2.75rem)] rounded-full outline-none z-20"
             >
               <div className="flex flex-col items-center gap-0.5 pointer-events-none relative">
                 <motion.span
@@ -119,14 +119,14 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
                     scale: isActive ? 1.15 : 1,
                   }}
                   transition={{ type: 'spring', stiffness: 500, damping: 30, duration: 0.1 }}
-                  className={`material-symbols-outlined text-[26px] ${isActive ? 'fill-[1]' : ''}`}>
+                  className={`material-symbols-outlined text-[clamp(22px,3dvh,26px)] ${isActive ? 'fill-[1]' : ''}`}>
                   {item.icon}
                 </motion.span>
 
                 {/* 瞬间出现的指示点 - 放在图标容器内部底部 */}
                 {isActive && !showSolidBg && (
                   <div
-                    className="absolute -bottom-2 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(255,45,85,0.4)]"
+                    className="absolute -bottom-[clamp(0.4rem,1dvh,0.5rem)] w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(255,45,85,0.4)]"
                   />
                 )}
               </div>
