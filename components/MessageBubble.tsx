@@ -126,7 +126,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     return 'bg-white/80 dark:bg-white/5 backdrop-blur-3xl border border-gray-100 dark:border-white/5 text-gray-800 dark:text-white/90 rounded-2xl rounded-tl-none shadow-sm'
   }
 
-  const containerClass = `message-bubble-container flex flex-col gap-2 ${isUser ? 'items-end' : 'items-start'} ${className}`
+  const containerClass = `message-bubble-container flex flex-col gap-2 select-none -webkit-user-select-none ${isUser ? 'items-end' : 'items-start'} ${className}`
   const highlightClass = isHighlighted
     ? 'ring-2 ring-orange-400 ring-offset-2 ring-offset-[#0B0A09] rounded-2xl'
     : ''

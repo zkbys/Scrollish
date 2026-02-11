@@ -218,6 +218,7 @@ const Explore: React.FC<ExploreProps> = ({
           .select('*')
           .eq('category_id', categoryId)
           .order('subscriber_count', { ascending: false })
+          .limit(30)
         if (data) setCategorySubreddits(categoryId, data)
       } catch (error) {
         console.error('Error fetching subreddits:', error)
@@ -365,7 +366,7 @@ const Explore: React.FC<ExploreProps> = ({
     : []
 
   return (
-    <div className="h-full w-full relative overflow-hidden bg-[#FDFCFB] dark:bg-[#0B0A09] transition-colors duration-300 select-none">
+    <div className="h-full w-full relative overflow-hidden bg-[#FDFCFB] dark:bg-[#0B0A09] transition-colors duration-300 select-none overscroll-x-none">
 
       {/* Fixed Background Layer */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
@@ -379,7 +380,7 @@ const Explore: React.FC<ExploreProps> = ({
       <div
         ref={containerRef}
         onScroll={handleMainScroll}
-        className="relative z-10 h-full flex flex-col overflow-y-auto no-scrollbar scroll-smooth">
+        className="relative z-10 h-full flex flex-col overflow-y-auto no-scrollbar scroll-smooth overscroll-x-none">
 
         {/* Header: 响应式缩放适配 - 矮屏极限收缩，长屏维持标准 */}
         <header className="sticky top-0 z-50 bg-white/40 dark:bg-black/40 backdrop-blur-xl border-b border-white/60 dark:border-white/5 transition-all">
@@ -559,7 +560,7 @@ const Explore: React.FC<ExploreProps> = ({
             <div
               ref={trendingContainerRef}
               onScroll={handleTrendingScroll}
-              className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-5 gap-4 pb-6">
+              className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-5 gap-4 pb-6 overscroll-x-none touch-pan-y">
               {trendingPosts.map((post) => (
                 <div
                   key={post.id}
@@ -614,8 +615,8 @@ const Explore: React.FC<ExploreProps> = ({
           </section>
 
           {/* Categories Navbar - 响应式高度适配 (配合 Header 缩放) */}
-          <nav className="sticky top-[clamp(4.2rem,18dvh-3rem,9.5rem)] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all relative max-w-lg mx-auto">
-            <div className="flex overflow-x-auto no-scrollbar px-5 gap-[clamp(1.5rem,5.5dvw,2rem)] opacity-40 blur-[1px]">
+          <nav className="sticky top-[clamp(4.2rem,18dvh-3rem,9.5rem)] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all relative max-w-lg mx-auto overscroll-x-none">
+            <div className="flex overflow-x-auto no-scrollbar px-5 gap-[clamp(1.5rem,5.5dvw,2rem)] opacity-40 blur-[1px] overscroll-x-none touch-pan-y">
               {categories.map((cat) => (
                 <div
                   key={cat.id}

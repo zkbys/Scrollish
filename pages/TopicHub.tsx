@@ -277,7 +277,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   return (
     <div
-      className={`h-full flex flex-col bg-[#FDFCFB] dark:bg-[#0B0A09] overflow-hidden select-none relative transition-colors duration-500 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
+      className={`h-full flex flex-col bg-[#FDFCFB] dark:bg-[#0B0A09] overflow-hidden select-none overscroll-x-none !overscroll-x-none relative transition-colors duration-500 ${isExiting ? 'opacity-0 scale-95' : 'opacity-100'}`}>
       <div className="absolute inset-0 pointer-events-none z-0">
         <div className="frost-overlay" />
         <div className="blob-pastel -top-20 -left-20 bg-[#FFEDD5] dark:bg-orange-500/20 opacity-60 dark:opacity-40" />
@@ -408,12 +408,12 @@ const TopicHub: React.FC<TopicHubProps> = ({
         </div>
 
         <div
-          className="relative w-full px-4 h-[52vh]"
+          className="relative w-full px-4 h-[52vh] overscroll-x-none !overscroll-x-none touch-pan-y !touch-pan-y"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}>
           <div
             className={`absolute inset-x-4 top-0 bottom-0 flex flex-col overflow-hidden transition-all duration-300 shadow-2xl rounded-[2.5rem] border border-white/40 dark:border-white/10 ${animationClass} 
-            bg-white/60 dark:bg-[#121212]/60 backdrop-blur-3xl`}>
+            bg-white/60 dark:bg-[#121212]/60 backdrop-blur-3xl overscroll-x-none !overscroll-x-none touch-pan-y !touch-pan-y`}>
             {/* 卡片头部 - 包含用户信息和数据统计 */}
             <div
               className="h-16 border-b border-gray-200/50 dark:border-white/5 flex items-center justify-between px-6 shrink-0"
@@ -467,7 +467,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
             <div
               ref={contentRef}
               onScroll={handleCardScroll}
-              className="flex-1 p-6 overflow-y-auto no-scrollbar scroll-smooth">
+              className="flex-1 p-6 overflow-y-auto no-scrollbar scroll-smooth overscroll-x-none">
               <MessageBubble
                 comment={activeComment}
                 isUser={false}

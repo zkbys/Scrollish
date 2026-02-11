@@ -91,45 +91,7 @@ const App: React.FC = () => {
     }
   }, [currentUser, currentPage, isAuthLoading, profile, _hasHydrated])
 
-  useEffect(() => {
-    const fetchAllPosts = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('production_posts')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (error) throw error
-
-        if (data && data.length > 0) {
-          const mappedPosts: Post[] = data.map((item: any) => ({
-            id: item.id,
-            user: item.author_name || item.subreddit || 'Anonymous',
-            avatar: item.author_avatar || IMAGES.avatar1,
-            titleEn: item.title_en,
-            titleZh: item.title_cn || '',
-            hashtags: item.hashtags || [],
-            image: item.image_url || IMAGES.london,
-            videoUrl: item.video_url || null,
-            likes: item.upvotes?.toString() || '0',
-            stars: item.stars?.toString() || '0',
-            comments: 0,
-            image_type: item.image_type,
-            subreddit: item.subreddit,
-          }))
-          setAllPosts(mappedPosts)
-        } else {
-          setAllPosts(POSTS)
-        }
-      } catch (err) {
-        console.error('Error fetching posts:', err)
-        setAllPosts(POSTS)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchAllPosts()
-  }, [])
+  // Redundant fetchAllPosts removed to improve performance and prevent timeouts.
 
   // [重构] 恢复瞬间导航：移除延迟和遮罩，优先响应速度
   const navigateTo = (nextPage: Page) => {

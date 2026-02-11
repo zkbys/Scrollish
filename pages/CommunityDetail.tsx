@@ -35,6 +35,7 @@ const CommunityDetail: React.FC<CommunityDetailProps> = ({
         .select('*')
         .eq('community_id', community.id)
         .order('upvotes', { ascending: false })
+        .limit(20)
 
       if (data) setPosts(data)
       setIsLoading(false)
@@ -83,7 +84,7 @@ const CommunityDetail: React.FC<CommunityDetailProps> = ({
   }
 
   return (
-    <div className="h-full w-full bg-background-light dark:bg-[#0B0A09] flex flex-col relative overflow-hidden transition-colors duration-300">
+    <div className="h-full w-full bg-background-light dark:bg-[#0B0A09] flex flex-col relative overflow-hidden transition-colors duration-300 overscroll-x-none select-none">
       {/* Header */}
       <header
         ref={headerRef}
@@ -118,7 +119,7 @@ const CommunityDetail: React.FC<CommunityDetailProps> = ({
 
       <main
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto no-scrollbar">
+        className="flex-1 overflow-y-auto no-scrollbar overscroll-x-none">
         {/* Banner Area */}
         <div
           className={`relative h-64 w-full bg-gradient-to-br ${getGradient(community.name)}`}>

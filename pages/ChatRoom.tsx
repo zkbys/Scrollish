@@ -357,7 +357,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-[#FDFCFB] dark:bg-[#0B0A09] max-w-[100vw] overflow-x-hidden select-none"
+      className="fixed inset-0 z-[60] flex flex-col bg-[#FDFCFB] dark:bg-[#0B0A09] max-w-[100vw] overflow-x-hidden select-none overscroll-x-none !overscroll-x-none"
       onTouchStart={handleBgTouchStart}
       onTouchMove={handleBgTouchMove}
       onTouchEnd={handleBgTouchEnd}
@@ -635,7 +635,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
       <main
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-5 py-6 pb-[90px] space-y-8 no-scrollbar relative z-10 overflow-x-visible overscroll-contain">
+        className="flex-1 overflow-y-auto px-5 py-6 pb-[90px] space-y-8 no-scrollbar relative z-10 overflow-x-visible overscroll-contain overscroll-x-none !overscroll-x-none touch-pan-y !touch-pan-y">
         {messages.map((msg, index) => {
           const isOP = msg.id === 'op-message'
           const isRoot = index === 1
@@ -700,7 +700,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
       <div className="fixed bottom-6 left-4 right-4 z-50 pointer-events-auto">
         <div
-          className={`p-2 rounded-[2rem] backdrop-blur-3xl border transition-all ${isAiMode ? 'bg-white/90 dark:bg-white/10 border-orange-500/50 shadow-2xl' : 'bg-gray-100/50 dark:bg-white/5 border-transparent opacity-60'}`}>
+          className={`p-2 rounded-[2rem] backdrop-blur-3xl transition-all ${isAiMode ? 'bg-white/90 dark:bg-white/10 border border-orange-500/50 shadow-2xl' : 'bg-gray-100/50 dark:bg-white/5 border-0 opacity-60'}`}>
           {quotedMessage && (
             <div className="flex justify-between items-center px-3 py-1 mb-2 bg-orange-500/10 rounded-full">
               <span className="text-[10px] text-orange-600 font-bold truncate">
@@ -726,7 +726,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               placeholder={
                 isAiMode ? 'Ask Dopa...' : 'Select a sentence to ask'
               }
-              className="flex-1 bg-transparent px-4 h-10 outline-none text-sm dark:text-white"
+              className="flex-1 bg-transparent px-4 h-10 outline-none border-none text-sm dark:text-white"
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             />
             <button

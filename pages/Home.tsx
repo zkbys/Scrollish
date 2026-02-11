@@ -330,7 +330,7 @@ const Home: React.FC<HomeProps> = ({
       {renderEmptyState() || (
         <div
           ref={scrollContainerRef}
-          className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 ${isReady ? 'opacity-100' : 'opacity-0'} ${isLoading ? 'pointer-events-none' : ''}`}
+          className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 overscroll-x-none select-none ${isReady ? 'opacity-100' : 'opacity-0'} ${isLoading ? 'pointer-events-none' : ''}`}
           onScroll={isLoading ? undefined : handleScroll}
           onTouchStart={isLoading ? undefined : handleTouchStart}
           onTouchMove={isLoading ? undefined : handleTouchMove}
@@ -612,7 +612,7 @@ export const FeedItem: React.FC<{
 
               <motion.div
                 variants={STAGGER_ITEM}
-                className="pointer-events-auto p-[clamp(0.75rem,2.5dvh,1.51rem)] bg-black/60 backdrop-blur-3xl border-2 border-white/5 rounded-[clamp(1.5rem,4dvh,2.5rem)] shadow-2xl relative overflow-hidden group max-w-[95%]">
+                className="pointer-events-auto p-[clamp(0.75rem,2.5dvh,1.51rem)] bg-black/60 backdrop-blur-3xl border-2 border-white/5 rounded-[clamp(1.5rem,4dvh,2.5rem)] shadow-2xl relative overflow-hidden group max-w-[95%] select-none -webkit-touch-callout-none">
                 <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-orange-500/10 rounded-full blur-2xl group-hover:bg-orange-500/20 transition-all duration-700" />
                 <h1 className="text-white text-[clamp(16px,2.2dvh,20px)] font-black leading-tight drop-shadow-2xl mb-1.5">
                   {titleEn}

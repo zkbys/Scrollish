@@ -24,16 +24,16 @@ interface AppState {
   currentPostIndex: number
   savedPostIndex: number
   currentFilters: { communityId?: string; followedIds?: string[] } | null
-  homeActiveTab: 'following' | 'foryou' // [新增]
-  isRestoring: boolean // [新增]
+  homeActiveTab: 'following' | 'foryou'
+  isRestoring: boolean
 
   // Actions
   initFeed: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
   refreshFeed: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
   loadMore: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
   setCurrentPostIndex: (index: number) => void
-  setHomeActiveTab: (tab: 'following' | 'foryou') => void // [新增]
-  setIsRestoring: (status: boolean) => void // [新增]
+  setHomeActiveTab: (tab: 'following' | 'foryou') => void
+  setIsRestoring: (status: boolean) => void
   saveCurrentPosition: () => void
   restoreSavedPosition: () => void
 }
@@ -50,13 +50,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   isRestoring: false,
 
   initFeed: async (filters) => {
-    // 缓存策略：如果过滤器没变，且已经有数据，就不重复初始化
     const isFiltered = !!(filters?.communityId || filters?.followedIds?.length)
     const currentFilters = get().currentFilters
-
-    // 简单的深度比较（针对 ID 列表）
     const filtersChanged = JSON.stringify(filters || {}) !== JSON.stringify(currentFilters || {})
 
+    // 如果过滤器没变且已经有数据，不重复加载
     if (!filtersChanged && get().posts.length > 0) return
 
     set({ isLoading: true, currentFilters: filters || {} })
@@ -64,7 +62,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       let data, error
 
       if (filters?.communityId) {
-        // 单个社区过滤
         ; ({ data, error } = await supabase
           .from('production_posts')
           .select('*')
@@ -72,7 +69,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           .order('created_at', { ascending: false })
           .limit(15))
       } else if (filters?.followedIds && filters.followedIds.length > 0) {
-        // 关注列表过滤
         ; ({ data, error } = await supabase
           .from('production_posts')
           .select('*')
@@ -80,21 +76,21 @@ export const useAppStore = create<AppState>((set, get) => ({
           .order('created_at', { ascending: false })
           .limit(15))
       } else {
-        // [修改] 获取所有帖子,然后在客户端随机排序
+        // [优化] 增加 Order 和 Limit，防止大数据量加载超时
         ; ({ data, error } = await supabase
           .from('production_posts')
-          .select('*'))
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(30))
       }
 
       if (error) throw error
       if (data) {
-        // [新增] 随机推送逻辑(仅对 For You 标签)
         let finalPosts = data
         if (!isFiltered) {
           const { useUserStore } = await import('./useUserStore')
           const viewedPostIds = useUserStore.getState().viewedPostIds
 
-          // Fisher-Yates 洗牌算法
           const shuffleArray = (array: any[]) => {
             const shuffled = [...array]
             for (let i = shuffled.length - 1; i > 0; i--) {
@@ -104,16 +100,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             return shuffled
           }
 
-          // 分离未浏览和已浏览的帖子
           const unviewedPosts = data.filter(p => !viewedPostIds.includes(p.id))
           const viewedPosts = data.filter(p => viewedPostIds.includes(p.id))
 
-          // 随机打乱
-          const shuffledUnviewed = shuffleArray(unviewedPosts)
-          const shuffledViewed = shuffleArray(viewedPosts)
-
-          // 优先显示未浏览的,然后补充已浏览的
-          finalPosts = [...shuffledUnviewed, ...shuffledViewed]
+          finalPosts = [...shuffleArray(unviewedPosts), ...shuffleArray(viewedPosts)]
         }
 
         set({ posts: finalPosts, hasLoaded: !isFiltered, currentPostIndex: 0 })
@@ -147,22 +137,22 @@ export const useAppStore = create<AppState>((set, get) => ({
           .order('created_at', { ascending: false })
           .limit(15))
       } else {
-        // [修改] 获取所有帖子,然后在客户端随机排序
+        // [优化] 增加 Limit，防止刷新时加载过多导致失败
         ; ({ data, error } = await supabase
           .from('production_posts')
-          .select('*'))
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(30))
       }
 
       if (error) throw error
       if (data) {
-        // [新增] 随机推送逻辑(仅对 For You 标签)
         let finalPosts = data
         const isFiltered = !!(filters?.communityId || filters?.followedIds?.length)
         if (!isFiltered) {
           const { useUserStore } = await import('./useUserStore')
           const viewedPostIds = useUserStore.getState().viewedPostIds
 
-          // Fisher-Yates 洗牌算法
           const shuffleArray = (array: any[]) => {
             const shuffled = [...array]
             for (let i = shuffled.length - 1; i > 0; i--) {
@@ -171,20 +161,11 @@ export const useAppStore = create<AppState>((set, get) => ({
             }
             return shuffled
           }
-
-          // 分离未浏览和已浏览的帖子
           const unviewedPosts = data.filter(p => !viewedPostIds.includes(p.id))
           const viewedPosts = data.filter(p => viewedPostIds.includes(p.id))
-
-          // 随机打乱
-          const shuffledUnviewed = shuffleArray(unviewedPosts)
-          const shuffledViewed = shuffleArray(viewedPosts)
-
-          // 优先显示未浏览的,然后补充已浏览的
-          finalPosts = [...shuffledUnviewed, ...shuffledViewed]
+          finalPosts = [...shuffleArray(unviewedPosts), ...shuffleArray(viewedPosts)]
         }
-
-        set({ posts: finalPosts }) // [修改] 不重置 currentPostIndex,保持当前位置
+        set({ posts: finalPosts })
       }
     } catch (err) {
       console.error('Feed refresh failed:', err)
@@ -201,7 +182,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       let data, error
 
       if (filters?.communityId) {
-        // 单个社区加载更多
         const lastPost = get().posts[get().posts.length - 1]
           ; ({ data, error } = await supabase
             .from('production_posts')
@@ -211,7 +191,6 @@ export const useAppStore = create<AppState>((set, get) => ({
             .order('created_at', { ascending: false })
             .limit(10))
       } else if (filters?.followedIds && filters.followedIds.length > 0) {
-        // 关注列表加载更多
         const lastPost = get().posts[get().posts.length - 1]
           ; ({ data, error } = await supabase
             .from('production_posts')
@@ -241,17 +220,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setCurrentPostIndex: (index: number) => set({ currentPostIndex: index }),
-
   setHomeActiveTab: (tab) => set({ homeActiveTab: tab }),
-
   setIsRestoring: (status) => set({ isRestoring: status }),
-
-  // [新增] 保存当前位置
   saveCurrentPosition: () => {
     set({ savedPostIndex: get().currentPostIndex })
   },
-
-  // [新增] 恢复保存的位置
   restoreSavedPosition: () => {
     const saved = get().savedPostIndex
     if (saved >= 0 && saved < get().posts.length) {

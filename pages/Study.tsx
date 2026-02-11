@@ -3,7 +3,7 @@ import React from 'react';
 
 const Study: React.FC = () => {
   return (
-    <div className="relative h-full flex flex-col bg-background-light dark:bg-background-dark overflow-hidden pb-10 transition-all duration-500">
+    <div className="relative h-full flex flex-col bg-background-light dark:bg-background-dark overflow-hidden pb-10 transition-all duration-500 overscroll-x-none select-none">
       {/* 锁定层：极致简约磨砂玻璃 */}
       <div className="absolute inset-0 z-[55] backdrop-blur-[15px] bg-white/5 dark:bg-black/10 flex flex-col items-center justify-center pointer-events-auto select-none border-0">
         <div className="flex flex-col items-center gap-4">

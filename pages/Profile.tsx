@@ -94,7 +94,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
   }
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden select-none transition-colors duration-300 bg-[#FDFCFB] dark:bg-[#0B0A09] text-gray-900 dark:text-gray-100 relative">
+    <div className="h-full w-full flex flex-col overflow-hidden select-none overscroll-x-none transition-colors duration-300 bg-[#FDFCFB] dark:bg-[#0B0A09] text-gray-900 dark:text-gray-100 relative">
       {/* Word Detail Overlay */}
       {viewingWord && (
         <WordDetailOverlay
@@ -262,7 +262,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         variants={STAGGER_CONTAINER}
         initial="initial"
         animate="animate"
-        className="relative z-10 flex-1 overflow-y-auto no-scrollbar scroll-smooth">
+        className="relative z-10 flex-1 overflow-y-auto no-scrollbar scroll-smooth overscroll-x-none">
 
         {/* Profile Info - 响应式缩放 */}
         <motion.div variants={STAGGER_ITEM} className="flex p-4 flex-col items-center mt-2 max-w-lg mx-auto">

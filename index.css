@@ -8,6 +8,12 @@
   body {
     /* 移除移动端点击时的默认灰色/蓝色高亮矩形 */
     -webkit-tap-highlight-color: transparent;
+    /* [核心] 禁用浏览器的左右侧滑返回/前进手势，实现 App 般的沉浸体验 */
+    overscroll-behavior-x: none;
+    /* 配合 overscroll，确保触摸动作由应用逻辑接管 */
+    touch-action: pan-y;
+    /* 针对 iOS 全局禁用长按菜单弹出 */
+    -webkit-touch-callout: none;
   }
 
   /* 针对所有交互性元素禁用长按选区（避免出现阴影） */
@@ -19,6 +25,15 @@
     -webkit-user-select: none;
     -webkit-touch-callout: none;
     /* 禁用 iOS 长按弹出菜单 */
+  }
+
+  /* [新增] 针对国内手机浏览器（夸克/UC等）的强制拦截 */
+  #root {
+    touch-action: pan-y !important;
+    overflow-x: hidden !important;
+    position: relative;
+    width: 100%;
+    height: 100%;
   }
 }
 
@@ -90,5 +105,45 @@
     /* 金橙渐变文字 */
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+  }
+
+  /* Citrus-Modern UI Extensions */
+  .citrus-glass {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(25px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+  }
+
+  .dark .citrus-glass {
+    background: rgba(15, 15, 15, 0.65);
+    backdrop-filter: blur(35px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .citrus-card-shadow {
+    box-shadow: 0 12px 60px -12px rgba(0, 0, 0, 0.15);
+  }
+
+  .dark .citrus-card-shadow {
+    box-shadow: 0 20px 80px -15px rgba(0, 0, 0, 0.5);
+  }
+
+  .magazine-bg-text {
+    position: absolute;
+    top: -1.5rem;
+    left: -1rem;
+    font-size: 6rem;
+    font-weight: 940;
+    line-height: 0.8;
+    background: linear-gradient(to bottom, currentColor, transparent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    opacity: 0.08;
+    pointer-events: none;
+    z-index: 0;
+    text-transform: uppercase;
+    font-style: italic;
+    white-space: nowrap;
+    filter: blur(0.5px);
   }
 }
