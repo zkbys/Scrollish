@@ -409,6 +409,7 @@ export const FeedItem: React.FC<{
     const [likes, setLikes] = useState(initialLikes)
     const videoRef = useRef<HTMLVideoElement>(null)
     const [videoError, setVideoError] = useState(false)
+    const [imageLoaded, setImageLoaded] = useState(false)
 
     const hasVideo = !!(post.videoUrl || post.video_url) && !videoError
     const imageUrl = post.image_url || post.image || ''
@@ -526,9 +527,30 @@ export const FeedItem: React.FC<{
                   style={{ backgroundImage: `url("${imageUrl}")` }}
                 />
                 <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
+
+                {/* 骨架屏占位 */}
+                <AnimatePresence>
+                  {!imageLoaded && (
+                    <motion.div
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 z-20 flex items-center justify-center bg-gray-900/40 backdrop-blur-md">
+                      <div className="relative w-12 h-12">
+                        <div className="absolute inset-0 border-4 border-orange-500/20 rounded-full" />
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          className="absolute inset-0 border-4 border-orange-500 border-t-transparent rounded-full"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <motion.img
                   src={imageUrl}
-                  className="absolute inset-0 w-full h-full object-contain z-10 drop-shadow-2xl"
+                  loading="lazy"
+                  onLoad={() => setImageLoaded(true)}
+                  className={`absolute inset-0 w-full h-full object-contain z-10 drop-shadow-2xl transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                   style={{ objectPosition: 'center 35%' }}
                   transition={{ type: 'spring', stiffness: 70, damping: 20 }}
                 />
