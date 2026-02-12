@@ -21,10 +21,11 @@ export const IMAGES = {
     'https://lh3.googleusercontent.com/aida-public/AB6AXuASTleqh_PHC98OfDRB4sMamFWgNQxE1ka153bTUyAWQG45bqlgDhcNRT5zZEHEc71lzhPzOcnxGlosrZaGVBtJZdy2bbksIxozLgmbblB6wf75q7l2pip4lyDvfis2MlZT26TaxZnWKav1EWtGR7oOI2E2aw1rS1a2Jjd5NA_nBtL7OX8dWz-l9AuiXz3UkiMwQ7at5XyppzkJGzGgFObYo_zpxRda1eqAP5Y8c8T14ghQ5tmihUQ3NUAt5LeeNAi-JJIxqaZYRfg-',
   vinyl:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuCRj1icx8VPNxHntTvx58OGort1b-EY7PO3t-xJXZnjzVY25xjfumYlkbJjTvUx2_kcRPgnmRgqy9CiJzvXSsFJKmkj8boSSBXYRYyHQdL5pDrBTJkQqmvX_VZHgiOAA9ePy4YXkf3M7-VDqMORToWY9fkvOyJNoh9DnhBSfF09ehwQH1YH6E2gSN4DID-ZHDh4rBE-CbpSAI4SIsjOf_Kt5GPJ3Ii80tjrBANeDsZF3QNjy9KpBf9ED5EjD-LHGeJX-Om2ePNinGrf',
-  onboarding1: '/引导页.png',
-  onboarding2: '/汽橙.jpg',
-  onboarding3: '/哆吧1.png',
+  onboarding1: '/onboarding_vision_1.png',
+  onboarding2: '/onboarding_vision_2.jpg',
+  onboarding3: '/dopa_logo.png',
   aiDopa: '/ai_dopa.png',
+  avatarProfile: '/no_001.png',
 }
 
 // 辅助函数：确保在生产环境（子路径部署）下路径正确

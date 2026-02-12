@@ -560,7 +560,7 @@ const Explore: React.FC<ExploreProps> = ({
             <div
               ref={trendingContainerRef}
               onScroll={handleTrendingScroll}
-              className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-5 gap-4 pb-6 overscroll-x-none touch-pan-y">
+              className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-5 gap-4 pb-6 overscroll-x-none touch-pan-x pan-y">
               {trendingPosts.map((post) => (
                 <div
                   key={post.id}
@@ -616,7 +616,7 @@ const Explore: React.FC<ExploreProps> = ({
 
           {/* Categories Navbar - 响应式高度适配 (配合 Header 缩放) */}
           <nav className="sticky top-[clamp(4.2rem,18dvh-3rem,9.5rem)] z-40 bg-white/40 dark:bg-[#0B0A09]/60 backdrop-blur-xl border-b border-white/40 dark:border-white/5 transition-all relative max-w-lg mx-auto overscroll-x-none">
-            <div className="flex overflow-x-auto no-scrollbar px-5 gap-[clamp(1.5rem,5.5dvw,2rem)] opacity-40 blur-[1px] overscroll-x-none touch-pan-y">
+            <div className="flex overflow-x-auto no-scrollbar px-5 gap-[clamp(1.5rem,5.5dvw,2rem)] opacity-40 blur-[1px] overscroll-x-none touch-pan-x pan-y">
               {categories.map((cat) => (
                 <div
                   key={cat.id}

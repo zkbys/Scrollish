@@ -91,22 +91,22 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: direction * -100 }}
                         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                        className="absolute inset-0 flex flex-col items-center justify-between p-10 pt-24"
+                        className="absolute inset-0 flex flex-col items-center justify-between p-[clamp(1.25rem,4dvw,2.25rem)] pt-[clamp(3rem,8dvh,6rem)]"
                     >
                         <div className="w-full space-y-6 text-center">
                             <motion.div
                                 initial={{ scale: 0.8, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
-                                className="w-48 h-48 mx-auto rounded-[3rem] overflow-hidden shadow-2xl rotate-3 bg-gray-800"
+                                className="w-[clamp(7.5rem,25dvh,11.5rem)] h-[clamp(7.5rem,25dvh,11.5rem)] mx-auto rounded-[clamp(2rem,6dvh,3rem)] overflow-hidden shadow-2xl rotate-3 bg-gray-800"
                             >
                                 <img src={visionSlides[step].image} className="w-full h-full object-cover" alt="" />
                             </motion.div>
-                            <div className="space-y-3">
-                                <h1 className="text-4xl font-black tracking-tighter italic">
+                            <div className="space-y-2">
+                                <h1 className="text-[clamp(1.5rem,4dvh,2.25rem)] font-black tracking-tighter italic leading-none">
                                     <span className="text-primary">{visionSlides[step].title.slice(0, 1)}</span>
                                     {visionSlides[step].title.slice(1)}
                                 </h1>
-                                <p className="text-white/50 text-base leading-relaxed max-w-[280px] mx-auto font-medium">
+                                <p className="text-white/50 text-[clamp(0.8125rem,1.8dvh,1rem)] leading-relaxed max-w-[280px] mx-auto font-medium">
                                     {visionSlides[step].description}
                                 </p>
                             </div>
@@ -123,7 +123,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                             </div>
                             <button
                                 onClick={handleNext}
-                                className={`w-full py-5 rounded-2xl bg-gradient-to-r ${visionSlides[step].accent} text-white font-black text-lg shadow-xl active:scale-95 transition-transform`}
+                                className={`w-full py-[clamp(0.75rem,2dvh,1.25rem)] rounded-2xl bg-gradient-to-r ${visionSlides[step].accent} text-white font-black text-lg shadow-xl active:scale-95 transition-transform`}
                             >
                                 {step === 2 ? "立即开始" : "下一步"}
                             </button>
@@ -136,11 +136,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         initial={{ opacity: 0, y: 50 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9 }}
-                        className="absolute inset-0 flex flex-col p-8 pt-24 justify-between"
+                        className="absolute inset-0 flex flex-col p-[clamp(1.25rem,4dvw,2.25rem)] pt-[clamp(3.5rem,8dvh,6rem)] justify-between"
                     >
                         <div className="space-y-2">
                             <span className="text-primary font-black uppercase tracking-[0.2em] text-[10px]">Onboarding 01</span>
-                            <h2 className="text-3xl font-black tracking-tight leading-tight">
+                            <h2 className="text-[clamp(1.5rem,4dvh,2rem)] font-black tracking-tight leading-tight">
                                 你学习英语的 <br /><span className="text-primary italic">原因</span> 是？
                             </h2>
                         </div>
@@ -150,9 +150,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <button
                                     key={r.id}
                                     onClick={() => handleReasonSelect(r.id)}
-                                    className="flex items-center gap-6 p-6 rounded-3xl bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-white/[0.08] transition-all group active:scale-[0.98]"
+                                    className="flex items-center gap-6 p-[clamp(0.75rem,2.5dvh,1.25rem)] rounded-3xl bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-white/[0.08] transition-all group active:scale-[0.98]"
                                 >
-                                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center group-hover:bg-primary/20 group-hover:text-primary transition-colors">
+                                    <div className="w-[clamp(2.25rem,6dvh,3rem)] h-[clamp(2.25rem,6dvh,3rem)] rounded-2xl bg-white/5 flex items-center justify-center group-hover:bg-primary/20 group-hover:text-primary transition-colors">
                                         <span className="material-symbols-outlined">{r.icon}</span>
                                     </div>
                                     <span className="text-lg font-bold">{r.label}</span>
@@ -168,11 +168,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         initial={{ opacity: 0, x: 100 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, scale: 0.9 }}
-                        className="absolute inset-0 flex flex-col p-8 pt-24 justify-between"
+                        className="absolute inset-0 flex flex-col p-[clamp(1.25rem,4dvw,2.25rem)] pt-[clamp(3.5rem,8dvh,6rem)] justify-between"
                     >
                         <div className="space-y-2">
                             <span className="text-primary font-black uppercase tracking-[0.2em] text-[10px]">Onboarding 02</span>
-                            <h2 className="text-3xl font-black tracking-tight leading-tight">
+                            <h2 className="text-[clamp(1.5rem,4dvh,2.25rem)] font-black tracking-tight leading-tight">
                                 你目前的 <br /><span className="text-primary italic">英语水平</span> 是？
                             </h2>
                         </div>
@@ -182,7 +182,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 <button
                                     key={l.id}
                                     onClick={() => handleLevelSelect(l.id)}
-                                    className="w-full text-left p-6 rounded-3xl bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-white/[0.08] transition-all group active:scale-[0.98]"
+                                    className="w-full text-left p-[clamp(0.75rem,2.5dvh,1.25rem)] rounded-3xl bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-white/[0.08] transition-all group active:scale-[0.98]"
                                 >
                                     <p className="text-lg font-black tracking-tight mb-1">{l.label}</p>
                                     <p className="text-sm text-white/40 font-medium">{l.desc}</p>

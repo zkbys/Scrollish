@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../supabase'
 import { useCommentStore } from '../store/useCommentStore'
 import { useDictionaryStore } from '../store/useDictionaryStore'
+import { useUserStore } from '../store/useUserStore'
 import { Comment, CulturalNote } from '../types'
 import { getAssetPath, IMAGES } from '../constants'
 import WordDetailOverlay from '../components/WordDetailOverlay'
@@ -28,6 +29,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const { getComments, fetchComments, addLocalComment, deleteLocalComment } =
     useCommentStore()
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
+  const { profile } = useUserStore()
+
+  const getDisplayAuthor = (name: string) => {
+    if (!name) return '??'
+    if (name === 'You' || name === 'Me') return profile?.display_name || 'You'
+    return name
+  }
+
+  const getInitials = (name: string) => {
+    const displayName = getDisplayAuthor(name)
+    return displayName.substring(0, 2).toUpperCase()
+  }
 
   // --- State ---
   const [opPostData, setOpPostData] = useState<{
@@ -161,7 +174,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           (parentId === 'op-message' ? opMessage : null)
         result.push({
           ...child,
-          replyToName: parentNode?.author,
+          replyToName: getDisplayAuthor(parentNode?.author || ''),
           replyText: parentNode?.content,
         })
         traverse(child.id)
@@ -171,24 +184,33 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     return result
   }, [allComments, focusCommentId, opPostData])
 
-  // 4. Auto Scroll
+  // 4. Auto Scroll - 增强追问时的视觉稳定性
   useEffect(() => {
     const lastMsg = messages[messages.length - 1]
-    if (lastMsg && lastMsg.isLocalAi && lastMsg.id !== flashMessageId) {
+    if (!lastMsg) return
+
+    // 如果是用户刚发出的提问，或者 AI 刚开始回复，都触发滚动
+    const shouldScroll =
+      (lastMsg.isLocal && !lastMsg.isLocalAi && lastMsg.id !== flashMessageId) || // 用户提问
+      (lastMsg.isLocalAi && lastMsg.id !== flashMessageId) // AI 回复
+
+    if (shouldScroll) {
       setFlashMessageId(lastMsg.id)
-      setTimeout(
-        () =>
+      setTimeout(() => {
+        // 使用更智能的滚动：如果是 AI 回复且超过一定长度，尝试对齐到气泡顶部或直接滚到底部
+        const el = document.getElementById(`msg-${lastMsg.id}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        } else {
           scrollContainerRef.current?.scrollTo({
             top: scrollContainerRef.current.scrollHeight,
             behavior: 'smooth',
-          }),
-        100,
-      )
+          })
+        }
+      }, 150)
     }
-  }, [messages])
+  }, [messages, flashMessageId])
 
-  const getInitials = (name: string) =>
-    name ? name.substring(0, 2).toUpperCase() : '??'
 
   // --- Actions ---
   const handleWordClick = async (word: string, context: string) => {
@@ -206,7 +228,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       const userMsg: Comment = {
         id: userMsgId,
         post_id: postId,
-        author: 'You',
+        author: profile?.display_name || 'You',
         content: question,
         content_cn: '',
         depth: (quotedMessage.depth || 0) + 1,
@@ -228,6 +250,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         isLoading: true,
         author: quotedMessage.author,
         content: 'Replying...',
+        replyToName: userMsg.author,
+        replyText: userMsg.content,
       })
 
       setQuotedMessage(null)
@@ -262,6 +286,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           content: data.choices?.[0]?.message?.content || '...',
           depth: userMsg.depth + 1,
           parent_id: userMsgId,
+          replyToName: userMsg.author,
+          replyText: userMsg.content,
         })
       } catch (e) {
         console.error(e)
@@ -353,7 +379,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   }
 
   const DROPLET_SHAPE = '50% 50% 50% 50% / 60% 60% 43% 43%'
-  const AI_AVATAR_PATH = getAssetPath(IMAGES.aiDopa)
 
   return (
     <div
@@ -453,7 +478,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
               <div className="mt-6 p-4 bg-orange-500/5 rounded-2xl border border-orange-500/10">
                 <p className="text-[10px] leading-relaxed text-orange-600 font-medium">
-                  💡 Tips: Level adjustments are powered by DeepSeek-V3 to make learning more efficient.
+                  💡 Tips: Level adjustments are powered by Dopa to make learning more efficient.
                 </p>
               </div>
             </motion.div>
@@ -649,23 +674,28 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               className={`flex gap-3 overflow-visible ${isUser ? 'flex-row-reverse' : ''} ${highlightedId === msg.id ? 'bg-orange-500/10 -mx-3 px-3 py-2 rounded-2xl' : ''}`}>
               <div className="shrink-0">
                 <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center border shadow-sm ${isOP ? 'bg-orange-500 text-white border-orange-600' : 'bg-white dark:bg-white/5 border-gray-100 dark:border-white/10 text-gray-400'}`}>
+                  className={`w-9 h-9 ${isOP ? 'rounded-xl' : 'rounded-full'} flex items-center justify-center border shadow-sm ${isOP ? 'bg-orange-500 text-white border-orange-600' : 'bg-white dark:bg-white/5 border-gray-100 dark:border-white/10 text-gray-400 overflow-hidden'}`}>
                   {isOP ? (
                     'OP'
                   ) : msg.isLocalAi ? (
                     <img
-                      src={AI_AVATAR_PATH}
-                      className="w-full h-full object-cover"
+                      src={getAssetPath(IMAGES.aiDopa)}
+                      className="w-full h-full object-cover rounded-full"
+                    />
+                  ) : isUser ? (
+                    <img
+                      src={getAssetPath(IMAGES.avatarProfile)}
+                      className="w-full h-full object-cover rounded-full"
                     />
                   ) : (
-                    getInitials(msg.author)
+                    getInitials(getDisplayAuthor(msg.author))
                   )}
                 </div>
               </div>
               <div
                 className={`flex flex-col gap-1.5 max-w-[85%] overflow-visible ${isUser ? 'items-end' : ''}`}>
                 <span className="text-[11px] font-black text-gray-400 dark:text-white/30 uppercase">
-                  {msg.isLocalAi ? 'Dopa' : msg.author}
+                  {msg.isLocalAi ? 'Dopa' : getDisplayAuthor(msg.author)}
                 </span>
                 {msg.replyText && !isOP && !isRoot && (
                   <div
@@ -673,7 +703,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                       handleJumpToWithReturn(msg.parent_id, msg.id)
                     }
                     className="text-[10px] text-gray-400 border-l-2 border-orange-500/30 pl-2 mb-1 cursor-pointer line-clamp-1">
-                    @{msg.replyToName}: {msg.replyText}
+                    @{getDisplayAuthor(msg.replyToName || '')}: {msg.replyText}
                   </div>
                 )}
 
@@ -704,7 +734,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           {quotedMessage && (
             <div className="flex justify-between items-center px-3 py-1 mb-2 bg-orange-500/10 rounded-full">
               <span className="text-[10px] text-orange-600 font-bold truncate">
-                ✨ Ask {quotedMessage.author}
+                ✨ Ask {getDisplayAuthor(quotedMessage.author)}
               </span>
               <button
                 onClick={() => {
@@ -726,7 +756,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
               placeholder={
                 isAiMode ? 'Ask Dopa...' : 'Select a sentence to ask'
               }
-              className="flex-1 bg-transparent px-4 h-10 outline-none border-none text-sm dark:text-white"
+              className="flex-1 bg-transparent px-4 h-10 outline-none border-none focus:outline-none focus:ring-0 text-sm dark:text-white"
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             />
             <button

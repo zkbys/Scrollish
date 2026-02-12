@@ -196,10 +196,10 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                   <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">Wechatroom</h3>
                   <div className="p-4 rounded-2xl bg-orange-500/5 border border-orange-500/10 flex flex-col items-center gap-4">
                     <div
-                      onClick={() => setFullscreenImage('/内侧交流群.jpg')}
+                      onClick={() => setFullscreenImage('/group_qr.jpg')}
                       className="w-full aspect-square max-w-[220px] bg-white dark:bg-white/10 rounded-2xl border border-orange-500/20 flex items-center justify-center relative group overflow-hidden shadow-lg p-3 cursor-zoom-in active:scale-95 transition-transform">
                       <img
-                        src={getAssetPath('/内侧交流群.jpg')}
+                        src={getAssetPath('/group_qr.jpg')}
                         alt="Wechatroom QR Code"
                         className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                       />
@@ -216,10 +216,10 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                   <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">Customer Service</h3>
                   <div className="p-4 rounded-2xl bg-orange-500/5 border border-orange-500/10 flex flex-col items-center gap-4">
                     <div
-                      onClick={() => setFullscreenImage('/客服.png')}
+                      onClick={() => setFullscreenImage('/support_qr.png')}
                       className="w-full aspect-square max-w-[190px] bg-white dark:bg-white/10 rounded-2xl border border-orange-500/20 flex items-center justify-center relative group overflow-hidden shadow-lg p-3 cursor-zoom-in active:scale-95 transition-transform">
                       <img
-                        src={getAssetPath('/客服.png')}
+                        src={getAssetPath('/support_qr.png')}
                         alt="Customer Service QR Code"
                         className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                       />
@@ -270,7 +270,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
             <div className="p-1 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-red-600 shadow-xl ring-4 ring-white/30 dark:ring-white/5">
               <div
                 className="bg-center bg-no-repeat aspect-square bg-cover rounded-full h-[clamp(4.5rem,11dvh,6.5rem)] w-[clamp(4.5rem,11dvh,6.5rem)] border-[3px] border-white dark:border-[#1C1C1E] shadow-inner"
-                style={{ backgroundImage: `url("${IMAGES.avatar1}")` }}>
+                style={{ backgroundImage: `url("${getAssetPath(IMAGES.avatarProfile)}")` }}>
               </div>
             </div>
             <div className="absolute -bottom-1 -right-1 bg-orange-500 text-white text-[clamp(8px,1.2dvh,10px)] font-black px-[clamp(0.4rem,1dvh,0.6rem)] py-[clamp(0.2rem,0.4dvh,0.3rem)] rounded-full border-2 border-white dark:border-[#1C1C1E] shadow-lg">

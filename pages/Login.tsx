@@ -68,7 +68,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 IMAGES.london,
                                 IMAGES.avatar1,
                                 IMAGES.grammar,
-                                getAssetPath('/哆吧1.png')
+                                getAssetPath('/dopa_logo.png')
                             ]),
                             fetchProfilePromise,
                             minLoadingTime
@@ -116,6 +116,12 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 if (authError) throw authError;
 
                 if (user) {
+                    // [修复] 标记邀请码为已使用
+                    await supabase
+                        .from('invite_codes')
+                        .update({ used: true })
+                        .eq('code', inviteCode.toUpperCase().trim());
+
                     // --- [新增] 资源预加载机制 ---
                     setIsPreloading(true);
 
@@ -143,7 +149,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 IMAGES.london,
                                 IMAGES.avatar1,
                                 IMAGES.grammar,
-                                getAssetPath('/哆吧1.png')
+                                getAssetPath('/dopa_logo.png')
                             ]),
                             fetchProfilePromise,
                             minLoadingTime
@@ -227,30 +233,30 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 className="w-full max-w-sm z-10"
             >
                 {/* Brand Header */}
-                <div className="mb-6 text-center">
+                <div className="mb-[clamp(0.75rem,3dvh,1.5rem)] text-center">
                     <motion.div
                         {...BUTTON_SPRING}
-                        className="inline-flex items-center justify-center w-22 h-22 bg-transparent rounded-3xl mb-4 shadow-2xl border border-white/10 overflow-hidden"
+                        className="inline-flex items-center justify-center w-[clamp(3.5rem,12dvh,5.5rem)] h-[clamp(3.5rem,12dvh,5.5rem)] bg-transparent rounded-full mb-[clamp(0.4rem,1.5dvh,0.75rem)] shadow-2xl border border-white/10 overflow-hidden"
                     >
                         <img
-                            src={getAssetPath('/哆吧1.png')}
+                            src={getAssetPath('/dopa_logo.png')}
                             alt="Logo"
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover scale-110"
                         />
                     </motion.div>
-                    <h1 className="text-3xl font-black text-white mb-1 tracking-tighter italic">
+                    <h1 className="text-[clamp(1.5rem,4dvh,2.25rem)] font-black text-white mb-0.5 tracking-tighter italic leading-none">
                         Scrollish
                     </h1>
-                    <p className="text-xs text-white/40 font-medium tracking-widest uppercase">
+                    <p className="text-[clamp(9px,1.2dvh,11px)] text-white/40 font-medium tracking-widest uppercase">
                         Insight Through <span className="text-primary">Scrolling</span>
                     </p>
                 </div>
 
                 {/* Main Glass Card */}
-                <div className="bg-white/[0.03] backdrop-blur-2xl p-6 pt-8 rounded-[2.5rem] border border-white/[0.08] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                <div className="bg-white/[0.03] backdrop-blur-2xl px-[clamp(1rem,3dvh,1.75rem)] pt-[clamp(1.25rem,4dvh,2rem)] pb-[clamp(0.75rem,2dvh,1.25rem)] rounded-[2.5rem] border border-white/[0.08] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary/40 to-transparent"></div>
 
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-[clamp(0.5rem,2dvh,1rem)]">
                         {!isLogin && (
                             <div key="username">
                                 <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
@@ -262,7 +268,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                         required
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
-                                        className="w-full h-14 px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 shadow-inner"
+                                        className="w-full h-[clamp(2.5rem,7dvh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 shadow-inner"
                                         placeholder="What should we call you?"
                                     />
                                 </div>
@@ -278,7 +284,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full h-15 px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none transition-all text-white font-medium placeholder:text-white/10 shadow-inner"
+                                className="w-full h-[clamp(2.5rem,7dvh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none transition-all text-white font-medium placeholder:text-white/10 shadow-inner"
                                 placeholder="name@example.com"
                             />
                         </div>
@@ -314,7 +320,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full h-15 px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 pr-14 shadow-inner"
+                                    className="w-full h-[clamp(2.5rem,7dvh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 pr-14 shadow-inner"
                                     placeholder="••••••••"
                                 />
                                 <button
@@ -333,7 +339,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             {...BUTTON_SPRING}
                             type="submit"
                             disabled={loading}
-                            className="w-full h-16 bg-primary text-white font-black rounded-[1.25rem] shadow-[0_10px_30px_-5px_rgba(255,107,0,0.4)] mt-4 flex items-center justify-center gap-3 group overflow-hidden relative"
+                            className="w-full h-[clamp(3rem,8dvh,4rem)] bg-primary text-white font-black rounded-[1.25rem] shadow-[0_10px_30px_-5px_rgba(255,107,0,0.4)] mt-1 flex items-center justify-center gap-3 group overflow-hidden relative"
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/15 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                             {loading ? (
@@ -352,8 +358,8 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                     </form>
 
                     {/* Support Button instead of social login */}
-                    <div className="mt-8 flex flex-col items-center">
-                        <div className="w-full border-t border-white/[0.05] mb-6"></div>
+                    <div className="mt-[clamp(0.8rem,1dvh,2rem)] flex flex-col items-center">
+                        <div className="w-full border-t border-white/[0.05] mb-[clamp(0.75rem,1dvh,1.5rem)]"></div>
                         <button
                             type="button"
                             onClick={() => setShowSupportQR(true)}
@@ -366,7 +372,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 </div>
 
                 {/* Aesthetic Footer */}
-                <div className="mt-8 text-center text-xs text-white/30 font-bold uppercase tracking-widest">
+                <div className="mt-[clamp(0.25rem,0.5dvh,0.75rem)] text-center text-xs text-white/30 font-bold uppercase tracking-widest">
                     <span>{isLogin ? "New Subect?" : "Known Participant?"}</span>
                     <button
                         type="button"
@@ -387,7 +393,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0 }}
-                            className="mt-6 p-5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-black text-center tracking-tight"
+                            className="mt-[clamp(0.5rem,1.5dvh,1rem)] p-5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-black text-center tracking-tight"
                         >
                             <div className="flex items-center justify-center gap-2">
                                 <span className="material-symbols-outlined text-sm">error</span>
@@ -424,7 +430,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
 
                             <div className="w-full aspect-square bg-white p-2 rounded-3xl shadow-[0_20px_40px_rgba(0,0,0,0.3)] relative group">
                                 <img
-                                    src={getAssetPath('/客服.png')}
+                                    src={getAssetPath('/support_qr.png')}
                                     alt="QR Code"
                                     style={{ WebkitTouchCallout: 'default' } as any}
                                     className="w-full h-full object-contain relative z-10"
@@ -439,7 +445,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 <button
                                     onClick={() => {
                                         const link = document.createElement('a');
-                                        link.href = getAssetPath('/客服.png');
+                                        link.href = getAssetPath('/support_qr.png');
                                         link.download = 'Scrollish_Support_QR.png';
                                         link.click();
                                     }}

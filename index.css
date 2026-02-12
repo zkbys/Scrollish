@@ -16,6 +16,13 @@
     -webkit-touch-callout: none;
   }
 
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
   /* 针对所有交互性元素禁用长按选区（避免出现阴影） */
   button,
   a,
@@ -29,7 +36,7 @@
 
   /* [新增] 针对国内手机浏览器（夸克/UC等）的强制拦截 */
   #root {
-    touch-action: pan-y !important;
+    touch-action: pan-y;
     overflow-x: hidden !important;
     position: relative;
     width: 100%;

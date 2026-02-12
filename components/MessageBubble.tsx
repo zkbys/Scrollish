@@ -118,7 +118,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     if (isImage) return 'my-1'
 
     if (isUser) {
-      return 'bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-2xl rounded-tr-none shadow-orange-500/20 shadow-md border border-transparent'
+      return 'bg-primary text-white rounded-2xl rounded-tr-none shadow-orange-500/20 shadow-md border border-transparent'
     }
     if (comment.isLocalAi) {
       return 'bg-white/80 dark:bg-white/5 backdrop-blur-3xl border border-orange-500/30 text-gray-800 dark:text-white/90 rounded-2xl rounded-tl-none ring-1 ring-orange-500/10 shadow-sm'
