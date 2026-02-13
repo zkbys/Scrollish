@@ -127,7 +127,9 @@ const Explore: React.FC<ExploreProps> = ({
       setTrendingScrollPos(0)
     }
     try {
-      let query = supabase.from('production_posts').select('*')
+      let query = supabase
+        .from('production_posts')
+        .select('id, title_en, title_cn, image_url, video_url, upvotes, subreddit, created_at, image_type, community_id')
       if (excludedTrendingIds.length > 0) {
         const idsToExclude = excludedTrendingIds.slice(-30)
         query = query.not('id', 'in', `(${idsToExclude.join(',')})`)
@@ -155,7 +157,7 @@ const Explore: React.FC<ExploreProps> = ({
       } else if (excludedTrendingIds.length > 0) {
         const { data: retryData } = await supabase
           .from('production_posts')
-          .select('*')
+          .select('id, title_en, title_cn, image_url, video_url, upvotes, subreddit, created_at, image_type, community_id')
           .order('upvotes', { ascending: false })
           .limit(8)
         if (retryData) {
@@ -191,7 +193,7 @@ const Explore: React.FC<ExploreProps> = ({
       try {
         const { data: catData } = await supabase
           .from('categories')
-          .select('*')
+          .select('id, name_en, name_cn')
           .order('name_en')
         if (catData) {
           setCategories(catData)
@@ -215,7 +217,7 @@ const Explore: React.FC<ExploreProps> = ({
       try {
         const { data } = await supabase
           .from('communities')
-          .select('*')
+          .select('id, name, display_name, subscriber_count, sub_category')
           .eq('category_id', categoryId)
           .order('subscriber_count', { ascending: false })
           .limit(30)
@@ -255,12 +257,12 @@ const Explore: React.FC<ExploreProps> = ({
         const safeQuery = searchQuery.replace(/[%_]/g, '\\$&')
         const communityQuery = supabase
           .from('communities')
-          .select('*')
+          .select('id, name, display_name, subscriber_count')
           .or(`name.ilike.%${safeQuery}%,display_name.ilike.%${safeQuery}%`)
           .limit(5)
         const postQuery = supabase
           .from('production_posts')
-          .select('*')
+          .select('id, title_en, title_cn, image_url, video_url, upvotes, subreddit, created_at, image_type, community_id')
           .or(`title_en.ilike.%${safeQuery}%,title_cn.ilike.%${safeQuery}%`)
           .limit(5)
         const [commRes, postRes] = await Promise.all([
