@@ -5,6 +5,7 @@ import { Comment } from '../types'
 interface CommentState {
   comments: Record<string, Comment[]>
   isLoading: Record<string, boolean>
+  hasFetched: Record<string, boolean> // [新增] 追踪是否已执行过请求，防止空评论帖子由于 length === 0 而无限重试
   fetchComments: (postId: string) => Promise<void>
   getComments: (postId: string) => Comment[]
   addLocalComment: (postId: string, comment: Comment) => void
@@ -20,10 +21,11 @@ interface CommentState {
 export const useCommentStore = create<CommentState>((set, get) => ({
   comments: {},
   isLoading: {},
+  hasFetched: {},
 
   fetchComments: async (postId) => {
-    // 缓存策略：如果已有数据且不为空，暂时不重复请求（可根据需要优化）
-    if (get().comments[postId]?.length > 0) return
+    // [优化] 核心守卫：如果正在加载或已经加载过该帖子的评论（即使评论数为0），则跳过请求
+    if (get().isLoading[postId] || get().hasFetched[postId]) return
 
     set((state) => ({ isLoading: { ...state.isLoading, [postId]: true } }))
 
@@ -55,6 +57,7 @@ export const useCommentStore = create<CommentState>((set, get) => ({
 
       set((state) => ({
         comments: { ...state.comments, [postId]: formattedData as Comment[] },
+        hasFetched: { ...state.hasFetched, [postId]: true } // 标记为已加载
       }))
     } catch (error) {
       console.error('Error fetching comments:', error)

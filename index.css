@@ -116,15 +116,15 @@
 
   /* Citrus-Modern UI Extensions */
   .citrus-glass {
-    background: rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(25px) saturate(200%);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(25px) saturate(220%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
   }
 
   .dark .citrus-glass {
-    background: rgba(15, 15, 15, 0.65);
-    backdrop-filter: blur(35px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(18, 18, 18, 0.92);
+    backdrop-filter: blur(35px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   .citrus-card-shadow {

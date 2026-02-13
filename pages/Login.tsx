@@ -208,11 +208,11 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 className="w-24 h-24 rounded-full border-t-2 border-primary border-r-2 border-primary/20"
                             />
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-primary font-black text-xs tracking-tighter italic">LOAD</span>
+                                <span className="text-primary font-black text-xs tracking-tighter italic">Loading</span>
                             </div>
                         </div>
                         <div className="text-center space-y-2">
-                            <h2 className="text-white font-black text-xl tracking-tighter italic uppercase">Please wait, loading...</h2>
+                            <h2 className="text-white font-black text-xl tracking-tighter italic uppercase">请稍候，正在加载...</h2>
                             <p className="text-white/30 text-[10px] font-bold uppercase tracking-[0.3em] animate-pulse">正在加载请稍后...</p>
                         </div>
                     </motion.div>
@@ -260,7 +260,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                         {!isLogin && (
                             <div key="username">
                                 <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
-                                    Username
+                                    用户名
                                 </label>
                                 <div className="group relative">
                                     <input
@@ -269,7 +269,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
                                         className="w-full h-[clamp(2.5rem,7dvh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 shadow-inner"
-                                        placeholder="What should we call you?"
+                                        placeholder="我们该如何称呼您？"
                                     />
                                 </div>
                             </div>
@@ -277,7 +277,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
 
                         <div>
                             <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
-                                Email Address
+                                电子邮件
                             </label>
                             <input
                                 type="email"
@@ -292,7 +292,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                         {!isLogin && (
                             <div key="invite-code">
                                 <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
-                                    Invitation Code
+                                    邀请码
                                 </label>
                                 <div className="relative group">
                                     <input
@@ -301,7 +301,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                         value={inviteCode}
                                         onChange={(e) => setInviteCode(e.target.value)}
                                         className="w-full h-15 px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 pr-14 shadow-inner"
-                                        placeholder="Enter alpha code"
+                                        placeholder="输入内部邀请码"
                                     />
                                     <div className="absolute right-4 top-1/2 -translate-y-1/2 text-primary/40 p-2">
                                         <span className="material-symbols-outlined text-[20px]">vpn_key</span>
@@ -312,7 +312,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
 
                         <div>
                             <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
-                                Password
+                                密码
                             </label>
                             <div className="relative group">
                                 <input
@@ -347,7 +347,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             ) : (
                                 <>
                                     <span className="text-lg tracking-tight uppercase">
-                                        {isLogin ? 'Enter Laboratory' : 'Create Identity'}
+                                        {isLogin ? '登录' : '注册为新用户'}
                                     </span>
                                     <span className="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">
                                         arrow_forward
@@ -373,7 +373,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
 
                 {/* Aesthetic Footer */}
                 <div className="mt-[clamp(0.25rem,0.5dvh,0.75rem)] text-center text-xs text-white/30 font-bold uppercase tracking-widest">
-                    <span>{isLogin ? "New Subect?" : "Known Participant?"}</span>
+                    <span>{isLogin ? "新用户？" : "已有账号？"}</span>
                     <button
                         type="button"
                         onClick={() => {
@@ -382,7 +382,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                         }}
                         className="text-primary font-black hover:text-orange-400 hover:underline underline-offset-8 ml-2"
                     >
-                        {isLogin ? "INITIALIZE" : "IDENTIFY"}
+                        {isLogin ? "注册" : "登录"}
                     </button>
                 </div>
 

@@ -26,9 +26,9 @@ export default defineConfig(({ mode }) => {
           name: 'Scrollish',
           short_name: 'Scrollish',
           description: 'Learn English by Scrolling',
-          theme_color: '#FF5500', // 对应你 tailwind.config.js 的 primary
-          background_color: '#FFFBF2', // 对应你 tailwind.config.js 的 background-light
-          display: 'standalone', // 关键：开启无地址栏模式
+          theme_color: '#FF5500',
+          background_color: '#FFFBF2',
+          display: 'standalone',
           orientation: 'portrait',
           icons: [
             {
@@ -47,6 +47,40 @@ export default defineConfig(({ mode }) => {
               type: 'image/png',
               purpose: 'any maskable',
             },
+          ],
+        },
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          skipWaiting: true,
+          clientsClaim: true,
+          runtimeCaching: [
+            {
+              // 缓存 Supabase Storage 图片
+              urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/.*$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'supabase-image-cache',
+                expiration: {
+                  maxEntries: 200,
+                  maxAgeSeconds: 30 * 24 * 60 * 60, // 30 Days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              // 缓存字体和其他静态资源
+              urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 365 * 24 * 60 * 60,
+                },
+              },
+            }
           ],
         },
       }),

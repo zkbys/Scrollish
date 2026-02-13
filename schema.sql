@@ -133,13 +133,26 @@
     created_at timestamptz DEFAULT now()
     );
 
-    -- User Vocabulary (SRR Algorithm)
+    -- User Vocabulary (Unified History & Starred)
     CREATE TABLE IF NOT EXISTS public.user_vocabulary (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
     word text NOT NULL,
-    translation text,
-    mastery_level int DEFAULT 0, -- 0-5
+    translation text, 
+    
+    -- Dictionary Details
+    ipa text,
+    definition_cn text,
+    definition_en text,
+    roots text,
+    
+    -- [New] History & Status Tracking
+    lookup_count int DEFAULT 1,
+    is_saved boolean DEFAULT false,
+    last_interacted_at timestamptz DEFAULT now(),
+    contexts jsonb DEFAULT '[]'::jsonb, -- Array of {text, meaning, created_at}
+    
+    mastery_level int DEFAULT 0, 
     next_review_at timestamptz DEFAULT now(),
     last_reviewed_at timestamptz,
     tags text[],

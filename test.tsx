@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Droplets, 
-  Sun, 
-  Zap, 
-  Heart, 
-  Bell, 
-  Menu, 
-  Home, 
-  Calendar, 
-  User, 
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Droplets,
+  Sun,
+  Zap,
+  Heart,
+  Bell,
+  Menu,
+  Home,
+  Calendar,
+  User,
   Plus,
   ChevronRight,
   Sparkles,
@@ -37,16 +37,17 @@ interface FeatureCardProps {
 
 // --- Components ---
 
-import { ImageWithFallback } from './components/figma/ImageWithFallback';
+// import { ImageWithFallback } from './components/figma/ImageWithFallback';
+const ImageWithFallback = (props: any) => <img {...props} />;
 
 const Header = () => (
   <div className="flex justify-between items-center p-6 pt-8">
     <div className="flex items-center gap-3">
       <div className="relative">
         <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-orange-300 p-0.5">
-          <ImageWithFallback 
-            src="https://images.unsplash.com/photo-1767716134849-5e5abb7bf59b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjdXRlJTIwYW5pbWUlMjBzdHlsZSUyMGF2YXRhciUyMG9yYW5nZSUyMHRoZW1lfGVufDF8fHx8MTc3MDMwMjA3OHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral" 
-            alt="User" 
+          <ImageWithFallback
+            src="https://images.unsplash.com/photo-1767716134849-5e5abb7bf59b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjdXRlJTIwYW5pbWUlMjBzdHlsZSUyMGF2YXRhciUyMG9yYW5nZSUyMHRoZW1lfGVufDF8fHx8MTc3MDMwMjA3OHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
+            alt="User"
             className="w-full h-full object-cover rounded-full"
           />
         </div>
@@ -75,7 +76,7 @@ const BigDroplet = () => {
     <div className="flex flex-col items-center justify-center my-4 relative">
       {/* Background Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-orange-300/20 rounded-full blur-3xl" />
-      
+
       {/* The Droplet Character */}
       <motion.div
         className="relative w-48 h-48 bg-gradient-to-br from-orange-300 via-orange-400 to-orange-500 rounded-[50%] shadow-xl shadow-orange-500/30 flex items-center justify-center cursor-pointer overflow-hidden z-10"
@@ -100,28 +101,28 @@ const BigDroplet = () => {
         {/* Shine effect */}
         <div className="absolute top-8 right-10 w-8 h-4 bg-white/40 rounded-full rotate-[-20deg] blur-[2px]" />
         <div className="absolute top-6 right-8 w-3 h-3 bg-white/60 rounded-full blur-[1px]" />
-        
+
         {/* Face */}
         <div className="relative flex flex-col items-center top-4">
           <div className="flex gap-6 mb-2">
             {/* Eyes */}
-            <motion.div 
+            <motion.div
               className="w-3 h-4 bg-orange-900 rounded-full"
               animate={isAnimating ? { scaleY: [1, 0.1, 1] } : {}}
             />
-            <motion.div 
+            <motion.div
               className="w-3 h-4 bg-orange-900 rounded-full"
               animate={isAnimating ? { scaleY: [1, 0.1, 1] } : {}}
             />
           </div>
           {/* Mouth */}
           <div className="w-4 h-2 bg-orange-900/50 rounded-b-full" />
-          
+
           {/* Cheeks */}
           <div className="absolute top-2 -left-3 w-4 h-2 bg-pink-300/50 rounded-full blur-[1px]" />
           <div className="absolute top-2 -right-3 w-4 h-2 bg-pink-300/50 rounded-full blur-[1px]" />
         </div>
-        
+
         {/* Liquid movement inside (simulated) */}
         <div className="absolute bottom-0 w-full h-1/3 bg-white/10 rounded-b-[40%]" />
       </motion.div>
@@ -137,7 +138,7 @@ const BigDroplet = () => {
 };
 
 const FeatureCard = ({ icon, title, subtitle, color, delay = 0 }: FeatureCardProps) => (
-  <motion.div 
+  <motion.div
     className="bg-white p-4 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col items-start gap-3 hover:shadow-lg transition-shadow cursor-pointer border border-orange-50"
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -199,14 +200,14 @@ const DailyList = () => (
       <h3 className="text-xl font-bold text-orange-900">Today's Focus</h3>
       <button className="text-xs font-bold text-orange-400 hover:text-orange-600">See All</button>
     </div>
-    
+
     <div className="space-y-3">
       {[
         { title: "Drink Water", time: "Every 2 hours", icon: <Droplets size={18} />, color: "bg-blue-400", bg: "bg-blue-50" },
         { title: "Morning Sun", time: "15 mins", icon: <Sun size={18} />, color: "bg-orange-400", bg: "bg-orange-50" },
         { title: "Mindfulness", time: "Before sleep", icon: <Sparkles size={18} />, color: "bg-purple-400", bg: "bg-purple-50" },
       ].map((item, idx) => (
-        <motion.div 
+        <motion.div
           key={idx}
           className={`flex items-center gap-4 p-4 rounded-3xl ${item.bg} border border-white/50 cursor-pointer`}
           initial={{ opacity: 0, x: -20 }}
@@ -232,7 +233,7 @@ const DailyList = () => (
 
 const NavBar = () => {
   const [active, setActive] = useState('home');
-  
+
   const navItems = [
     { id: 'home', icon: <Home size={22} />, label: 'Home' },
     { id: 'calendar', icon: <Calendar size={22} />, label: 'Plan' },
@@ -247,7 +248,7 @@ const NavBar = () => {
         if (item.isFab) {
           return (
             <div key={item.id} className="relative -top-6">
-              <motion.button 
+              <motion.button
                 className="w-16 h-16 bg-gradient-to-tr from-orange-400 to-amber-400 rounded-full flex items-center justify-center text-white shadow-lg shadow-orange-400/40 border-4 border-white"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
@@ -257,17 +258,17 @@ const NavBar = () => {
             </div>
           );
         }
-        
+
         const isActive = active === item.id;
         return (
-          <button 
+          <button
             key={item.id}
             onClick={() => setActive(item.id)}
             className={`flex flex-col items-center gap-1 p-3 rounded-2xl w-16 transition-all ${isActive ? 'text-orange-500' : 'text-gray-300 hover:text-gray-400'}`}
           >
             {item.icon}
             {isActive && (
-              <motion.div 
+              <motion.div
                 layoutId="nav-dot"
                 className="w-1.5 h-1.5 bg-orange-500 rounded-full absolute bottom-3"
               />
@@ -287,24 +288,24 @@ export default function App() {
       {/* Decorative Background Blobs */}
       <div className="absolute top-[-10%] right-[-20%] w-[500px] h-[500px] bg-orange-100/50 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-[10%] left-[-10%] w-[300px] h-[300px] bg-yellow-100/50 rounded-full blur-3xl pointer-events-none" />
-      
+
       <div className="max-w-md mx-auto relative z-10">
         <Header />
-        
+
         <BigDroplet />
-        
+
         <div className="px-6 grid grid-cols-2 gap-4 my-6">
-          <FeatureCard 
-            icon={<Heart size={20} />} 
-            title="Health" 
-            subtitle="Keep it up!" 
+          <FeatureCard
+            icon={<Heart size={20} />}
+            title="Health"
+            subtitle="Keep it up!"
             color="bg-red-400"
             delay={0.1}
           />
-          <FeatureCard 
-            icon={<Droplets size={20} />} 
-            title="Hydration" 
-            subtitle="1.2L / 2L" 
+          <FeatureCard
+            icon={<Droplets size={20} />}
+            title="Hydration"
+            subtitle="1.2L / 2L"
             color="bg-cyan-400"
             delay={0.2}
           />
@@ -313,7 +314,7 @@ export default function App() {
         <ToolsGrid />
 
         <DailyList />
-        
+
         <NavBar />
       </div>
     </div>

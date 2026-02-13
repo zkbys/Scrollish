@@ -102,7 +102,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
 
             if (shouldFetchTrending) {
                 let query = import('../supabase').then(m => {
-                    let q = m.supabase.from('production_posts').select('*')
+                    let q = m.supabase.from('production_posts').select('id, community_id, title_en, title_cn, image_url, video_url, image_type, upvotes, subreddit, created_at')
                     if (excludedTrendingIds.length > 0) {
                         const idsToExclude = excludedTrendingIds.slice(-30)
                         q = q.not('id', 'in', `(${idsToExclude.join(',')})`)

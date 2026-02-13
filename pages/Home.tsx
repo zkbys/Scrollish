@@ -100,6 +100,16 @@ const Home: React.FC<HomeProps> = ({
     restoreScroll()
   }, [])
 
+  // [新增] 专门用于记录浏览历史的 Effect，确保首屏和恢复位置时都能记录
+  useEffect(() => {
+    if (isReady && posts.length > 0) {
+      const currentPost = posts[currentPostIndex]
+      if (currentPost) {
+        useUserStore.getState().addViewHistory(currentPost)
+      }
+    }
+  }, [isReady, posts.length, currentPostIndex])
+
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     // [关键] 正在恢复位置或未就绪时，忽略滚动事件
     if (isRestoring || !isReady) return
@@ -110,12 +120,6 @@ const Home: React.FC<HomeProps> = ({
     const newIndex = Math.round(container.scrollTop / rowHeight)
     if (newIndex !== currentPostIndex) {
       setCurrentPostIndex(newIndex)
-
-      // [新增] 记录浏览历史
-      const currentPost = posts[newIndex]
-      if (currentPost) {
-        useUserStore.getState().addViewHistory(currentPost)
-      }
     }
   }
 
@@ -518,6 +522,7 @@ export const FeedItem: React.FC<{
                 loop
                 muted
                 playsInline
+                preload="none"
                 onError={() => setVideoError(true)}
               />
             ) : (

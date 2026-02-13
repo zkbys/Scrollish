@@ -26,13 +26,14 @@ const RoundedStar = ({ className = "size-6", fill = "currentColor" }) => (
 );
 
 const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
-  const { likedPosts, starredWords, viewHistory, profile, fetchProfile, updateProfile, logout } = useUserStore()
+  const { likedPosts, starredWords, viewHistory, profile, fetchProfile, fetchStarredWords, updateProfile, logout } = useUserStore()
   const { scrollPos, setScrollPos } = useProfileStore()
   const { theme, toggleTheme } = useThemeStore()
   const [activeTab, setActiveTab] = useState<'favorites' | 'history'>('favorites')
 
   useEffect(() => {
     fetchProfile()
+    fetchStarredWords()
   }, [])
 
   const userLevel = profile ? Math.floor(Math.sqrt((profile.total_xp || 0) / 100)) + 1 : 1
@@ -46,6 +47,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null)
   const [viewingWord, setViewingWord] = useState<string | null>(null)
   const [viewingDefinition, setViewingDefinition] = useState<any>(null)
+  const [viewingWordContext, setViewingWordContext] = useState<string>('')
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // 恢复滚动位置
@@ -67,9 +69,22 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
     setScrollPos(e.currentTarget.scrollTop)
   }
 
-  const handleWordClick = (word: any) => {
+  const handleWordClick = async (word: any) => {
     setViewingWord(word.word)
-    setViewingDefinition(word)
+
+    // 如果没有 context，尝试从云端加载
+    let updatedWord = { ...word }
+    if (!word.contexts || word.contexts.length === 0) {
+      const contexts = await useUserStore.getState().fetchWordContext(word.word)
+      if (contexts && contexts.length > 0) {
+        updatedWord.contexts = contexts
+        setViewingWordContext(contexts[0].text)
+      }
+    } else {
+      setViewingWordContext(word.contexts[0]?.text || '')
+    }
+
+    setViewingDefinition(updatedWord)
   }
 
   const handlePostClick = (rawPost: any) => {
@@ -100,7 +115,9 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
         <WordDetailOverlay
           word={viewingWord}
           definition={viewingDefinition}
+          context={viewingWordContext}
           onClose={() => setViewingWord(null)}
+          hideContextMeaning={true}
         />
       )}
       {/* Fullscreen Image Preview */}
@@ -541,11 +558,20 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                         <p className="text-[11px] font-bold text-gray-700 dark:text-white/80 line-clamp-2 leading-relaxed">
                           {word.definition_cn}
                         </p>
-                        {word.context_meaning_cn && (
-                          <p className="text-[9px] text-gray-400 dark:text-white/30 mt-1 line-clamp-1 italic">
-                            Context: {word.context_meaning_cn}
-                          </p>
-                        )}
+                        <div className="flex items-center justify-between mt-1 gap-2">
+                          {word.contexts && word.contexts.length > 0 ? (
+                            <p className="text-[9px] text-gray-400 dark:text-white/30 line-clamp-1 italic flex-1">
+                              "{word.contexts[0].text}"
+                            </p>
+                          ) : (
+                            <div className="flex-1" />
+                          )}
+                          {word.contexts && word.contexts.length > 1 && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-orange-500/10 text-orange-500 text-[8px] font-black">
+                              +{word.contexts.length - 1} MORE
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </motion.div>
                   ))}

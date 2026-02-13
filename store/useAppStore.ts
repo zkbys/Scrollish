@@ -64,24 +64,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (filters?.communityId) {
         ; ({ data, error } = await supabase
           .from('production_posts')
-          .select('*')
+          .select('id, community_id, title_en, title_cn, image_url, video_url, image_type, upvotes, subreddit, created_at')
           .eq('community_id', filters.communityId)
           .order('created_at', { ascending: false })
-          .limit(15))
+          .limit(20))
       } else if (filters?.followedIds && filters.followedIds.length > 0) {
         ; ({ data, error } = await supabase
           .from('production_posts')
-          .select('*')
+          .select('id, community_id, title_en, title_cn, image_url, video_url, image_type, upvotes, subreddit, created_at')
           .in('community_id', filters.followedIds)
           .order('created_at', { ascending: false })
-          .limit(15))
+          .limit(20))
       } else {
-        // [优化] 增加 Order 和 Limit，防止大数据量加载超时
-        ; ({ data, error } = await supabase
-          .from('production_posts')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(30))
+        // [优化] 随机采样代替固定 Top 30，解决重复刷新问题
+        ; ({ data, error } = await supabase.rpc('get_random_posts', {
+          limit_count: 40,
+        }))
       }
 
       if (error) throw error
@@ -103,6 +101,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           const unviewedPosts = data.filter(p => !viewedPostIds.includes(p.id))
           const viewedPosts = data.filter(p => viewedPostIds.includes(p.id))
 
+          // 优先展示未看过的随机内容
           finalPosts = [...shuffleArray(unviewedPosts), ...shuffleArray(viewedPosts)]
         }
 
@@ -125,24 +124,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (filters?.communityId) {
         ; ({ data, error } = await supabase
           .from('production_posts')
-          .select('*')
+          .select('id, community_id, title_en, title_cn, image_url, video_url, image_type, upvotes, subreddit, created_at')
           .eq('community_id', filters.communityId)
           .order('created_at', { ascending: false })
-          .limit(15))
+          .limit(20))
       } else if (filters?.followedIds && filters.followedIds.length > 0) {
         ; ({ data, error } = await supabase
           .from('production_posts')
-          .select('*')
+          .select('id, community_id, title_en, title_cn, image_url, video_url, image_type, upvotes, subreddit, created_at')
           .in('community_id', filters.followedIds)
           .order('created_at', { ascending: false })
-          .limit(15))
+          .limit(20))
       } else {
-        // [优化] 增加 Limit，防止刷新时加载过多导致失败
-        ; ({ data, error } = await supabase
-          .from('production_posts')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(30))
+        // [优化] 刷新也使用随机 RPC
+        ; ({ data, error } = await supabase.rpc('get_random_posts', {
+          limit_count: 40,
+        }))
       }
 
       if (error) throw error
@@ -185,7 +182,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const lastPost = get().posts[get().posts.length - 1]
           ; ({ data, error } = await supabase
             .from('production_posts')
-            .select('*')
+            .select('id, community_id, title_en, title_cn, image_url, video_url, image_type, upvotes, subreddit, created_at')
             .eq('community_id', filters.communityId)
             .lt('created_at', lastPost?.created_at || new Date().toISOString())
             .order('created_at', { ascending: false })
@@ -194,7 +191,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const lastPost = get().posts[get().posts.length - 1]
           ; ({ data, error } = await supabase
             .from('production_posts')
-            .select('*')
+            .select('id, community_id, title_en, title_cn, image_url, video_url, image_type, upvotes, subreddit, created_at')
             .in('community_id', filters.followedIds)
             .lt('created_at', lastPost?.created_at || new Date().toISOString())
             .order('created_at', { ascending: false })

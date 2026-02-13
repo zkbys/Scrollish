@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react'
 import { useDictionaryStore } from '../store/useDictionaryStore'
+import { useUserStore } from '../store/useUserStore'
 
 interface InteractiveTextProps {
   text: string
   contextSentence?: string
   className?: string
-  externalOnClick?: (word: string) => void
+  externalOnClick?: (word: string, context: string) => void
 }
 
 const InteractiveText: React.FC<
@@ -19,6 +20,7 @@ const InteractiveText: React.FC<
 }) => {
     const { triggerAnalysis, isAnalyzing, cachedDefinitions } =
       useDictionaryStore()
+    const { registerWordLookup, isWordStarred } = useUserStore()
 
     const segments = useMemo(() => {
       if (!text) return []
@@ -34,13 +36,18 @@ const InteractiveText: React.FC<
       }
     }, [text])
 
-    const handleWordClick = (word: string) => {
+    const handleWordClick = async (word: string) => {
       if (disabled) return
+      const finalContext = contextSentence || text
+
       if (externalOnClick) {
-        externalOnClick(word)
+        externalOnClick(word, finalContext)
       } else {
         if (navigator.vibrate) navigator.vibrate(20)
-        triggerAnalysis(word, contextSentence || text)
+        const result = await triggerAnalysis(word, finalContext)
+        if (result) {
+          registerWordLookup(result, finalContext)
+        }
       }
     }
 
@@ -49,8 +56,13 @@ const InteractiveText: React.FC<
         {segments.map((seg, i) => {
           const word = seg.segment
           const isWord = seg.isWordLike
-          const isLoading = isAnalyzing(word)
-          const isReady = !!cachedDefinitions[word]
+          const finalContext = contextSentence || text
+          const contextKey = finalContext.trim().slice(0, 30)
+          const cacheKey = `${word}:${contextKey}`
+
+          const isLoading = isAnalyzing(word, finalContext)
+          // [核心修复] 划线逻辑关联到全局词书，而非特定语境缓存
+          const isStarred = isWordStarred(word)
 
           if (isWord) {
             return (
@@ -70,7 +82,7 @@ const InteractiveText: React.FC<
                 className={`
                 relative inline-block select-none -webkit-user-select-none ${disabled ? '' : 'cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5 hover:bg-white/10 active:scale-95'}
                 ${!disabled && isLoading ? 'animate-pulse text-orange-400/80' : ''} 
-                ${!disabled && isReady ? 'decoration-green-500 decoration-wavy underline underline-offset-4 decoration-2' : ''}
+                ${!disabled && isStarred ? 'decoration-green-500 decoration-wavy underline underline-offset-4 decoration-2' : ''}
               `}>
                 {word}
                 {isLoading && (

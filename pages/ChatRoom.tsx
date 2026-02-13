@@ -29,7 +29,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const { getComments, fetchComments, addLocalComment, deleteLocalComment } =
     useCommentStore()
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
-  const { profile } = useUserStore()
+  const { profile, registerWordLookup } = useUserStore()
 
   const getDisplayAuthor = (name: string) => {
     if (!name) return '??'
@@ -51,6 +51,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
   const [inputText, setInputText] = useState('')
   const [quotedMessage, setQuotedMessage] = useState<Comment | null>(null)
   const [viewingWord, setViewingWord] = useState<string | null>(null)
+  const [viewingWordContext, setViewingWordContext] = useState<string>('')
   const [viewingNote, setViewingNote] = useState<CulturalNote[] | null>(null)
   const [showGlobalTranslation, setShowGlobalTranslation] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -214,8 +215,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
   // --- Actions ---
   const handleWordClick = async (word: string, context: string) => {
-    await triggerAnalysis(word, context)
+    if (navigator.vibrate) navigator.vibrate(20)
+    // 触发分析（内置语境缓存逻辑）
+    const result = await triggerAnalysis(word, context)
+    // 无论是否命缓存，只要点击了，就显式增加一次计数并更新语境
+    if (result) {
+      useUserStore.getState().registerWordLookup(result, context)
+    }
     setViewingWord(word)
+    setViewingWordContext(context)
   }
 
   const handleSend = async () => {
@@ -397,7 +405,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       {viewingWord && (
         <WordDetailOverlay
           word={viewingWord}
-          definition={getDefinition(viewingWord)}
+          definition={getDefinition(viewingWord, viewingWordContext)}
+          context={viewingWordContext}
           onClose={() => setViewingWord(null)}
         />
       )}

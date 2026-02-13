@@ -12,6 +12,7 @@ import { useCommentStore } from '../store/useCommentStore'
 import { useDictionaryStore } from '../store/useDictionaryStore'
 import MessageBubble from '../components/MessageBubble'
 import WordDetailOverlay from '../components/WordDetailOverlay'
+import { useUserStore } from '../store/useUserStore'
 import { Comment } from '../types'
 
 interface TopicHubProps {
@@ -37,6 +38,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   // 查词状态
   const [viewingWord, setViewingWord] = useState<string | null>(null)
+  const [viewingWordContext, setViewingWordContext] = useState<string>('')
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
   const [scale, setScale] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
@@ -55,6 +57,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const { fetchComments, getComments, isLoading } = useCommentStore()
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
+  const { registerWordLookup } = useUserStore()
 
   // 每次切换卡片时重置底部状态
   useEffect(() => {
@@ -164,8 +167,15 @@ const TopicHub: React.FC<TopicHubProps> = ({
   }
 
   const handleWordClick = async (word: string, context: string) => {
-    await triggerAnalysis(word, context)
+    if (navigator.vibrate) navigator.vibrate(20)
+    // 触发分析（内置语境缓存逻辑）
+    const result = await triggerAnalysis(word, context)
+    // 无论是否命缓存，只要点击了，就显式增加一次计数并更新语境
+    if (result) {
+      useUserStore.getState().registerWordLookup(result, context)
+    }
     setViewingWord(word)
+    setViewingWordContext(context)
   }
 
   const handleCardScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -292,7 +302,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
       {viewingWord && (
         <WordDetailOverlay
           word={viewingWord}
-          definition={getDefinition(viewingWord)}
+          definition={getDefinition(viewingWord, viewingWordContext)}
+          context={viewingWordContext}
           onClose={() => setViewingWord(null)}
         />
       )}
@@ -416,8 +427,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
             bg-white/60 dark:bg-[#121212]/60 backdrop-blur-3xl overscroll-x-none !overscroll-x-none touch-pan-y !touch-pan-y`}>
             {/* 卡片头部 - 包含用户信息和数据统计 */}
             <div
-              className="h-16 border-b border-gray-200/50 dark:border-white/5 flex items-center justify-between px-6 shrink-0"
-              onClick={goToChatRoom}>
+              className="h-16 border-b border-gray-200/50 dark:border-white/5 flex items-center justify-between px-6 shrink-0">
               <div className="flex items-center gap-3">
                 <div
                   className={`w-8 h-8 rounded-full p-[2px] ${activeComment?.isOpCard ? 'bg-gray-200 dark:bg-white' : 'bg-gradient-to-tr from-orange-500 to-red-500'}`}>
@@ -455,11 +465,14 @@ const TopicHub: React.FC<TopicHubProps> = ({
                 </div>
               </div>
               {!activeComment?.isOpCard && (
-                <div className="w-8 h-8 rounded-full bg-gray-100/50 dark:bg-white/5 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-gray-400 text-[18px]">
+                <button
+                  onClick={goToChatRoom}
+                  className="w-10 h-10 rounded-full bg-gray-100/80 dark:bg-white/5 flex items-center justify-center active:scale-95 transition-all hover:bg-gray-200/80 dark:hover:bg-white/10"
+                >
+                  <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
                     expand_less
                   </span>
-                </div>
+                </button>
               )}
             </div>
 

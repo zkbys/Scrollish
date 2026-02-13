@@ -13,6 +13,7 @@ export interface DictionaryResult {
   definition_cn: string
   definition_en: string
   roots: string
+  contexts?: { text: string; meaning: string; created_at: string }[]
 }
 
 interface DictionaryState {
@@ -25,8 +26,8 @@ interface DictionaryState {
     context: string,
   ) => Promise<DictionaryResult | null>
   forgetWord: (word: string) => void
-  getDefinition: (word: string) => DictionaryResult | null
-  isAnalyzing: (word: string) => boolean
+  getDefinition: (word: string, context: string) => DictionaryResult | null
+  isAnalyzing: (word: string, context: string) => boolean
 }
 
 export const useDictionaryStore = create<DictionaryState>()(
@@ -38,18 +39,20 @@ export const useDictionaryStore = create<DictionaryState>()(
       triggerAnalysis: async (word, context) => {
         const { analyzingWords, cachedDefinitions } = get()
 
-        if (cachedDefinitions[word]) {
-          return cachedDefinitions[word]
+        // 生成语境相关的缓存 Key (为了简洁和安全，对 context 取简短的哈希或截取)
+        // 这里简单使用 word + context 的前 30 个字符作为 Key
+        const contextKey = context.trim().slice(0, 30)
+        const cacheKey = `${word}:${contextKey}`
+
+        if (cachedDefinitions[cacheKey]) {
+          return cachedDefinitions[cacheKey]
         }
 
-        if (analyzingWords.includes(word)) return null
+        if (analyzingWords.includes(cacheKey)) return null
 
-        set({ analyzingWords: [...analyzingWords, word] })
+        set({ analyzingWords: [...analyzingWords, cacheKey] })
 
         try {
-          // [Security Note] It is safe to use VITE_SUPABASE_ANON_KEY here.
-          // The Anon Key is public by design and intended for client-side use.
-          // Access control is handled by Postgres Row Level Security (RLS) policies.
           const { data, error } = await supabase.functions.invoke('dictionary', {
             headers: {
               'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -86,15 +89,15 @@ export const useDictionaryStore = create<DictionaryState>()(
           set((state) => ({
             cachedDefinitions: {
               ...state.cachedDefinitions,
-              [word]: parsedResult,
+              [cacheKey]: parsedResult,
             },
-            analyzingWords: state.analyzingWords.filter((w) => w !== word),
+            analyzingWords: state.analyzingWords.filter((w) => w !== cacheKey),
           }))
           return parsedResult
         } catch (error) {
           console.error('Dict API Error:', error)
           set((state) => ({
-            analyzingWords: state.analyzingWords.filter((w) => w !== word),
+            analyzingWords: state.analyzingWords.filter((w) => w !== cacheKey),
           }))
           return null
         }
@@ -109,8 +112,16 @@ export const useDictionaryStore = create<DictionaryState>()(
         })
       },
 
-      getDefinition: (word) => get().cachedDefinitions[word] || null,
-      isAnalyzing: (word) => get().analyzingWords.includes(word),
+      getDefinition: (word, context) => {
+        const contextKey = context.trim().slice(0, 30)
+        const cacheKey = `${word}:${contextKey}`
+        return get().cachedDefinitions[cacheKey] || null
+      },
+      isAnalyzing: (word, context) => {
+        const contextKey = context.trim().slice(0, 30)
+        const cacheKey = `${word}:${contextKey}`
+        return get().analyzingWords.includes(cacheKey)
+      },
     }),
     {
       name: 'scrollish-dict-v3',
