@@ -95,7 +95,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
             if (shouldFetchCategories) {
                 promises.push(
                     import('../supabase').then(m =>
-                        m.supabase.from('categories').select('*').order('name_en')
+                        m.supabase.from('categories').select('id, name_en, name_cn').order('name_en')
                     )
                 )
             }

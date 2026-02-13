@@ -101,7 +101,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     const fetchOp = async () => {
       const { data } = await supabase
         .from('production_posts')
-        .select('*')
+        .select('content_en, content_cn, title_en, title_cn, author, subreddit')
         .eq('id', postId)
         .single()
       if (data)

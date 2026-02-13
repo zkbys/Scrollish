@@ -87,8 +87,9 @@ def segment_text_consistent(text: str) -> List[str]:
     if is_image:
         return [converted_text.strip()]
 
-    # 3. 对保护后的文本进行分句
-    pattern = r'[^.!?\n]+[.!?\n]+|[^.!?\n]+$'
+    # 3. 对保护后的文本进行分句 (使用负向先行断言，避免在小数点处切分)
+    # 匹配条件：非标点符号序列 + (标点符号(?!\d) 或 换行符 或 字符串末尾)
+    pattern = r'[^.!?\n]+(?:(?:\.(?!\d)|[!?\n])+|(?=$))'
     matches = re.findall(pattern, protected_text)
     
     # 4. 还原 GIF 语法并转换为 URL
@@ -104,7 +105,17 @@ def segment_text_consistent(text: str) -> List[str]:
                 restored = restored.replace(placeholder, gif_url)
         segments.append(restored.strip())
     
-    return [s for s in segments if s] or [converted_text.strip()]
+    # 过滤掉纯噪声（不含字母或数字且长度极短）的片段
+    final_segments = []
+    for s in segments:
+        s = s.strip()
+        if not s: continue
+        # 如果片段不含字母数字且长度小于 3，通常是脏数据
+        if not re.search(r'[a-zA-Z0-9]', s) and len(s) < 3:
+            continue
+        final_segments.append(s)
+
+    return final_segments or [converted_text.strip()]
 
 def merge_short_sentences(segments: List[str]) -> List[str]:
     """
@@ -131,7 +142,18 @@ def merge_short_sentences(segments: List[str]) -> List[str]:
 
 # --- 核心处理逻辑 ---
 async def process_comment(comment: Dict[str, Any], sem: asyncio.Semaphore):
+    """处理单个评论，使用状态字段进行追踪"""
+    comment_id = comment['id']
+    
     async with sem:
+        # 1. 标记为处理中
+        try:
+            supabase.table("comments").update({
+                "enrichment_status": "processing"
+            }).eq("id", comment_id).execute()
+        except Exception as e:
+            print(f"⚠️ Failed to update status to processing for {comment_id[:8]}: {e}")
+        
         raw_content = comment['content'] or ""
         pre_sentences = segment_text_consistent(raw_content)
         # 应用短句合并
@@ -140,15 +162,18 @@ async def process_comment(comment: Dict[str, Any], sem: asyncio.Semaphore):
         word_count = get_word_count(raw_content)
         is_short = word_count < 12
         
-        print(f"🔄 Processing {comment['id'][:8]} (Segments: {len(pre_sentences)}, Mode: {'Simple' if is_short else 'Full'})...")
+        print(f"🔄 Processing {comment_id[:8]} (Segments: {len(pre_sentences)}, Mode: {'Simple' if is_short else 'Full'})...")
+        
+        # 3. 构造 编号输入 (Numbered Input) 强制 AI 关注每一个分片
+        numbered_input = "\n".join([f"{i+1}. {s}" for i, s in enumerate(pre_sentences)])
         
         # 定义难度等级
         levels_to_generate = ["Mixed", "Basic"] if is_short else ["Mixed", "Basic", "Intermediate", "Expert"]
         
-        # 构建句子模板 (添加 index)
+        # 构建句子模板
         segments_template = [{"index": i + 1, "en": s, "zh": "..."} for i, s in enumerate(pre_sentences)]
         
-        # 构建难度变体模板 (添加 index)
+        # 构建难度变体模板
         difficulty_template = {}
         for level in levels_to_generate:
             difficulty_template[level] = [
@@ -198,22 +223,22 @@ async def process_comment(comment: Dict[str, Any], sem: asyncio.Semaphore):
         prompt = f"""
         # Role: Expert English Education Specialist
         
-        # Task: Analyze this Reddit comment following the One-Shot Example.
-        ## Input: "{raw_content}"
+        # Task: Analyze this Reddit comment. I have pre-segmented it into {len(pre_sentences)} pieces.
+        
+        # Input (Numbered Pieces):
+        {numbered_input}
         
         # CRITICAL RULES (STRICT ALIGNMENT):
-        1. **Sentence Indexing**: Each sentence has a fixed 'index' (1, 2, 3...). 
-        2. **Consistency**: You MUST ensure that the 'zh' translation and all 'rewritten' versions (Mixed, Basic, Intermediate, Expert) for index 'X' correspond EXACTLY to the same original English sentence at index 'X'.
+        1. **Index Integrity**: I provided {len(pre_sentences)} numbered pieces. You MUST return EXACTLY {len(pre_sentences)} items in 'sentence_segments' and each list in 'difficulty_variants'.
+        2. **Consistency**: Index 'X' in all lists MUST refer to the EXACT SAME text from Piece 'X'.
         3. **Language Purity**: 
            - 'Mixed': Chinese + English allowed.
            - 'Basic', 'Intermediate', 'Expert': MUST be 100% PURE ENGLISH. ZERO Chinese characters.
-        4. **Matching**: Array lengths MUST match the number of pre-segmented sentences ({len(pre_sentences)}).
-
-        # One-Shot Example:
-        {json.dumps(one_shot_output, ensure_ascii=False, indent=2)}
-
+        4. **Cultural Notes**: The 'explanation' field MUST be in **SIMPLIFIED CHINESE** (简体中文). Do NOT explain in English.
+        
         # Output Format:
-        Return ONLY a single valid JSON object following the structure above.
+        Return ONLY a single valid JSON object following this template:
+        {json.dumps(json_template, ensure_ascii=False, indent=2)}
         """
 
         current_model = "deepseek-ai/DeepSeek-V3"
@@ -284,100 +309,153 @@ async def process_comment(comment: Dict[str, Any], sem: asyncio.Semaphore):
                 
                 # 构建入库数据
                 enrichment_payload = {
-                    "comment_id": comment["id"],
+                    "comment_id": comment_id,
                     "native_polished": data_dict["native_polished"],
                     "sentence_segments": data_dict["sentence_segments"],
                     "difficulty_variants": data_dict["difficulty_variants"],
                     "cultural_notes": data_dict["cultural_notes"]
                 }
                 
-                # 写入数据库
+                # 写入数据库并更新状态为 completed
                 supabase.table("comments").update({
-                    "content_cn": data_dict["translated_content"]
-                }).eq("id", comment["id"]).execute()
+                    "content_cn": data_dict["translated_content"],
+                    "enrichment_status": "completed"
+                }).eq("id", comment_id).execute()
                 
                 supabase.table("comments_enrichment").upsert(enrichment_payload).execute()
-                print(f"✅ Finished {comment['id'][:8]} on attempt {attempt+1}")
-                break 
+                print(f"✅ Finished {comment_id[:8]} on attempt {attempt+1}")
+                return  # 成功处理，直接返回
 
             except Exception as e:
                 if attempt < 2:
-                    print(f"⚠️ Retry {attempt+1} for {comment['id'][:8]} due to: {str(e)[:100]}")
+                    print(f"⚠️ Retry {attempt+1} for {comment_id[:8]} due to: {str(e)[:100]}")
                     await asyncio.sleep(2)
                 else:
-                    print(f"❌ Final Failure {comment['id'][:8]}: {str(e)}")
+                    # 最终失败，标记为 failed
+                    print(f"❌ Final Failure {comment_id[:8]}: {str(e)}")
+                    try:
+                        supabase.table("comments").update({
+                            "enrichment_status": "failed"
+                        }).eq("id", comment_id).execute()
+                    except Exception as update_error:
+                        print(f"⚠️ Failed to update status to failed: {update_error}")
+                    raise  # 重新抛出异常以便统计
 
-async def main(post_limit: Optional[int] = None):
-    print(f"🚀 Starting Incremental Processing (DeepSeek-V3)...")
+async def main(post_limit: Optional[int] = None, comment_limit: Optional[int] = None):
+    """主函数：使用 enrichment_status 字段进行增量处理"""
+    print(f"🚀 Starting Incremental Processing (DeepSeek-V3) - Status-Based Mode")
+    print("="*60)
     
-    # 1. 获取所有已处理的 ID
+    # 1. 直接查询状态为 pending 的评论（极速查询，有索引支持）
     try:
-        processed_res = supabase.table("comments_enrichment").select("comment_id").execute()
-        processed_ids = {p['comment_id'] for p in processed_res.data}
-        print(f"💡 Found {len(processed_ids)} already processed comments.")
+        print("🔍 Querying pending comments...")
+        all_pending_comments = []
+        offset = 0
+        page_size = 100
+        
+        while True:
+            page_res = supabase.table("comments") \
+                .select("id, content, post_id") \
+                .eq("enrichment_status", "pending") \
+                .gt("content", "") \
+                .range(offset, offset + page_size - 1) \
+                .execute()
+            
+            batch = page_res.data
+            # 过滤：内容长度 > 5
+            filtered_batch = [c for c in batch if c.get('content') and len(c['content']) > 5]
+            all_pending_comments.extend(filtered_batch)
+            
+            if len(batch) < page_size:
+                break
+            
+            offset += page_size
+            if offset % 500 == 0:
+                print(f"  📥 Fetched {len(all_pending_comments)} pending comments so far...")
+        
+        print(f"💡 Found {len(all_pending_comments)} pending comments in total.")
+        
+        # 应用评论数量限制（用于测试）
+        if comment_limit and len(all_pending_comments) > comment_limit:
+            all_pending_comments = all_pending_comments[:comment_limit]
+            print(f"🧪 Test Mode: Limited to {comment_limit} comments.")
+        
     except Exception as e:
-        print(f"⚠️ Failed to fetch processed IDs, starting from scratch: {e}")
-        processed_ids = set()
-
-    # 2. 获取所有帖子
-    try:
-        posts_response = supabase.table("production_posts").select("id, title_en").execute()
-        posts = posts_response.data
-        if post_limit:
-            posts = posts[:post_limit]
-            print(f"🧪 Test Mode: Limited to {post_limit} posts.")
-    except Exception as e:
-        print(f"❌ Failed to fetch posts: {e}")
+        print(f"❌ Failed to fetch pending comments: {e}")
         return
-
-    if not posts:
-        print("No posts found in production_posts.")
+    
+    if not all_pending_comments:
+        print("\n✨ No pending comments found. All caught up!")
         return
-
-    print(f"📊 Processing {len(posts)} posts. Starting...")
+    
+    # 2. 按 post_id 分组（保持原有的组织逻辑）
+    from collections import defaultdict
+    comments_by_post = defaultdict(list)
+    for comment in all_pending_comments:
+        comments_by_post[comment['post_id']].append(comment)
+    
+    # 3. 获取帖子标题（用于显示）
+    post_ids = list(comments_by_post.keys())
+    if post_limit:
+        post_ids = post_ids[:post_limit]
+        print(f"🧪 Test Mode: Limited to {post_limit} posts.")
+    
+    print(f"\n📊 Processing {len(post_ids)} posts with pending comments...")
+    print("="*60)
     
     total_processed = 0
     total_failed = 0
     semaphore = asyncio.Semaphore(10)
-
-    for idx, post in enumerate(posts):
-        post_id = post["id"]
-        post_title = post.get("title_en", "Untitled")[:30]
+    
+    for idx, post_id in enumerate(post_ids):
+        comments = comments_by_post[post_id]
         
-        print(f"\n📦 [{idx+1}/{len(posts)}] Post: {post_title}... ({post_id})")
-        
-        # 3. 获取该帖子下的所有评论
+        # 获取帖子标题
         try:
-            comments = supabase.table("comments").select("id, content").eq("post_id", post_id).execute().data
-            # 过滤：1. 长度 > 5, 2. 不在 processed_ids 中
-            to_process = [c for c in comments if c.get('content') and len(c['content']) > 5 and c['id'] not in processed_ids]
-        except Exception as e:
-            print(f"  ⚠️ Failed to fetch comments for {post_id}: {e}")
-            continue
-
-        if not to_process:
-            print(f"  ☕ All comments already processed for this post.")
-            continue
-
-        print(f"  📝 Found {len(to_process)} new comments. Processing...")
+            post_info = supabase.table("production_posts").select("title_en").eq("id", post_id).limit(1).execute()
+            post_title = post_info.data[0].get("title_en", "Untitled")[:30] if post_info.data else "Unknown"
+        except:
+            post_title = "Unknown"
         
-        tasks = [process_comment(c, semaphore) for c in to_process]
+        print(f"\n📦 [{idx+1}/{len(post_ids)}] Post: {post_title}... ({post_id})")
+        print(f"  📝 Processing {len(comments)} pending comments...")
+        
+        # 4. 并发处理评论
+        tasks = [process_comment(c, semaphore) for c in comments]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         success_count = sum(1 for r in results if r is None)
-        fail_count = len(to_process) - success_count
+        fail_count = len(comments) - success_count
         
         total_processed += success_count
         total_failed += fail_count
         
         print(f"  ✅ Post Completed: {success_count} success, {fail_count} failed.")
-
-    print(f"\n{'='*40}")
-    print(f"🏁 DONE!")
-    print(f"📈 New Success: {total_processed}")
-    print(f"📉 Total Failed: {total_failed}")
-    print(f"{'='*40}")
+    
+    # 5. 最终统计
+    print("\n" + "="*60)
+    print("🏁 Processing Complete!")
+    print("="*60)
+    print(f"📈 Successfully Processed: {total_processed}")
+    print(f"📉 Failed: {total_failed}")
+    
+    # 6. 显示当前状态分布
+    try:
+        print("\n📊 Current Status Distribution:")
+        for status in ["pending", "processing", "completed", "failed"]:
+            count = supabase.table("comments") \
+                .select("id", count="exact") \
+                .eq("enrichment_status", status) \
+                .execute().count
+            print(f"   {status.capitalize()}: {count}")
+    except Exception as e:
+        print(f"⚠️ Could not fetch status distribution: {e}")
+    
+    print("="*60)
 
 if __name__ == "__main__":
-    # >>> 修改此处：设置为 2 个帖子进行测试 <<<
-    asyncio.run(main(post_limit=2))
+    # 使用新的参数：post_limit 和 comment_limit
+    # post_limit: 限制处理的帖子数量
+    # comment_limit: 限制处理的评论总数
+    # asyncio.run(main(post_limit=None, comment_limit=50))  # 测试：处理 50 条评论
+    asyncio.run(main(post_limit=10))
