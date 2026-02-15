@@ -13,12 +13,25 @@ from pydantic import BaseModel, Field, model_validator, ValidationError
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+# 优先使用 SERVICE_ROLE_KEY 以绕过 RLS 限制
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
 SILICONFLOW_API_KEY = os.getenv("VITE_SILICONFLOW_API_KEY")
 SILICONFLOW_BASE_URL = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 client = AsyncOpenAI(api_key=SILICONFLOW_API_KEY, base_url=SILICONFLOW_BASE_URL)
+
+# 数据库更新重试装饰器
+async def retry_db_operation(operation, max_retries=3):
+    """重试数据库操作，处理连接中断"""
+    for attempt in range(max_retries):
+        try:
+            return operation()
+        except Exception as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)  # 指数退避
+            else:
+                raise e
 
 # --- 数据模型 ---
 class Segment(BaseModel):
@@ -166,9 +179,11 @@ async def process_post(post: Dict[str, Any], sem: asyncio.Semaphore):
     
     async with sem:
         try:
-            supabase.table("production_posts").update({"enrichment_status": "processing"}).eq("id", post_id).execute()
+            await retry_db_operation(
+                lambda: supabase.table("production_posts").update({"enrichment_status": "processing"}).eq("id", post_id).execute()
+            )
         except Exception as e:
-            print(f"⚠️ Failed to update status for {post_id}: {e}")
+            print(f"⚠️ Failed to update status for {post_id[:8]}: {e}")
         
         raw_content = post['content_en'] or ""
         # 0. 清理链接
@@ -179,7 +194,12 @@ async def process_post(post: Dict[str, Any], sem: asyncio.Semaphore):
         
         if not pre_sentences:
             print(f"⏩ Skipping {post_id[:8]}: Empty after cleaning.")
-            supabase.table("production_posts").update({"enrichment_status": "completed"}).eq("id", post_id).execute()
+            try:
+                await retry_db_operation(
+                    lambda: supabase.table("production_posts").update({"enrichment_status": "completed"}).eq("id", post_id).execute()
+                )
+            except Exception as e:
+                print(f"⚠️ Failed to mark as completed: {e}")
             return
 
         print(f"🔄 Processing Post {post_id[:8]} ({len(pre_sentences)} segments)...")
@@ -242,41 +262,65 @@ async def process_post(post: Dict[str, Any], sem: asyncio.Semaphore):
                     if idx < len(pre_sentences):
                         seg["en"] = pre_sentences[idx]
 
-                # 更新数据库
-                supabase.table("production_posts").update({
-                    "content_cn": data_dict["translated_content"],
-                    "native_polished": data_dict["native_polished"],
-                    "sentence_segments": data_dict["sentence_segments"],
-                    "difficulty_variants": data_dict["difficulty_variants"],
-                    "cultural_notes": data_dict["cultural_notes"],
-                    "enrichment_status": "completed"
-                }).eq("id", post_id).execute()
-                
-                print(f"✅ Finished Post {post_id[:8]}")
+                # 更新数据库 (带重试)
+                try:
+                    await retry_db_operation(
+                        lambda: supabase.table("production_posts").update({
+                            "content_cn": data_dict["translated_content"],
+                            "native_polished": data_dict["native_polished"],
+                            "sentence_segments": data_dict["sentence_segments"],
+                            "difficulty_variants": data_dict["difficulty_variants"],
+                            "cultural_notes": data_dict["cultural_notes"],
+                            "enrichment_status": "completed"
+                        }).eq("id", post_id).execute()
+                    )
+                    print(f"✅ Finished Post {post_id[:8]}")
+                except Exception as db_err:
+                    print(f"❌ DB Update failed for {post_id[:8]}: {db_err}")
+                    raise
                 return
 
             except Exception as e:
                 print(f"⚠️ Retry {attempt+1} for {post_id[:8]}: {str(e)[:100]}")
                 await asyncio.sleep(2)
         
-        supabase.table("production_posts").update({"enrichment_status": "failed"}).eq("id", post_id).execute()
+        # 最终失败，标记状态
+        try:
+            await retry_db_operation(
+                lambda: supabase.table("production_posts").update({"enrichment_status": "failed"}).eq("id", post_id).execute()
+            )
+        except Exception as e:
+            print(f"⚠️ Could not mark post as failed: {e}")
 
 async def main(limit: int = 50):
     print(f"🚀 Starting Post Enrichment Processing")
     
-    # 1. 预处理：将 content_en 为空字符串或只有空格的帖子直接标记为 completed
+    # 1. 预处理：将 content_en 为空字符串的帖子直接标记为 completed
     print("🧹 Cleaning up empty content posts...")
     try:
-        # 处理真正为空的
-        empty_res = supabase.table("production_posts") \
-            .update({"enrichment_status": "completed"}) \
+        # 分两次查询：先找出空内容和null的ID，再逐个更新（避免复杂查询语法问题）
+        empty_posts = supabase.table("production_posts") \
+            .select("id") \
             .eq("enrichment_status", "pending") \
-            .or_("content_en.eq.'',content_en.is.null") \
+            .is_("content_en", "null") \
             .execute()
-        if empty_res.data:
-            print(f"   - Marked {len(empty_res.data)} empty posts as completed.")
+        
+        empty_posts_2 = supabase.table("production_posts") \
+            .select("id") \
+            .eq("enrichment_status", "pending") \
+            .eq("content_en", "") \
+            .execute()
+        
+        all_empty_ids = [p['id'] for p in (empty_posts.data or [])] + [p['id'] for p in (empty_posts_2.data or [])]
+        
+        if all_empty_ids:
+            for empty_id in all_empty_ids:
+                await retry_db_operation(
+                    lambda id=empty_id: supabase.table("production_posts").update({"enrichment_status": "completed"}).eq("id", id).execute()
+                )
+            print(f"   - Marked {len(all_empty_ids)} empty posts as completed.")
     except Exception as e:
-        print(f"   - Bulk update empty posts failed: {e}")
+        print(f"   - Cleanup empty posts failed: {e}")
 
     # 2. 获取待处理帖子 (过滤空内容)
     res = supabase.table("production_posts") \

@@ -42,7 +42,7 @@ class EnrichmentResult(BaseModel):
     native_polished: str = Field(..., description="地道、流畅的母语级英语版本")
     translated_content: str
     sentence_segments: List[Segment]
-    difficulty_variants: Dict[str, List[DifficultySegment]]
+    difficulty_variants: Optional[Dict[str, List[DifficultySegment]]] = None
     cultural_notes: List[CulturalNote]
 
 # --- 工具函数 ---
@@ -167,24 +167,24 @@ async def process_comment(comment: Dict[str, Any], sem: asyncio.Semaphore):
         # 3. 构造 编号输入 (Numbered Input) 强制 AI 关注每一个分片
         numbered_input = "\n".join([f"{i+1}. {s}" for i, s in enumerate(pre_sentences)])
         
-        # 定义难度等级
-        levels_to_generate = ["Mixed", "Basic"] if is_short else ["Mixed", "Basic", "Intermediate", "Expert"]
+        # 定义难度等级 (已注释以提速)
+        # levels_to_generate = ["Mixed", "Basic"] if is_short else ["Mixed", "Basic", "Intermediate", "Expert"]
         
         # 构建句子模板
         segments_template = [{"index": i + 1, "en": s, "zh": "..."} for i, s in enumerate(pre_sentences)]
         
-        # 构建难度变体模板
+        # 构建难度变体模板 (已注释以提速)
         difficulty_template = {}
-        for level in levels_to_generate:
-            difficulty_template[level] = [
-                {"index": i + 1, "original": s, "rewritten": "..."} for i, s in enumerate(pre_sentences)
-            ]
+        # for level in levels_to_generate:
+        #     difficulty_template[level] = [
+        #         {"index": i + 1, "original": s, "rewritten": "..."} for i, s in enumerate(pre_sentences)
+        #     ]
 
         json_template = {
             "native_polished": "Professional rewrite of the whole comment.",
             "translated_content": "Full text translation.",
             "sentence_segments": segments_template,
-            "difficulty_variants": difficulty_template,
+            "difficulty_variants": {}, # 暂时不生成难度变体以节省 token
             "cultural_notes": [{"trigger_word": "...", "explanation": "..."}]
         }
 
@@ -197,24 +197,7 @@ async def process_comment(comment: Dict[str, Any], sem: asyncio.Semaphore):
                 {"index": 1, "en": "Honestly, the NFL is just playing the culture war for ratings.", "zh": "老实说，NFL 只是在利用文化战争来提高收视率。"},
                 {"index": 2, "en": "They lean into it when it's trendy, but they don't care about actual reform.", "zh": "当这些话题流行时，他们会参与其中，但他们并不关心真正的改革。"}
             ],
-            "difficulty_variants": {
-                "Mixed": [
-                    {"index": 1, "original": "Honestly, the NFL is just playing the culture war for ratings.", "rewritten": "Honestly，NFL 只是在 playing 这个 culture war 来赚 ratings。"},
-                    {"index": 2, "original": "They lean into it when it's trendy, but they don't care about actual reform.", "rewritten": "当它很 trendy 的时候他们会 lean into it，但他们并不 care 真正的 reform。"}
-                ],
-                "Basic": [
-                    {"index": 1, "original": "Honestly, the NFL is just playing the culture war for ratings.", "rewritten": "I think the NFL uses culture problems to get more viewers."},
-                    {"index": 2, "original": "They lean into it when it's trendy, but they don't care about actual reform.", "rewritten": "They do this when it is popular, but they do not want real change."}
-                ],
-                "Intermediate": [
-                    {"index": 1, "original": "Honestly, the NFL is just playing the culture war for ratings.", "rewritten": "In my opinion, the NFL exploits cultural conflicts to increase their television ratings."},
-                    {"index": 2, "original": "They lean into it when it's trendy, but they don't care about actual reform.", "rewritten": "They engage with these trends for publicity, yet they lack commitment to genuine reform."}
-                ],
-                "Expert": [
-                    {"index": 1, "original": "Honestly, the NFL is just playing the culture war for ratings.", "rewritten": "Truth be told, the NFL is merely weaponizing the culture war to bolster their viewership figures."},
-                    {"index": 2, "original": "They lean into it when it's trendy, but they don't care about actual reform.", "rewritten": "They pivot towards these social issues when advantageous, while remaining indifferent to systemic reform."}
-                ]
-            },
+            "difficulty_variants": {}, # 已简化
             "cultural_notes": [
                 {"trigger_word": "culture war", "explanation": "文化战争：指社会中不同群体之间关于价值观、政治立场的激烈冲突。"}
             ]
@@ -229,11 +212,11 @@ async def process_comment(comment: Dict[str, Any], sem: asyncio.Semaphore):
         {numbered_input}
         
         # CRITICAL RULES (STRICT ALIGNMENT):
-        1. **Index Integrity**: I provided {len(pre_sentences)} numbered pieces. You MUST return EXACTLY {len(pre_sentences)} items in 'sentence_segments' and each list in 'difficulty_variants'.
+        1. **Index Integrity**: I provided {len(pre_sentences)} numbered pieces. You MUST return EXACTLY {len(pre_sentences)} items in 'sentence_segments'.
         2. **Consistency**: Index 'X' in all lists MUST refer to the EXACT SAME text from Piece 'X'.
-        3. **Language Purity**: 
-           - 'Mixed': Chinese + English allowed.
-           - 'Basic', 'Intermediate', 'Expert': MUST be 100% PURE ENGLISH. ZERO Chinese characters.
+        # 3. **Language Purity**: (SKIP FOR NOW)
+        #    - 'Mixed': Chinese + English allowed.
+        #    - 'Basic', 'Intermediate', 'Expert': MUST be 100% PURE ENGLISH. ZERO Chinese characters.
         4. **Cultural Notes**: The 'explanation' field MUST be in **SIMPLIFIED CHINESE** (简体中文). Do NOT explain in English.
         
         # Output Format:
@@ -275,27 +258,28 @@ async def process_comment(comment: Dict[str, Any], sem: asyncio.Semaphore):
                 if seg_indices != expected_indices:
                     raise ValueError(f"AI Error: Sentence segments indices mismatch. Expected {expected_indices}, got {seg_indices}")
 
-                for level, segments in data_dict["difficulty_variants"].items():
-                    # 检查难度变体索引
-                    level_indices = [s["index"] for s in segments]
-                    if level_indices != expected_indices:
-                        raise ValueError(f"AI Error: Level '{level}' indices mismatch. Expected {expected_indices}, got {level_indices}")
-                    
-                    for seg in segments:
-                        if level != "Mixed" and contains_chinese(seg["rewritten"]):
-                            raise ValueError(f"AI Error: Level '{level}' contains Chinese in: {seg['rewritten'][:50]}")
+                # 注释难度变体验证以提速
+                # for level, segments in data_dict["difficulty_variants"].items():
+                #     # 检查难度变体索引
+                #     level_indices = [s["index"] for s in segments]
+                #     if level_indices != expected_indices:
+                #         raise ValueError(f"AI Error: Level '{level}' indices mismatch. Expected {expected_indices}, got {level_indices}")
+                #     
+                #     for seg in segments:
+                #         if level != "Mixed" and contains_chinese(seg["rewritten"]):
+                #             raise ValueError(f"AI Error: Level '{level}' contains Chinese in: {seg['rewritten'][:50]}")
                 
                 # 2. 检查数组长度一致性
                 expected_length = len(data_dict["sentence_segments"])
-                for level, segments in data_dict["difficulty_variants"].items():
-                    if len(segments) != expected_length:
-                        raise ValueError(f"AI Error: Level '{level}' has {len(segments)} sentences, expected {expected_length}")
+                # for level, segments in data_dict["difficulty_variants"].items():
+                #     if len(segments) != expected_length:
+                #         raise ValueError(f"AI Error: Level '{level}' has {len(segments)} sentences, expected {expected_length}")
                 
                 # 3. 检查 original 字段与预分句一致
-                for level, segments in data_dict["difficulty_variants"].items():
-                    for idx, seg in enumerate(segments):
-                        if idx < len(pre_sentences):
-                            seg["original"] = pre_sentences[idx]  # 强制覆盖
+                # for level, segments in data_dict["difficulty_variants"].items():
+                #     for idx, seg in enumerate(segments):
+                #         if idx < len(pre_sentences):
+                #             seg["original"] = pre_sentences[idx]  # 强制覆盖
                 
                 # 4. 检查 cultural_notes 的 explanation 是否为中文
                 for note in data_dict["cultural_notes"]:
@@ -312,7 +296,7 @@ async def process_comment(comment: Dict[str, Any], sem: asyncio.Semaphore):
                     "comment_id": comment_id,
                     "native_polished": data_dict["native_polished"],
                     "sentence_segments": data_dict["sentence_segments"],
-                    "difficulty_variants": data_dict["difficulty_variants"],
+                    "difficulty_variants": {}, # 暂时设置为空以提速
                     "cultural_notes": data_dict["cultural_notes"]
                 }
                 
