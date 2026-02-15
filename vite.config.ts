@@ -50,6 +50,7 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // [修复] 增加缓存上限到 10MB，适应较大的资源文件
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           skipWaiting: true,
           clientsClaim: true,

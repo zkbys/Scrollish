@@ -24,26 +24,48 @@ interface ExploreProps {
  */
 const SafeImage: React.FC<{ src: string; className?: string; alt?: string; layoutId?: string }> = ({ src, className, alt, layoutId }) => {
   const [isLoaded, setIsLoaded] = useState(false)
+  const [isError, setIsError] = useState(false)
+  const [isSlow, setIsSlow] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isLoaded) setIsSlow(true)
+    }, 20000) // 发现页图片较小，20s 超时
+    return () => clearTimeout(timer)
+  }, [isLoaded])
+
   return (
-    <div className={`relative ${className} overflow-hidden`}>
+    <div className={`relative ${className} overflow-hidden bg-gray-100 dark:bg-white/5`}>
       <motion.img
         layoutId={layoutId}
         src={src}
         alt={alt}
-        onLoad={() => setIsLoaded(true)}
+        onLoad={() => {
+          setIsLoaded(true)
+          setIsError(false)
+          setIsSlow(false)
+        }}
+        onError={() => {
+          setIsError(true)
+          setIsSlow(false)
+        }}
         initial={{ opacity: 0 }}
-        animate={{ opacity: isLoaded ? 1 : 0 }}
+        animate={{ opacity: (isLoaded && !isError) ? 1 : 0 }}
         transition={{ duration: 0.3 }}
         className="w-full h-full object-cover"
       />
       <AnimatePresence>
-        {!isLoaded && (
+        {(!isLoaded || isError || isSlow) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex items-center justify-center bg-white/5 dark:bg-white/5">
-            <div className="w-5 h-5 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin" />
+            className="absolute inset-0 flex items-center justify-center">
+            {isError || isSlow ? (
+              <span className="material-symbols-outlined text-gray-400 dark:text-white/20 text-lg">image</span>
+            ) : (
+              <div className="w-5 h-5 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin" />
+            )}
           </motion.div>
         )}
       </AnimatePresence>

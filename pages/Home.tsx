@@ -390,7 +390,7 @@ const Home: React.FC<HomeProps> = ({
       {renderEmptyState() || (
         <div
           ref={scrollContainerRef}
-          className={`h-full w-full overflow-y-auto overflow-x-hidden snap-y snap-mandatory hide-scrollbar bg-black overscroll-none ${isReady ? 'opacity-100' : 'opacity-0'
+          className={`h-full w-full overflow-y-auto overflow-x-hidden snap-y snap-mandatory no-scrollbar bg-black overscroll-none ${isReady ? 'opacity-100' : 'opacity-0'
             } ${isLoading ? 'pointer-events-none' : ''} ${isTouching ? '' : 'transition-transform duration-300 ease-out'
             }`}
           style={{
@@ -510,6 +510,8 @@ export const FeedItem: React.FC<{
     const videoRef = useRef<HTMLVideoElement>(null)
     const [videoError, setVideoError] = useState(false)
     const [imageLoaded, setImageLoaded] = useState(false)
+    const [imageError, setImageError] = useState(false)
+    const [isSlowLoad, setIsSlowLoad] = useState(false)
 
     const hasVideo = !!videoUrl && !videoError
 
@@ -519,6 +521,24 @@ export const FeedItem: React.FC<{
         toggleFollowCommunity(post.community_id)
         if (navigator.vibrate) navigator.vibrate(50)
       }
+    }
+
+    useEffect(() => {
+      let timeout: NodeJS.Timeout
+      if (!hasVideo && isActive && !imageLoaded && !imageError) {
+        // 设置 30 秒超时，如果 30 秒还没加载出来，标记为慢加载
+        timeout = setTimeout(() => {
+          if (!imageLoaded) setIsSlowLoad(true)
+        }, 30000)
+      }
+      return () => clearTimeout(timeout)
+    }, [hasVideo, isActive, imageLoaded, imageError])
+
+    const handleRetryImage = () => {
+      setImageError(false)
+      setIsSlowLoad(false)
+      setImageLoaded(false)
+      // 通过强制重置 src 来触发重新加载（取决于浏览器缓存行为，通常会重新尝试）
     }
 
     useEffect(() => {
@@ -624,20 +644,44 @@ export const FeedItem: React.FC<{
                 />
                 <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
 
-                {/* 骨架屏占位 */}
+                {/* 骨架屏或错误占位 */}
                 <AnimatePresence>
-                  {!imageLoaded && (
+                  {(!imageLoaded || imageError || isSlowLoad) && (
                     <motion.div
                       exit={{ opacity: 0 }}
-                      className="absolute inset-0 z-20 flex items-center justify-center bg-gray-900/40 backdrop-blur-md">
-                      <div className="relative w-12 h-12">
-                        <div className="absolute inset-0 border-4 border-orange-500/20 rounded-full" />
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          className="absolute inset-0 border-4 border-orange-500 border-t-transparent rounded-full"
-                        />
-                      </div>
+                      className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-gray-900/40 backdrop-blur-md px-10 text-center">
+                      {imageError ? (
+                        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
+                          <span className="material-symbols-outlined text-red-500 text-5xl mb-4 opacity-80">broken_image</span>
+                          <p className="text-white/60 text-xs font-bold leading-relaxed mb-6">Image Unavailable<br /><span className="text-[10px] opacity-50 font-medium">Connection reset or timed out</span></p>
+                          <button
+                            onClick={handleRetryImage}
+                            className="px-6 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      ) : isSlowLoad ? (
+                        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
+                          <span className="material-symbols-outlined text-orange-500 text-5xl mb-4 opacity-80">timer_slow</span>
+                          <p className="text-white/60 text-xs font-bold leading-relaxed mb-6">Connection Slow<br /><span className="text-[10px] opacity-50 font-medium">Taking longer than expected to load</span></p>
+                          <button
+                            onClick={handleRetryImage}
+                            className="px-6 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 rounded-full text-orange-500 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_15px_rgba(249,115,22,0.2)]"
+                          >
+                            Keep Waiting
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative w-12 h-12">
+                          <div className="absolute inset-0 border-4 border-orange-500/20 rounded-full" />
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                            className="absolute inset-0 border-4 border-orange-500 border-t-transparent rounded-full"
+                          />
+                        </div>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -645,8 +689,16 @@ export const FeedItem: React.FC<{
                 <motion.img
                   src={imageUrl}
                   loading={isActive ? "eager" : "lazy"}
-                  onLoad={() => setImageLoaded(true)}
-                  className={`absolute inset-0 w-full h-full object-contain z-10 drop-shadow-2xl transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                  onLoad={() => {
+                    setImageLoaded(true)
+                    setIsSlowLoad(false)
+                    setImageError(false)
+                  }}
+                  onError={() => {
+                    setImageError(true)
+                    setIsSlowLoad(false)
+                  }}
+                  className={`absolute inset-0 w-full h-full object-contain z-10 drop-shadow-2xl transition-opacity duration-500 ${(imageLoaded && !imageError) ? 'opacity-100' : 'opacity-0'}`}
                   style={{ objectPosition: 'center 35%' }}
                   transition={{ type: 'spring', stiffness: 70, damping: 20 }}
                 />
