@@ -8,7 +8,9 @@ interface JellyLikeButtonProps {
 }
 
 const JellyLikeButton: React.FC<JellyLikeButtonProps> = ({ isLiked, onClick, count }) => {
-    const controls = useAnimation()
+    // [新增] 记录用户是否在当前生命周期内点击过点赞
+    // 这样可以防止每次进入页面时，已点赞的帖子都重新触发一次庆祝动效
+    const [hasInteracted, setHasInteracted] = React.useState(false)
 
     // 气泡效果配置 (径向发散 - 细腻 90px 版)
     const bubbleVariants = {
@@ -30,21 +32,20 @@ const JellyLikeButton: React.FC<JellyLikeButtonProps> = ({ isLiked, onClick, cou
         }
     }
 
-    // 这种水滴形状与 App 统一
-    const DROPLET_SHAPE = "50% 50% 50% 50% / 60% 60% 43% 43%"
-
     const handleClick = (e: React.MouseEvent) => {
+        setHasInteracted(true)
         onClick(e)
     }
 
     return (
         <div className="flex flex-col items-center gap-1.5 relative select-none">
             {/* 细腻径向气泡层 - 90px */}
+            {/* [修改] 只有在交互过且当前是点赞状态时才展示粒子 */}
             <div
                 key={isLiked ? 'particles-on' : 'particles-off'}
                 className="absolute top-[23px] left-1/2 -translate-x-1/2 w-0 h-0 pointer-events-none z-0"
             >
-                {isLiked && [...Array(30)].map((_, i) => (
+                {hasInteracted && isLiked && [...Array(30)].map((_, i) => (
                     <motion.div
                         key={`${i}-${isLiked}`}
                         custom={i}
@@ -60,7 +61,8 @@ const JellyLikeButton: React.FC<JellyLikeButtonProps> = ({ isLiked, onClick, cou
                 whileHover={{ scale: 1.15 }}
                 whileTap={{ scale: 0.8 }}
                 onClick={handleClick}
-                animate={isLiked ? {
+                // [修改] 只有在交互过且点赞时才触发跳动效果
+                animate={(hasInteracted && isLiked) ? {
                     scale: [0.8, 1.25, 0.9, 1.1, 1],
                     y: [0, -10, 0], // 跳动效果
                 } : { scale: 1, y: 0 }}

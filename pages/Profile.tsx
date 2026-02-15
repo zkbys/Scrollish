@@ -415,13 +415,13 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                     onClick={() => handlePostClick(post)}
                     className="group glass-card-premium overflow-hidden flex flex-col transition-all duration-300 active:scale-95 shadow-sm hover:shadow-lg cursor-pointer">
                     <div className="aspect-square w-full bg-gray-100 dark:bg-black overflow-hidden relative">
-                      {post.video_url ? (
-                        <video src={post.video_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
+                      {((post as any).video_url || (post as any).videoUrl) ? (
+                        <video src={(post as any).video_url || (post as any).videoUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
                       ) : (
-                        <div className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url("${post.image_url}")` }} />
+                        <div className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url("${(post as any).image_url || (post as any).image}")` }} />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                      {post.video_url && (
+                      {((post as any).video_url || (post as any).videoUrl) && (
                         <div className="absolute top-2 right-2 size-[clamp(1.5rem,3.5dvh,1.75rem)] bg-white/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/60">
                           <span className="material-symbols-outlined text-white text-[clamp(14px,1.8dvh,18px)] font-bold">play_arrow</span>
                         </div>
@@ -430,10 +430,10 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                     <div className="p-[clamp(0.5rem,1.2dvh,0.75rem)] flex flex-col justify-between flex-grow">
                       <div>
                         <span className="inline-block px-1.5 py-0.5 rounded-md bg-orange-100/60 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[clamp(8px,1dvh,9.5px)] font-black uppercase mb-1 border border-orange-200/50 dark:border-orange-500/20">
-                          r/{post.subreddit || 'Reddit'}
+                          r/{(post as any).subreddit || 'Reddit'}
                         </span>
                         <p className="text-gray-900 dark:text-white text-[clamp(10px,1.3dvh,12px)] font-extrabold leading-snug line-clamp-2">
-                          {post.title_en}
+                          {(post as any).title_en || (post as any).titleEn}
                         </p>
                       </div>
                       <p className="text-gray-400 dark:text-white/30 text-[clamp(8px,1dvh,9px)] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">
@@ -462,13 +462,13 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                     onClick={() => handlePostClick(item.post)}
                     className="group glass-card-premium overflow-hidden flex flex-col transition-all duration-300 active:scale-95 shadow-sm hover:shadow-lg cursor-pointer">
                     <div className="aspect-square w-full bg-gray-100 dark:bg-black overflow-hidden relative">
-                      {item.post.video_url ? (
-                        <video src={item.post.video_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
+                      {((item.post as any).video_url || (item.post as any).videoUrl) ? (
+                        <video src={(item.post as any).video_url || (item.post as any).videoUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" muted />
                       ) : (
-                        <div className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url("${item.post.image_url}")` }} />
+                        <div className="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url("${(item.post as any).image_url || (item.post as any).image}")` }} />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                      {item.post.video_url && (
+                      {((item.post as any).video_url || (item.post as any).videoUrl) && (
                         <div className="absolute top-2 right-2 size-[clamp(1.5rem,3.5dvh,1.75rem)] bg-white/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/60">
                           <span className="material-symbols-outlined text-white text-[clamp(14px,1.8dvh,18px)] font-bold">play_arrow</span>
                         </div>
@@ -477,10 +477,10 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                     <div className="p-[clamp(0.5rem,1.2dvh,0.75rem)] flex flex-col justify-between flex-grow">
                       <div>
                         <span className="inline-block px-1.5 py-0.5 rounded-md bg-purple-100/60 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 text-[clamp(8px,1dvh,9.5px)] font-black uppercase mb-1 border border-purple-200/50 dark:border-purple-500/20">
-                          r/{item.post.subreddit || 'Reddit'}
+                          r/{(item.post as any).subreddit || 'Reddit'}
                         </span>
                         <p className="text-gray-900 dark:text-white text-[clamp(10px,1.3dvh,12px)] font-extrabold leading-snug line-clamp-2">
-                          {item.post.title_en}
+                          {(item.post as any).title_en || (item.post as any).titleEn}
                         </p>
                       </div>
                       <p className="text-gray-400 dark:text-white/30 text-[clamp(8px,1dvh,9px)] font-bold mt-2 flex items-center gap-1 uppercase tracking-tight">

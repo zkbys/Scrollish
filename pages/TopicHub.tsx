@@ -14,6 +14,7 @@ import MessageBubble from '../components/MessageBubble'
 import WordDetailOverlay from '../components/WordDetailOverlay'
 import { useUserStore } from '../store/useUserStore'
 import { Comment } from '../types'
+import InteractiveText from '../components/InteractiveText'
 
 interface TopicHubProps {
   onNavigate: (page: Page) => void
@@ -389,8 +390,12 @@ const TopicHub: React.FC<TopicHubProps> = ({
           <span className="text-white/80 text-[10px] font-bold uppercase tracking-widest">
             {post.subreddit}
           </span>
-          <h1 className="text-white text-xl font-black leading-tight line-clamp-2 mt-1">
-            {post.titleEn}
+          <h1 className="text-white text-xl font-black leading-tight line-clamp-2 mt-1 pointer-events-auto">
+            <InteractiveText
+              text={post.titleEn || post.title_en || ''}
+              contextSentence={post.titleEn || post.title_en || ''}
+              externalOnClick={handleWordClick}
+            />
           </h1>
         </div>
         <button

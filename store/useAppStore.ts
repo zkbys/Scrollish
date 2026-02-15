@@ -26,6 +26,7 @@ interface AppState {
   currentFilters: { communityId?: string; followedIds?: string[] } | null
   homeActiveTab: 'following' | 'foryou'
   isRestoring: boolean
+  lastLoadTime: number // 上次加载成功的时间戳
 
   // Actions
   initFeed: (filters?: { communityId?: string; followedIds?: string[] }) => Promise<void>
@@ -48,6 +49,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentFilters: null,
   homeActiveTab: 'foryou',
   isRestoring: false,
+  lastLoadTime: 0,
 
   initFeed: async (filters) => {
     const isFiltered = !!(filters?.communityId || filters?.followedIds?.length)
@@ -76,9 +78,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           .order('created_at', { ascending: false })
           .limit(20))
       } else {
-        // [优化] 随机采样代替固定 Top 30，解决重复刷新问题
+        // [优化] 增大采样池到 100，确保去重后依然有足够的条数返回
         ; ({ data, error } = await supabase.rpc('get_random_posts', {
-          limit_count: 40,
+          limit_count: 100,
         }))
       }
 
@@ -98,11 +100,17 @@ export const useAppStore = create<AppState>((set, get) => ({
             return shuffled
           }
 
+          // [逻辑升级] 1. 过滤掉已经看过的
           const unviewedPosts = data.filter(p => !viewedPostIds.includes(p.id))
-          const viewedPosts = data.filter(p => viewedPostIds.includes(p.id))
 
-          // 优先展示未看过的随机内容
-          finalPosts = [...shuffleArray(unviewedPosts), ...shuffleArray(viewedPosts)]
+          if (unviewedPosts.length >= 20) {
+            // 数量足够，只选没看过的
+            finalPosts = shuffleArray(unviewedPosts).slice(0, 20)
+          } else {
+            // 数量不足，用池子里的其他数据补齐到 20 条，确保刷得爽
+            const otherPosts = shuffleArray(data.filter(p => !unviewedPosts.some(uv => uv.id === p.id)))
+            finalPosts = [...shuffleArray(unviewedPosts), ...otherPosts.slice(0, 20 - unviewedPosts.length)]
+          }
         }
 
         set({ posts: finalPosts, hasLoaded: !isFiltered, currentPostIndex: 0 })
@@ -136,9 +144,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           .order('created_at', { ascending: false })
           .limit(20))
       } else {
-        // [优化] 刷新也使用随机 RPC
+        // [优化] 刷新也使用 100 采样池
         ; ({ data, error } = await supabase.rpc('get_random_posts', {
-          limit_count: 40,
+          limit_count: 100,
         }))
       }
 
@@ -159,10 +167,16 @@ export const useAppStore = create<AppState>((set, get) => ({
             return shuffled
           }
           const unviewedPosts = data.filter(p => !viewedPostIds.includes(p.id))
-          const viewedPosts = data.filter(p => viewedPostIds.includes(p.id))
-          finalPosts = [...shuffleArray(unviewedPosts), ...shuffleArray(viewedPosts)]
+
+          if (unviewedPosts.length >= 20) {
+            finalPosts = shuffleArray(unviewedPosts).slice(0, 20)
+          } else {
+            // 补齐 20 条
+            const otherPosts = shuffleArray(data.filter(p => !unviewedPosts.some(uv => uv.id === p.id)))
+            finalPosts = [...shuffleArray(unviewedPosts), ...otherPosts.slice(0, 20 - unviewedPosts.length)]
+          }
         }
-        set({ posts: finalPosts })
+        set({ posts: finalPosts, currentPostIndex: 0 })
       }
     } catch (err) {
       console.error('Feed refresh failed:', err)
@@ -172,7 +186,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadMore: async (filters) => {
-    if (get().isLoadingMore || get().isLoading) return
+    // [优化] 增加 5 秒载入冷却时间，防止在底部停留导致的连续触发
+    const now = Date.now()
+    if (get().isLoadingMore || get().isLoading || (now - get().lastLoadTime < 5000)) return
 
     set({ isLoadingMore: true })
     try {
@@ -197,17 +213,49 @@ export const useAppStore = create<AppState>((set, get) => ({
             .order('created_at', { ascending: false })
             .limit(10))
       } else {
+        // [优化] 采样池扩大到 100
         ; ({ data, error } = await supabase.rpc('get_random_posts', {
-          limit_count: 10,
+          limit_count: 100,
         }))
       }
 
       if (error) throw error
 
       if (data && data.length > 0) {
-        set((state) => ({
-          posts: [...state.posts, ...data],
-        }))
+        // [修复] 处理浏览器环境中的动态导入
+        const { useUserStore } = await import('./useUserStore')
+        const viewedPostIds = useUserStore.getState().viewedPostIds
+
+        set((state) => {
+          // 1. 严格过滤：既不在当前列表，也没看过
+          const strictNewPosts = data.filter(
+            p => !viewedPostIds.includes(p.id) &&
+              !state.posts.some(existing => existing.id === p.id)
+          )
+
+          // 2. 兜底逻辑：如果不重复于当前 Session，即便看过也可以再次出现
+          const sessionNewPosts = data.filter(
+            p => !state.posts.some(existing => existing.id === p.id)
+          )
+
+          // 3. 填充逻辑：目标追加 20 条
+          let finalNewData = []
+          if (strictNewPosts.length >= 20) {
+            finalNewData = strictNewPosts.slice(0, 20)
+          } else if (sessionNewPosts.length > 0) {
+            // 用 sessionNewPosts 补齐
+            const remaining = 20 - strictNewPosts.length
+            finalNewData = [...strictNewPosts, ...sessionNewPosts.slice(0, remaining)]
+          } else {
+            // 全库全 Session 刷完的极端兜底
+            finalNewData = data.slice(0, 20)
+          }
+
+          return {
+            posts: [...state.posts, ...finalNewData],
+            lastLoadTime: Date.now(),
+          }
+        })
       }
     } catch (err) {
       console.error('Load more failed:', err)

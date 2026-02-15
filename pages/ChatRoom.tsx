@@ -653,11 +653,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           </span>
         </div>
         <button
-          onClick={() => setShowSettings(true)}
-          className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-2xl"
+          className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-2xl opacity-40 cursor-not-allowed"
           style={{ borderRadius: DROPLET_SHAPE }}>
           <span className="material-symbols-outlined text-white text-[20px]">
-            tune
+            lock
           </span>
         </button>
       </div>

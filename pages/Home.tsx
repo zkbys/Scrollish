@@ -34,27 +34,28 @@ const Home: React.FC<HomeProps> = ({
 }) => {
   const {
     posts,
-    initFeed,
-    refreshFeed,
-    loadMore,
     isLoading,
     isLoadingMore,
     currentPostIndex,
-    setCurrentPostIndex,
     homeActiveTab,
-    setHomeActiveTab,
     isRestoring,
+    lastLoadTime, // [新增] 连动 cooldown
+    initFeed,
+    loadMore,
+    refreshFeed, // Keep refreshFeed
+    setCurrentPostIndex,
+    setHomeActiveTab,
   } = useAppStore()
 
   const { followedCommunities } = useUserStore()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  const [isReady, setIsReady] = useState(() => {
-    return !(posts.length > 0 && currentPostIndex > 0)
-  })
-
+  const [isReady, setIsReady] = useState(false)
   const [pullY, setPullY] = useState(0)
+  const [pushY, setPushY] = useState(0) // [新增] 底部回弹位移
+  const [isTouching, setIsTouching] = useState(false) // [新增] 是否正在触摸，用于控制 Transition
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [cooldownRemaining, setCooldownRemaining] = useState(0) // [新增] 展示剩余秒数
   const touchStartRef = useRef(0)
 
   const getFilters = useCallback(() => {
@@ -82,14 +83,23 @@ const Home: React.FC<HomeProps> = ({
       if (posts.length > 0 && currentPostIndex > 0) {
         const rowHeight = container.clientHeight
         if (rowHeight > 0) {
-          container.scrollTop = currentPostIndex * rowHeight
-          // 额外检查一下是否滚动到位了，CSS Snap 可能会干扰
+          // [优化] 使用 behavior: 'auto' 强制瞬时跳转，配合移除 scroll-smooth
+          container.scrollTo({
+            top: currentPostIndex * rowHeight,
+            behavior: 'auto'
+          })
+
+          // 额外检查一下是否滚动到位了
           if (Math.abs(container.scrollTop - currentPostIndex * rowHeight) > 5) {
-            container.scrollTo({ top: currentPostIndex * rowHeight })
+            container.scrollTo({
+              top: currentPostIndex * rowHeight,
+              behavior: 'auto'
+            })
           }
-          setIsReady(true)
+
+          // 给浏览器一个微小的渲染帧（毫秒级），确保内容重排后再显示，防止闪烁
+          requestAnimationFrame(() => setIsReady(true))
         } else {
-          // 如果高度还没准备好，下一帧再试
           requestAnimationFrame(restoreScroll)
         }
       } else {
@@ -129,10 +139,14 @@ const Home: React.FC<HomeProps> = ({
       if (isLoading || isLoadingMore) return
       if (observer.current) observer.current.disconnect()
 
+      // [优化] 增加 rootMargin，在距离底部还有 150% 屏高时就提前触发加载
+      // 这样用户还没滑到最后一条，新内容多半已经到了
       observer.current = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting) {
           loadMore(getFilters())
         }
+      }, {
+        rootMargin: '150% 0px'
       })
       if (node) observer.current.observe(node)
     },
@@ -147,26 +161,68 @@ const Home: React.FC<HomeProps> = ({
     }
   }
 
+  // [新增] 处理 5s 冷却倒计时
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now()
+      const diff = 5000 - (now - lastLoadTime)
+      if (diff > 0) {
+        setCooldownRemaining(Math.ceil(diff / 1000))
+      } else {
+        setCooldownRemaining(0)
+      }
+    }, 500)
+    return () => clearInterval(timer)
+  }, [lastLoadTime])
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    setPullY(80) // 保持刷新动画
+    await refreshFeed(getFilters())
+    // [修复] 刷新后立即回到顶部
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'auto' })
+    setIsRefreshing(false)
+    setPullY(0)
+  }
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (scrollContainerRef.current?.scrollTop === 0) {
-      touchStartRef.current = e.touches[0].clientY
-    }
+    touchStartRef.current = e.touches[0].clientY
+    setIsTouching(true) // 开始触摸，禁用 Transition 提高响应速度
   }
   const handleTouchMove = (e: React.TouchEvent) => {
-    const touchY = e.touches[0].clientY
-    const diff = touchY - touchStartRef.current
-    if (scrollContainerRef.current?.scrollTop === 0 && diff > 0) {
-      setPullY(Math.min(diff / 2.5, 120))
+    const currentY = e.touches[0].clientY
+    const startY = touchStartRef.current
+    const deltaY = currentY - startY
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    // 顶部下拉（刷新）
+    if (container.scrollTop <= 0 && deltaY > 0) {
+      setPullY(Math.min(deltaY * 0.5, 80))
+      setPushY(0) // 确保底部回弹归零
+    }
+    // [新增] 底部上拉（回弹/加载）
+    else if (
+      container.scrollTop + container.clientHeight >= container.scrollHeight - 5 &&
+      deltaY < 0
+    ) {
+      // deltaY 是负数，取绝对值并乘以阻尼
+      setPushY(Math.min(Math.abs(deltaY) * 0.5, 80))
+      setPullY(0) // 确保顶部下拉归零
+    }
+    else {
+      setPullY(0)
+      setPushY(0)
     }
   }
-  const handleTouchEnd = async () => {
-    if (pullY > 80) {
-      setIsRefreshing(true)
-      setPullY(80)
-      await refreshFeed(getFilters())
-      setIsRefreshing(false)
+
+  const handleTouchEnd = () => {
+    setIsTouching(false) // 结束触摸，恢复 Transition 以便优雅回弹
+    if (pullY > 60 && !isLoading) {
+      handleRefresh()
     }
     setPullY(0)
+    setPushY(0)
     touchStartRef.current = 0
   }
 
@@ -334,16 +390,20 @@ const Home: React.FC<HomeProps> = ({
       {renderEmptyState() || (
         <div
           ref={scrollContainerRef}
-          className={`h-full overflow-y-auto snap-y snap-mandatory no-scrollbar pb-0 overscroll-x-none select-none ${isReady ? 'opacity-100' : 'opacity-0'} ${isLoading ? 'pointer-events-none' : ''}`}
+          className={`h-full w-full overflow-y-auto overflow-x-hidden snap-y snap-mandatory hide-scrollbar bg-black overscroll-none ${isReady ? 'opacity-100' : 'opacity-0'
+            } ${isLoading ? 'pointer-events-none' : ''} ${isTouching ? '' : 'transition-transform duration-300 ease-out'
+            }`}
+          style={{
+            transform: `translateY(${pullY - pushY}px)`,
+            overscrollBehavior: 'none'
+          }}
           onScroll={isLoading ? undefined : handleScroll}
           onTouchStart={isLoading ? undefined : handleTouchStart}
           onTouchMove={isLoading ? undefined : handleTouchMove}
-          onTouchEnd={isLoading ? undefined : handleTouchEnd}
-          style={{ transform: `translateY(${pullY > 0 ? pullY / 3 : 0}px)` }}>
+          onTouchEnd={isLoading ? undefined : handleTouchEnd}>
           {posts.map((post, index) => (
             <div
               key={`${post.id}-${index}`}
-              ref={index === posts.length - 3 ? lastPostElementRef : null}
               className="h-full w-full snap-start relative"
               style={{ scrollSnapStop: 'always' }}>
               <FeedItem
@@ -357,22 +417,49 @@ const Home: React.FC<HomeProps> = ({
             </div>
           ))}
 
-          {posts.length > 0 && (
-            <div
-              className="h-20 w-full flex items-center justify-center snap-start bg-gray-50 dark:bg-black/50 transition-colors"
-              style={{ scrollSnapStop: 'always' }}>
-              {isLoadingMore ? (
-                <div className="flex items-center gap-2 text-gray-400 dark:text-white/50 text-xs font-bold uppercase tracking-widest">
-                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                  Loading More...
+          {/* 底部加载占位与触发锚点 - 移除 snap-start 防止位置被“锁死” */}
+          <div
+            ref={lastPostElementRef}
+            className="w-full flex flex-col items-center justify-center bg-black gap-2 px-10 transition-all duration-500"
+            style={{
+              // 这里不再 snap，让用户自由滚动到新内容
+              height: (isLoadingMore || cooldownRemaining > 0) ? '20vh' : '5vh',
+              opacity: (isLoadingMore || (cooldownRemaining > 0 && pushY > 10)) ? 1 : 0
+            }}>
+            {isLoadingMore ? (
+              <div className="flex items-center gap-2 text-white/50 text-xs font-bold uppercase tracking-widest">
+                <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                Loading More...
+              </div>
+            ) : cooldownRemaining > 0 ? (
+              <div className="flex flex-col items-center gap-2">
+                <div className="text-white/30 text-[10px] font-medium uppercase tracking-tighter">
+                  Wait {cooldownRemaining}s to load more
                 </div>
-              ) : (
-                <div className="text-gray-300 dark:text-white/20 text-[10px]">
-                  - End of Feed -
+                <div className="w-20 h-1 bg-white/10 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-orange-500"
+                    initial={{ width: '100%' }}
+                    animate={{ width: '0%' }}
+                    transition={{ duration: cooldownRemaining, ease: "linear" }}
+                  />
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            ) : (
+              <div className="text-white/40 text-[10px] font-bold uppercase tracking-widest">
+                Pull up to load
+              </div>
+            )}
+
+            {homeActiveTab !== 'foryou' && !isLoadingMore && posts.length > 0 && cooldownRemaining === 0 && (
+              <div className="text-white/20 text-[10px] mt-2">
+                - End of Feed -
+              </div>
+            )}
+          </div>
+
+          {/* 底部额外留白，同样不使用 snap-start */}
+          <div className="h-40 w-full bg-black" />
         </div>
       )}
     </div>
@@ -408,19 +495,23 @@ export const FeedItem: React.FC<{
     const isSubscribed = post.community_id
       ? isFollowing(post.community_id)
       : false
+
+    // [增强] 字段容错：优先使用数据库原始字段名，兼容 UI 映射后的字段名
     const initialLikes =
       typeof post.upvotes === 'number' ? post.upvotes : parseInt(post.likes) || 0
+    const imageUrl = post.image_url || post.image || ''
+    const videoUrl = post.video_url || post.videoUrl || null
+    const titleEn = post.title_en || post.titleEn || ''
+    const titleCn = post.title_cn || post.titleZh || ''
+    const subreddit = post.subreddit || 'Community'
+    const commentCount = post.comments || post.comment_count || 0
+
     const [likes, setLikes] = useState(initialLikes)
     const videoRef = useRef<HTMLVideoElement>(null)
     const [videoError, setVideoError] = useState(false)
     const [imageLoaded, setImageLoaded] = useState(false)
 
-    const hasVideo = !!(post.videoUrl || post.video_url) && !videoError
-    const imageUrl = post.image_url || post.image || ''
-    const titleEn = post.title_en || post.titleEn || ''
-    const titleCn = post.title_cn || post.titleZh || ''
-    const subreddit = post.subreddit || 'Community'
-    const commentCount = post.comments || post.comment_count || 0
+    const hasVideo = !!videoUrl && !videoError
 
     const handleToggleSub = (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -516,13 +607,13 @@ export const FeedItem: React.FC<{
             {hasVideo ? (
               <video
                 ref={videoRef}
-                src={post.videoUrl || post.video_url}
+                src={videoUrl || ''}
                 className="h-full w-full object-cover"
                 style={{ objectPosition: 'center 35%' }}
                 loop
                 muted
                 playsInline
-                preload="none"
+                preload={isActive ? "auto" : "metadata"}
                 onError={() => setVideoError(true)}
               />
             ) : (
@@ -553,7 +644,7 @@ export const FeedItem: React.FC<{
 
                 <motion.img
                   src={imageUrl}
-                  loading="lazy"
+                  loading={isActive ? "eager" : "lazy"}
                   onLoad={() => setImageLoaded(true)}
                   className={`absolute inset-0 w-full h-full object-contain z-10 drop-shadow-2xl transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                   style={{ objectPosition: 'center 35%' }}

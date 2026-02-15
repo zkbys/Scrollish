@@ -24,16 +24,40 @@ const InteractiveText: React.FC<
 
     const segments = useMemo(() => {
       if (!text) return []
-      try {
-        // @ts-ignore
-        const segmenter = new Intl.Segmenter('en', { granularity: 'word' })
-        return [...segmenter.segment(text)]
-      } catch (e) {
-        return text.split(/(\s+|[.,!?;:"'()])/).map((s) => ({
-          segment: s,
-          isWordLike: /^[a-zA-Z0-9'-]+$/.test(s),
-        }))
-      }
+
+      // 1. [新增] 识别 *text* 格式并标记为加粗，但不拆分单词
+      const boldRegex = /(\*[^*]+\*)/g
+      const rawSegments = text.split(boldRegex)
+
+      const finalSegments: { segment: string; isWordLike: boolean; isBold: boolean }[] = []
+
+      rawSegments.forEach((piece) => {
+        const isBold = piece.startsWith('*') && piece.endsWith('*')
+        // 去除星号
+        const cleanPiece = isBold ? piece.slice(1, -1) : piece
+
+        // 2. 对每一段进行词法分割
+        const subSegments: { segment: string; isWordLike: boolean }[] = []
+        try {
+          // @ts-ignore
+          const segmenter = new Intl.Segmenter('en', { granularity: 'word' })
+          subSegments.push(...[...segmenter.segment(cleanPiece)].map(s => ({
+            segment: s.segment,
+            isWordLike: s.isWordLike
+          })))
+        } catch (e) {
+          subSegments.push(...cleanPiece.split(/(\s+|[.,!?;:"'()])/).map((s) => ({
+            segment: s,
+            isWordLike: /^[a-zA-Z0-9'-]+$/.test(s),
+          })))
+        }
+
+        subSegments.forEach(sub => {
+          finalSegments.push({ ...sub, isBold })
+        })
+      })
+
+      return finalSegments
     }, [text])
 
     const handleWordClick = async (word: string) => {
@@ -56,9 +80,10 @@ const InteractiveText: React.FC<
         {segments.map((seg, i) => {
           const word = seg.segment
           const isWord = seg.isWordLike
+          const isBold = seg.isBold
           const finalContext = contextSentence || text
           const contextKey = finalContext.trim().slice(0, 30)
-          const cacheKey = `${word}:${contextKey}`
+          // const cacheKey = `${word}:${contextKey}`
 
           const isLoading = isAnalyzing(word, finalContext)
           // [核心修复] 划线逻辑关联到全局词书，而非特定语境缓存
@@ -80,10 +105,11 @@ const InteractiveText: React.FC<
                   e.stopPropagation()
                 }}
                 className={`
-                relative inline-block select-none -webkit-user-select-none ${disabled ? '' : 'cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5 hover:bg-white/10 active:scale-95'}
-                ${!disabled && isLoading ? 'animate-pulse text-orange-400/80' : ''} 
-                ${!disabled && isStarred ? 'decoration-green-500 decoration-wavy underline underline-offset-4 decoration-2' : ''}
-              `}>
+              relative inline-block select-none -webkit-user-select-none ${disabled ? '' : 'cursor-pointer transition-all duration-200 rounded-sm px-0.5 -mx-0.5 hover:bg-white/10 active:scale-95'}
+              ${!disabled && isLoading ? 'animate-pulse text-orange-400/80' : ''} 
+              ${!disabled && isStarred ? 'decoration-green-500 decoration-wavy underline underline-offset-4 decoration-2' : ''}
+              ${isBold ? 'font-black' : ''}
+            `}>
                 {word}
                 {isLoading && (
                   <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-orange-500/50 animate-progress-line" />
@@ -91,7 +117,7 @@ const InteractiveText: React.FC<
               </span>
             )
           }
-          return <span key={i}>{word}</span>
+          return <span key={i} className={isBold ? 'font-black' : ''}>{word}</span>
         })}
 
         <style>{`

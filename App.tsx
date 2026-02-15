@@ -116,9 +116,10 @@ const App: React.FC = () => {
       store.restoreSavedPosition()
 
       // 在导航完成后，延迟关闭恢复状态，等待 DOM 渲染和滚动锁定。
+      // [优化] 由于 Home 现在跳转是瞬时的，缩短锁定时长。
       setTimeout(() => {
         useAppStore.getState().setIsRestoring(false)
-      }, 500)
+      }, 200)
     }
 
     // 处理实际导航和滑动方向
@@ -143,7 +144,7 @@ const App: React.FC = () => {
 
   // 2. [新增/重命名] 进入预览页 (用于 Explore 和 Profile)
   // 这实现了"点击进入显示类似于首页那样的页面"的需求
-  const handlePostPreview = (post: Post) => {
+  const handlePostPreview = (post: any) => {
     setViewingPost(post)
     navigateTo(Page.Preview)
   }

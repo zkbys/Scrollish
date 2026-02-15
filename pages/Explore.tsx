@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 interface ExploreProps {
   onNavigate?: (page: Page) => void
-  onPostSelect?: (post: Post) => void
+  onPostSelect?: (post: any) => void
   onCommunitySelect?: (community: any) => void
 }
 
@@ -284,22 +284,7 @@ const Explore: React.FC<ExploreProps> = ({
 
   const handlePostClick = (rawPost: any) => {
     if (onPostSelect) {
-      onPostSelect({
-        id: rawPost.id,
-        user: rawPost.author || rawPost.subreddit || 'Anonymous',
-        avatar: IMAGES.avatar1,
-        titleEn: rawPost.title_en,
-        titleZh: rawPost.title_cn || '',
-        hashtags: [],
-        image: rawPost.image_url || IMAGES.london,
-        videoUrl: rawPost.video_url || null,
-        likes: rawPost.upvotes?.toString() || '0',
-        stars: '0',
-        comments: 0,
-        image_type: rawPost.image_type,
-        subreddit: rawPost.subreddit,
-        community_id: rawPost.community_id,
-      })
+      onPostSelect(rawPost)
     }
   }
 
@@ -590,16 +575,6 @@ const Explore: React.FC<ExploreProps> = ({
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80" />
                     </div>
-                    {post.image_type === 'generated' && (
-                      <div className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-2.5 py-1 bg-black/30 backdrop-blur-md rounded-full border border-white/10">
-                        <span className="material-symbols-outlined text-[12px] text-orange-500">
-                          auto_awesome
-                        </span>
-                        <span className="text-[9px] font-black text-white/90 uppercase tracking-tighter">
-                          AI Art
-                        </span>
-                      </div>
-                    )}
                     <div className="absolute bottom-5 left-5 right-5 z-20">
                       <p className="text-[clamp(13px,1.9dvh,15px)] font-black text-white leading-snug tracking-tight line-clamp-1 drop-shadow-md">
                         {post.title_en}
