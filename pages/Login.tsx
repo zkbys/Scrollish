@@ -10,7 +10,7 @@ import { useUserStore } from '../store/useUserStore';
 
 interface LoginProps {
     onNavigate: (page: Page) => void;
-    onLoginSuccess: (user: any) => void;
+    onLoginSuccess: (user: any) => void | Promise<void>;
 }
 
 const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
@@ -24,6 +24,15 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
     const [error, setError] = useState<string | null>(null);
     const [showSupportQR, setShowSupportQR] = useState(false);
     const [isPreloading, setIsPreloading] = useState(false);
+    const { currentUser } = useUserStore();
+
+    // [新增] 路由守卫保底：如果 App.tsx 已经检测到登录但 Login 页还卡在 preloading，强行触发成功回调
+    React.useEffect(() => {
+        if (currentUser && isPreloading) {
+            console.log('[Login] Auth detected in store, unblocking preloading screen');
+            onLoginSuccess(currentUser);
+        }
+    }, [currentUser, isPreloading]);
 
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -49,36 +58,29 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                     // useUserStore.getState().login(user);
 
                     try {
-                        const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000)); // 至少持继 2 秒
+                        const preloadingTimeout = 5000; // 5秒强行跳过预加载，防止卡死
+                        const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000));
 
-                        // [修复] 手动拉取 Profile
-                        const fetchProfilePromise = supabase
-                            .from('profiles')
-                            .select('*')
-                            .eq('id', user.id)
-                            .single()
-                            .then(({ data }) => {
-                                if (data) {
-                                    useUserStore.getState().setProfile(data);
-                                }
-                            });
-
+                        // [优化] 增加超时保护，防止图片加载慢导致一直卡在 Loading 界面
                         const tasks = [
                             preloadImages([
                                 IMAGES.london,
                                 IMAGES.avatar1,
                                 IMAGES.grammar,
                                 getAssetPath('/dopa_logo.png')
-                            ]),
-                            fetchProfilePromise,
+                            ]).catch(err => console.warn('Images preloading failed:', err)),
                             minLoadingTime
                         ];
-                        await Promise.all(tasks);
+
+                        await Promise.race([
+                            Promise.all(tasks),
+                            new Promise(resolve => setTimeout(resolve, preloadingTimeout)) // [修复] 真正的 5s 超时兜底
+                        ]);
                     } catch (e) {
-                        console.warn('Preloading failed, proceeding anyway', e);
-                        // 即使预加载失败，也要保证最小展示时间
-                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        console.warn('Preloading phase encountered an issue:', e);
                     }
+
+                    console.log('[Login] Preloading done, triggering success navigation');
                     onLoginSuccess(user);
                 }
             } else {
@@ -130,28 +132,16 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
 
                     try {
                         // 预加载 Onboarding 和首页核心资源
-                        const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000)); // 至少持继 2 秒
+                        const minLoadingTime = new Promise(resolve => setTimeout(resolve, 2000)); // 至少持续 2 秒
 
-                        // [修复] 手动拉取 Profile
-                        const fetchProfilePromise = supabase
-                            .from('profiles')
-                            .select('*')
-                            .eq('id', user.id)
-                            .single()
-                            .then(({ data }) => {
-                                if (data) {
-                                    useUserStore.getState().setProfile(data);
-                                }
-                            });
-
+                        // [优化] 减少冗余 Profile 拉取，只做最小必要的预加载
                         const tasks = [
                             preloadImages([
                                 IMAGES.london,
                                 IMAGES.avatar1,
                                 IMAGES.grammar,
                                 getAssetPath('/dopa_logo.png')
-                            ]),
-                            fetchProfilePromise,
+                            ]).catch(err => console.warn('Images preloading failed:', err)),
                             minLoadingTime
                         ];
                         await Promise.all(tasks);
@@ -160,8 +150,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                         // 即使预加载失败，也要保证最小展示时间
                         await new Promise(resolve => setTimeout(resolve, 2000));
                     }
-
-                    onLoginSuccess(user);
+                    await onLoginSuccess(user);
                     // 提示用户：如果开启了邮箱验证，可能需要去邮箱点击确认
                     if (!user.identities || user.identities.length === 0) {
                         setError('账号已创建，但需要检查您的邮箱点击确认链接。');
@@ -191,7 +180,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
     };
 
     return (
-        <div className="h-screen h-[100dvh] w-full bg-[#0B0A09] flex flex-col items-center justify-center p-6 overflow-hidden relative font-sans">
+        <div className="h-screen h-[100vh] w-full bg-[#0B0A09] flex flex-col items-center justify-center p-6 overflow-hidden relative font-sans">
             {/* --- Preloading Overlay --- */}
             <AnimatePresence>
                 {isPreloading && (
@@ -233,10 +222,10 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 className="w-full max-w-sm z-10"
             >
                 {/* Brand Header */}
-                <div className="mb-[clamp(0.75rem,3dvh,1.5rem)] text-center">
+                <div className="mb-[clamp(0.75rem,3vh,1.5rem)] text-center">
                     <motion.div
                         {...BUTTON_SPRING}
-                        className="inline-flex items-center justify-center w-[clamp(3.5rem,12dvh,5.5rem)] h-[clamp(3.5rem,12dvh,5.5rem)] bg-transparent rounded-full mb-[clamp(0.4rem,1.5dvh,0.75rem)] shadow-2xl border border-white/10 overflow-hidden"
+                        className="inline-flex items-center justify-center w-[clamp(3.5rem,12vh,5.5rem)] h-[clamp(3.5rem,12vh,5.5rem)] bg-transparent rounded-full mb-[clamp(0.4rem,1.5vh,0.75rem)] shadow-2xl border border-white/10 overflow-hidden"
                     >
                         <img
                             src={getAssetPath('/dopa_logo.png')}
@@ -244,19 +233,19 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             className="w-full h-full object-cover scale-110"
                         />
                     </motion.div>
-                    <h1 className="text-[clamp(1.5rem,4dvh,2.25rem)] font-black text-white mb-0.5 tracking-tighter italic leading-none">
+                    <h1 className="text-[clamp(1.5rem,4vh,2.25rem)] font-black text-white mb-0.5 tracking-tighter italic leading-none">
                         Scrollish
                     </h1>
-                    <p className="text-[clamp(9px,1.2dvh,11px)] text-white/40 font-medium tracking-widest uppercase">
+                    <p className="text-[clamp(9px,1.2vh,11px)] text-white/40 font-medium tracking-widest uppercase">
                         Insight Through <span className="text-primary">Scrolling</span>
                     </p>
                 </div>
 
                 {/* Main Glass Card */}
-                <div className="bg-white/[0.03] backdrop-blur-2xl px-[clamp(1rem,3dvh,1.75rem)] pt-[clamp(1.25rem,4dvh,2rem)] pb-[clamp(0.75rem,2dvh,1.25rem)] rounded-[2.5rem] border border-white/[0.08] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden">
+                <div className="bg-white/[0.03] backdrop-blur-2xl px-[clamp(1rem,3vh,1.75rem)] pt-[clamp(1.25rem,4vh,2rem)] pb-[clamp(0.75rem,2vh,1.25rem)] rounded-[2.5rem] border border-white/[0.08] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary/40 to-transparent"></div>
 
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-[clamp(0.5rem,2dvh,1rem)]">
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-[clamp(0.5rem,2vh,1rem)]">
                         {!isLogin && (
                             <div key="username">
                                 <label className="block text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2 ml-3">
@@ -268,7 +257,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                         required
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
-                                        className="w-full h-[clamp(2.5rem,7dvh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 shadow-inner"
+                                        className="w-full h-[clamp(2.5rem,7vh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 shadow-inner"
                                         placeholder="我们该如何称呼您？"
                                     />
                                 </div>
@@ -284,7 +273,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full h-[clamp(2.5rem,7dvh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none transition-all text-white font-medium placeholder:text-white/10 shadow-inner"
+                                className="w-full h-[clamp(2.5rem,7vh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none transition-all text-white font-medium placeholder:text-white/10 shadow-inner"
                                 placeholder="name@example.com"
                             />
                         </div>
@@ -320,7 +309,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full h-[clamp(2.5rem,7dvh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 pr-14 shadow-inner"
+                                    className="w-full h-[clamp(2.5rem,7vh,3.5rem)] px-6 bg-white/[0.05] border border-white/[0.05] focus:border-primary/50 focus:bg-white/[0.08] rounded-2xl outline-none text-white font-medium placeholder:text-white/10 pr-14 shadow-inner"
                                     placeholder="••••••••"
                                 />
                                 <button
@@ -339,7 +328,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             {...BUTTON_SPRING}
                             type="submit"
                             disabled={loading}
-                            className="w-full h-[clamp(3rem,8dvh,4rem)] bg-primary text-white font-black rounded-[1.25rem] shadow-[0_10px_30px_-5px_rgba(255,107,0,0.4)] mt-1 flex items-center justify-center gap-3 group overflow-hidden relative"
+                            className="w-full h-[clamp(3rem,8vh,4rem)] bg-primary text-white font-black rounded-[1.25rem] shadow-[0_10px_30px_-5px_rgba(255,107,0,0.4)] mt-1 flex items-center justify-center gap-3 group overflow-hidden relative"
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/15 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                             {loading ? (
@@ -358,8 +347,8 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                     </form>
 
                     {/* Support Button instead of social login */}
-                    <div className="mt-[clamp(0.8rem,1dvh,2rem)] flex flex-col items-center">
-                        <div className="w-full border-t border-white/[0.05] mb-[clamp(0.75rem,1dvh,1.5rem)]"></div>
+                    <div className="mt-[clamp(0.8rem,1vh,2rem)] flex flex-col items-center">
+                        <div className="w-full border-t border-white/[0.05] mb-[clamp(0.75rem,1vh,1.5rem)]"></div>
                         <button
                             type="button"
                             onClick={() => setShowSupportQR(true)}
@@ -372,7 +361,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                 </div>
 
                 {/* Aesthetic Footer */}
-                <div className="mt-[clamp(0.25rem,0.5dvh,0.75rem)] text-center text-xs text-white/30 font-bold uppercase tracking-widest">
+                <div className="mt-[clamp(0.25rem,0.5vh,0.75rem)] text-center text-xs text-white/30 font-bold uppercase tracking-widest">
                     <span>{isLogin ? "新用户？" : "已有账号？"}</span>
                     <button
                         type="button"
@@ -393,7 +382,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0 }}
-                            className="mt-[clamp(0.5rem,1.5dvh,1rem)] p-5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-black text-center tracking-tight"
+                            className="mt-[clamp(0.5rem,1.5vh,1rem)] p-5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-black text-center tracking-tight"
                         >
                             <div className="flex items-center justify-center gap-2">
                                 <span className="material-symbols-outlined text-sm">error</span>

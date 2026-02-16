@@ -17,10 +17,10 @@ const JellyCommentButton: React.FC<JellyCommentButtonProps> = ({ onClick, label 
                 whileTap={{ scale: 0.8 }}
                 onClick={onClick}
                 className="flex items-center justify-center transition-all duration-300 relative z-10 bg-transparent shadow-none"
-                style={{ borderRadius: DROPLET_SHAPE, width: 'clamp(2.2rem,5.5dvh,2.5rem)', height: 'clamp(2.2rem,5.5dvh,2.5rem)' }}
+                style={{ borderRadius: DROPLET_SHAPE, width: 'clamp(2.2rem,5.5vh,2.5rem)', height: 'clamp(2.2rem,5.5vh,2.5rem)' }}
             >
                 <motion.span
-                    className="material-symbols-outlined text-[clamp(20px,2.8dvh,24px)] text-white/70 hover:text-white"
+                    className="material-symbols-outlined text-[clamp(20px,2.8vh,24px)] text-white/70 hover:text-white"
                     whileHover={{
                         rotate: [0, -10, 10, -5, 5, 0],
                         transition: { duration: 0.5, ease: "easeInOut" }
@@ -30,7 +30,7 @@ const JellyCommentButton: React.FC<JellyCommentButtonProps> = ({ onClick, label 
                 </motion.span>
             </motion.button>
             {label && (
-                <span className="text-white/50 text-[clamp(8px,1.2dvh,10px)] font-black drop-shadow-md">
+                <span className="text-white/50 text-[clamp(8px,1.2vh,10px)] font-black drop-shadow-md">
                     {label}
                 </span>
             )}

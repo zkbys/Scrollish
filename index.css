@@ -1,3 +1,14 @@
+:root {
+  /* [兼容性] 现代浏览器使用 dvh，旧版回退到 vh */
+  --dynamic-vh: 1vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --dynamic-vh: 1dvh;
+  }
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

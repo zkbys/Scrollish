@@ -64,32 +64,142 @@ const App: React.FC = () => {
     setLoading: setAuthLoading,
     isLoading: isAuthLoading,
     _hasHydrated,
+    hasFetchedProfile, // [新增] 必须解构出来作为 Effect 的依赖，否则新用户登录会因 Profile 为空而不触发跳转
   } = useUserStore()
   const { initializeExplore } = useExploreStore()
 
   useEffect(() => {
-    setAuthLoading(false)
+    // 1. 初始化时检查现有会话
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        // 如果已有会话且 store 中没有用户，执行同步
+        if (!useUserStore.getState().currentUser) {
+          login(session.user)
+        }
+      } else {
+        // [修复] 如果没有会话，确保清除本地持久化中的残留用户状态
+        logout()
+      }
+      setAuthLoading(false)
+    })
+
+    // 2. 监听 Auth 状态变化 (登录/登出/刷新)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        // 只有当用户真的变化或 store 为空时才调用 login，避免过度刷新 session id
+        if (useUserStore.getState().currentUser?.id !== session.user.id) {
+          login(session.user)
+        }
+      } else {
+        // [优化] 只有在真的没有有效会话时才调用 logout
+        // 增加一个额外的 check，防止 Supabase 在刷新 Token 时触发虚假的 null session
+        supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+          if (!currentSession && useUserStore.getState().currentUser) {
+            logout()
+          }
+        })
+      }
+      setAuthLoading(false)
+    })
+
     initializeExplore()
     // 初始化主题
     import('./store/useThemeStore').then((m) =>
       m.useThemeStore.getState().initTheme(),
     )
-  }, [])
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [login, logout, setAuthLoading, initializeExplore])
 
   // [路由守卫优化] 增加对 _hasHydrated 的判断
   useEffect(() => {
     if (_hasHydrated && !isAuthLoading) {
-      if (!currentUser && currentPage !== Page.Login) {
-        setCurrentPage(Page.Login)
-      } else if (
-        currentUser &&
-        !profile?.learning_reason &&
-        currentPage !== Page.Onboarding
-      ) {
-        setCurrentPage(Page.Onboarding)
+      if (!currentUser) {
+        if (currentPage !== Page.Login) {
+          setCurrentPage(Page.Login)
+        }
+      } else {
+        // 已登录情况下的自动跳转逻辑
+        if (currentPage === Page.Login) {
+          // [优化] 如果已登录但还在登录页，根据资料完整度决定去哪
+          const hasProfile = useUserStore.getState().hasFetchedProfile
+          if (hasProfile) {
+            if (!profile?.learning_reason) {
+              setCurrentPage(Page.Onboarding)
+            } else {
+              setCurrentPage(Page.Home)
+            }
+          } else {
+            // [新增] 极端情况兜底：如果已登录，但在登录页停留超过 5 秒还没加载完 Profile，强行跳转
+            const timer = setTimeout(() => {
+              if (useUserStore.getState().currentUser && currentPage === Page.Login) {
+                console.warn('[Routing] Watchdog triggered: Forcing navigation from Login page')
+                setCurrentPage(profile?.learning_reason ? Page.Home : Page.Onboarding)
+              }
+            }, 5000)
+            return () => clearTimeout(timer)
+          }
+        } else if (
+          useUserStore.getState().hasFetchedProfile &&
+          !profile?.learning_reason &&
+          currentPage !== Page.Onboarding
+        ) {
+          setCurrentPage(Page.Onboarding)
+        }
       }
     }
-  }, [currentUser, currentPage, isAuthLoading, profile, _hasHydrated])
+  }, [currentUser, currentPage, isAuthLoading, profile, hasFetchedProfile, _hasHydrated])
+
+  // [新增] 单设备登录限制：监听 Session ID 变化
+  useEffect(() => {
+    if (!_hasHydrated || !currentUser) return
+
+    // 1. 订阅当前用户 Profile 的实时变化
+    const channel = supabase
+      .channel(`profile_session_${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${currentUser.id}`,
+        },
+        (payload) => {
+          const newSessionId = payload.new?.last_session_id
+          const localId = useUserStore.getState().localSessionId
+
+          if (newSessionId && localId && newSessionId !== localId) {
+            alert('您的账号已在其他设备登录，当前会话已失效。')
+            logout()
+            setCurrentPage(Page.Login)
+          }
+        }
+      )
+      .subscribe()
+
+    // 2. 初始比对（处理刷新后 ID 可能已变化的情况）
+    const validateSession = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('last_session_id')
+        .eq('id', currentUser.id)
+        .single()
+
+      const localId = useUserStore.getState().localSessionId
+      if (data?.last_session_id && localId && data.last_session_id !== localId) {
+        logout()
+        setCurrentPage(Page.Login)
+      }
+    }
+    validateSession()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUser?.id, _hasHydrated, logout]) // [修改] 使用 id 作为依赖，避免引用变化导致的重连
 
   // Redundant fetchAllPosts removed to improve performance and prevent timeouts.
 
@@ -253,7 +363,7 @@ const App: React.FC = () => {
           <Login
             onNavigate={navigateTo}
             onLoginSuccess={(user) => {
-              login(user)
+              // [优化] 登录成功后直接跳转首页，具体的 store 逻辑交给 App.tsx 的全局监听
               navigateTo(Page.Home)
             }}
           />
@@ -282,32 +392,28 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex justify-center bg-black min-h-screen">
-      <div className="relative w-full max-w-md h-screen overflow-hidden bg-[#0B0A09] shadow-2xl flex flex-col">
-        <main className="flex-1 overflow-hidden relative">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentPage}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="absolute inset-0 h-full w-full">
-              {renderPage()}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+    <main className="h-screen w-full relative overflow-hidden bg-[#0B0A09]">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentPage}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="absolute inset-0 h-full w-full">
+          {renderPage()}
+        </motion.div>
+      </AnimatePresence>
 
-        {!hideBottomNav && (
-          <BottomNav
-            activePage={
-              currentPage === Page.Preview ? Page.Profile : currentPage
-            }
-            onNavigate={navigateTo}
-          />
-        )}
-      </div>
-    </div>
+      {!hideBottomNav && (
+        <BottomNav
+          activePage={
+            currentPage === Page.Preview ? Page.Profile : currentPage
+          }
+          onNavigate={navigateTo}
+        />
+      )}
+    </main>
   )
 }
 

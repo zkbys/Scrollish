@@ -20,6 +20,7 @@ interface UserState {
   currentUser: any | null
   profile: any | null
   isLoading: boolean
+  localSessionId: string | null // [新增] 当前设备的会话 ID
   _hasHydrated: boolean // [新增] 用于标识持久化存储是否已加载完成
 
   // Actions
@@ -61,6 +62,7 @@ export const useUserStore = create<UserState>()(
       currentUser: null,
       profile: null,
       isLoading: true,
+      localSessionId: null,
       _hasHydrated: false,
       hasFetchedProfile: false,
       hasFetchedStarredWords: false,
@@ -171,21 +173,58 @@ export const useUserStore = create<UserState>()(
         set({ viewedPostIds: [], viewHistory: [] })
       },
 
-      login: (userData: any) => {
-        set({ currentUser: userData, isLoading: false })
-        // 登录后拉取数据库里的单词
+      login: async (userData: any) => {
+        // [修改] 只有在真的没有 ID 时才生成新的，避免刷新页面时重复生成
+        let currentSessionId = get().localSessionId;
+
+        if (!currentSessionId) {
+          currentSessionId = crypto.randomUUID?.() || Math.random().toString(36).substring(2) + Date.now().toString(36)
+          console.log('[Auth] Generated first local session ID:', currentSessionId)
+        } else {
+          console.log('[Auth] Using existing local session ID:', currentSessionId)
+        }
+
+        set({ currentUser: userData, localSessionId: currentSessionId, isLoading: false })
+
+        // 异步同步新会话 ID 到数据库
+        if (userData?.id) {
+          console.log('[Auth] Verifying session ID for User:', userData.id)
+
+          const { error, status } = await supabase
+            .from('profiles')
+            .update({ last_session_id: currentSessionId })
+            .eq('id', userData.id)
+
+          if (error) {
+            console.error('[Auth] Failed to sync session ID:', error.message, 'Status:', status)
+          } else {
+            console.log('[Auth] Session ID verified/synced, status:', status)
+          }
+        }
+
+        // 登录后拉取数据库里的个人资料和单词
+        get().fetchProfile(true)
         get().fetchStarredWords()
         get().syncLocalWordsToCloud()
       },
 
-      logout: () => {
+      logout: async () => {
+        // [修复] 只有在真的有 Supabase 会话时才调用 signOut，避免与 App.tsx 监听器形成死循环
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          await supabase.auth.signOut()
+        }
+
         set({
           currentUser: null,
+          profile: null,
+          localSessionId: null,
           likedPosts: [],
           followedCommunities: [],
           starredWords: [],
           hasFetchedProfile: false,
           hasFetchedStarredWords: false,
+          isLoading: false, // [关键修复] 登出后必须标记加载完成，否则 App.tsx 会卡在加载页
         })
       },
 
@@ -200,13 +239,36 @@ export const useUserStore = create<UserState>()(
         // [卫兵逻辑] 如果已有数据且不是强制刷新，直接跳过
         if (get().profile && !force && get().hasFetchedProfile) return
 
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single()
-        if (data) {
-          set({ profile: data, hasFetchedProfile: true })
+        console.log('[Store] Fetching profile for user:', user.id)
+
+        try {
+          // [新增] 5秒强制超时保护，防止数据库响应慢导致 App.tsx 路由死锁
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+          )
+
+          const fetchPromise = supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single()
+
+          const { data, error } = await Promise.race([
+            fetchPromise,
+            timeoutPromise
+          ]) as any
+
+          if (data) {
+            console.log('[Store] Profile fetched successfully')
+            set({ profile: data, hasFetchedProfile: true })
+          } else {
+            console.warn('[Store] Profile not found or error:', error?.message)
+            set({ hasFetchedProfile: true })
+          }
+        } catch (err: any) {
+          console.error('[Store] Profile fetch failed or timed out:', err.message)
+          // [关键修复] 无论成功失败，都必须标记已尝试过拉取，否则 App.tsx 会卡在加载页
+          set({ hasFetchedProfile: true })
         }
       },
 
@@ -352,10 +414,21 @@ export const useUserStore = create<UserState>()(
         const user = get().currentUser
         const currentProfile = get().profile
         if (!user) return
+
         const { error } = await supabase
           .from('profiles')
-          .update(updates)
+          .update({
+            username: updates.username,
+            display_name: updates.display_name,
+            avatar_url: updates.avatar_url,
+            native_language: updates.native_language,
+            target_level: updates.target_level,
+            daily_goal_mins: updates.daily_goal_mins,
+            learning_reason: updates.learning_reason,
+            last_session_id: updates.last_session_id
+          })
           .eq('id', user.id)
+
         if (!error) {
           set({ profile: { ...(currentProfile || {}), ...updates } })
         } else {
@@ -374,6 +447,15 @@ export const useUserStore = create<UserState>()(
     {
       name: 'scrollish-user-storage',
       storage: createJSONStorage(() => localStorage),
+      // [新增] 只持久化核心业务数据，排除认证状态和加载标记，避免刷新时的状态竞争
+      partialize: (state) => ({
+        likedPosts: state.likedPosts,
+        starredWords: state.starredWords,
+        followedCommunities: state.followedCommunities,
+        viewedPostIds: state.viewedPostIds,
+        viewHistory: state.viewHistory,
+        localSessionId: state.localSessionId,
+      }),
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.setHasHydrated(true)
