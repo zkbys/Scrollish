@@ -47,6 +47,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     content: string
     content_cn: string
     author: string
+    sentence_segments?: any[]
+    cultural_notes?: any[]
   } | null>(null)
   const [inputText, setInputText] = useState('')
   const [quotedMessage, setQuotedMessage] = useState<Comment | null>(null)
@@ -101,7 +103,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     const fetchOp = async () => {
       const { data } = await supabase
         .from('production_posts')
-        .select('content_en, content_cn, title_en, title_cn, author, subreddit')
+        .select(
+          'content_en, content_cn, title_en, title_cn, author, subreddit, sentence_segments, cultural_notes',
+        )
         .eq('id', postId)
         .single()
       if (data)
@@ -109,6 +113,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
           content: data.content_en || data.title_en,
           content_cn: data.content_cn || data.title_cn,
           author: data.author || data.subreddit || 'OP',
+          sentence_segments: data.sentence_segments,
+          cultural_notes: data.cultural_notes,
         })
     }
     fetchOp()
@@ -129,7 +135,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
       depth: -1,
       parent_id: null,
       created_at: new Date().toISOString(),
-      enrichment: { sentence_segments: null, cultural_notes: [] } as any,
+      enrichment: {
+        sentence_segments: opPostData.sentence_segments,
+        cultural_notes: opPostData.cultural_notes || [],
+      } as any,
     }
     const rootComment = allComments.find((c) => c.id === focusCommentId)
     if (!rootComment) return [opMessage]

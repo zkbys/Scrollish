@@ -33,9 +33,12 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const [animationClass, setAnimationClass] = useState('')
   const [isExiting, setIsExiting] = useState(false)
   const [videoError, setVideoError] = useState(false)
-  const [opContent, setOpContent] = useState<{ en: string; cn: string } | null>(
-    null,
-  )
+  const [opContent, setOpContent] = useState<{
+    en: string
+    cn: string
+    sentence_segments?: any[]
+    cultural_notes?: any[]
+  } | null>(null)
 
   // 查词状态
   const [viewingWord, setViewingWord] = useState<string | null>(null)
@@ -72,11 +75,18 @@ const TopicHub: React.FC<TopicHubProps> = ({
     if (post?.id) {
       fetchComments(post.id)
       if (post.content_en && post.content_en.length > 10) {
-        setOpContent({ en: post.content_en, cn: post.content_cn })
+        setOpContent({
+          en: post.content_en,
+          cn: post.content_cn,
+          sentence_segments: post.sentence_segments,
+          cultural_notes: post.cultural_notes,
+        })
       } else {
         supabase
           .from('production_posts')
-          .select('content_en, content_cn, title_en, title_cn')
+          .select(
+            'content_en, content_cn, title_en, title_cn, sentence_segments, cultural_notes',
+          )
           .eq('id', post.id)
           .single()
           .then(({ data }) => {
@@ -84,6 +94,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
               setOpContent({
                 en: data.content_en || data.title_en || '',
                 cn: data.content_cn || data.title_cn || '',
+                sentence_segments: data.sentence_segments,
+                cultural_notes: data.cultural_notes,
               })
           })
       }
@@ -100,8 +112,10 @@ const TopicHub: React.FC<TopicHubProps> = ({
         opContent?.en || post.content_en || post.title_en || 'Loading...',
       content_cn: opContent?.cn || post.content_cn || post.title_cn || '',
       upvotes: post.upvotes || 0,
-      depth: -1,
-      enrichment: null,
+      enrichment: {
+        sentence_segments: opContent?.sentence_segments || post.sentence_segments,
+        cultural_notes: opContent?.cultural_notes || post.cultural_notes || [],
+      },
     }
     const topLevel = allComments
       .filter((c) => c.depth === 0)
