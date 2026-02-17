@@ -2,6 +2,7 @@ import path from 'path'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa' // [新增] 引入插件
+import basicSsl from '@vitejs/plugin-basic-ssl' // [新增] 引入 ssl 插件
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '')
@@ -13,6 +14,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
+      basicSsl(), // [新增] 启用临时的 HTTPS 证书
       // [新增] PWA 核心配置
       VitePWA({
         registerType: 'autoUpdate',
@@ -57,7 +59,8 @@ export default defineConfig(({ mode }) => {
           runtimeCaching: [
             {
               // 缓存 Supabase Storage 图片
-              urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/.*$/,
+              urlPattern:
+                /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/.*$/,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'supabase-image-cache',
@@ -81,7 +84,7 @@ export default defineConfig(({ mode }) => {
                   maxAgeSeconds: 365 * 24 * 60 * 60,
                 },
               },
-            }
+            },
           ],
         },
       }),
