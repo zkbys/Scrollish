@@ -329,32 +329,29 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     setTimeout(() => setHighlightedId(null), 1500)
   }
 
-  // 9. 背景长按 (翻译Peek模式)
+  // 9. 背景长按 (翻译Peek模式 -> 切换模式)
   const handleBgTouchStart = (e: React.TouchEvent) => {
     if ((e.target as HTMLElement).closest('input') || contextMenu) return
     touchStartRef.current = e.touches[0].clientY
     setIsDragging(true)
 
-    // [修复] 按住 200ms 后显示翻译
+    // [修复] 按住 200ms 后切换翻译
     bgPressTimerRef.current = setTimeout(() => {
       if (navigator.vibrate) navigator.vibrate(50)
-      setShowGlobalTranslation(true)
+      setShowGlobalTranslation((prev) => !prev)
     }, 200)
   }
 
   const handleBgTouchEnd = () => {
-    // [修复] 松开立即隐藏
     if (bgPressTimerRef.current) clearTimeout(bgPressTimerRef.current)
-    setShowGlobalTranslation(false)
     setIsDragging(false)
     setPullY(0)
   }
 
   const handleBgTouchMove = (e: React.TouchEvent) => {
     if (Math.abs(e.touches[0].clientY - touchStartRef.current) > 10) {
-      // 如果滑动了，取消翻译显示
+      // 如果滑动了，取消翻译切换计时器
       if (bgPressTimerRef.current) clearTimeout(bgPressTimerRef.current)
-      setShowGlobalTranslation(false)
     }
   }
 
@@ -363,7 +360,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     if (navigator.vibrate) navigator.vibrate(50)
     // 确保取消背景的长按事件，防止冲突
     if (bgPressTimerRef.current) clearTimeout(bgPressTimerRef.current)
-    setShowGlobalTranslation(false)
+    // setShowGlobalTranslation(false) // [修改] 切换模式下不应自动关闭
 
     if (msg.isLocalAi) {
       setQuotedMessage({ id: msg.id, author: 'Dopa', content: msg.content })
@@ -427,7 +424,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute top-20 left-1/2 -translate-x-1/2 bg-black/60 px-4 py-1 rounded-full text-white/80 text-xs font-bold z-50 backdrop-blur">
-            Hold to Translate
+            Translation Mode
           </motion.div>
         )}
 

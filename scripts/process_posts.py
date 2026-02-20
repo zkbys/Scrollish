@@ -161,7 +161,7 @@ async def process_post(post: Dict[str, Any], sem: asyncio.Semaphore):
         except Exception as e:
             print(f"⚠️ Failed to update status for {post_id[:8]}: {e}")
         
-        raw_content = post['content_en'] or ""
+        raw_content = post.get('content_en') or post.get('title_en') or ""
         cleaned_content = clean_links(raw_content)
         pre_sentences = segment_text_consistent(cleaned_content)
         pre_sentences = merge_short_sentences(pre_sentences)
@@ -267,25 +267,40 @@ async def main(limit: int = 50, force_update: bool = False):
     # 1. 构建查询
     # 我们不仅要处理 pending 的，还要处理那些状态为 completed 但缺失分句数据的帖子
     if not force_update:
-        # Supabase Python SDK 不支持复杂的 OR 过滤在 select 中，我们分两次取或者用更通用的查询
         # 获取 pending 帖子
         res_pending = supabase.table("production_posts") \
-            .select("id, content_en") \
+            .select("id, content_en, title_en") \
             .eq("enrichment_status", "pending") \
             .neq("content_en", "") \
             .limit(limit) \
             .execute()
         
-        # 获取已完成但无分句的帖子
-        res_missing = supabase.table("production_posts") \
-            .select("id, content_en") \
-            .eq("enrichment_status", "completed") \
-            .is_("sentence_segments", "null") \
-            .neq("content_en", "") \
-            .limit(limit - len(res_pending.data or [])) \
+        # 获取已完成但无分句的帖子 (NULL 或 空数组)
+        # 注意：supabase-py 可能无法直接查询 json 类型的长度或空数组，通常只能查 is null
+        # 但我们可以尝试列出 completed 的，然后在 python 层过滤
+        res_completed = supabase.table("production_posts") \
+            .select("id, content_en, title_en, sentence_segments") \
+            .in_("enrichment_status", ["completed", "processing"]) \
+            .order("enrichment_status", desc=True) \
+            .limit(limit * 2) \
             .execute()
+            
+        posts_pending = res_pending.data or []
+        posts_completed = res_completed.data or []
         
-        posts = (res_pending.data or []) + (res_missing.data or [])
+        # 过滤出真正缺失 segments 的 posts
+        posts_missing_segments = [
+            p for p in posts_completed 
+            if not p.get('sentence_segments') or len(p.get('sentence_segments', [])) == 0
+        ]
+        
+        # 合并列表，优先处理缺失分句的已完成贴
+        #以此修复 TopicHub 只显示整段翻译的问题
+        posts = posts_missing_segments[:limit] + posts_pending
+        # 去重
+        seen = set()
+        posts = [x for x in posts if not (x['id'] in seen or seen.add(x['id']))][:limit]
+        
     else:
         res = supabase.table("production_posts") \
             .select("id, content_en") \
