@@ -7,13 +7,12 @@ import React, {
 } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../supabase'
-import { Page } from '../types'
+import { Page, Comment, CulturalNote } from '../types' // [修改] 导入了 CulturalNote
 import { useCommentStore } from '../store/useCommentStore'
 import { useDictionaryStore } from '../store/useDictionaryStore'
 import MessageBubble from '../components/MessageBubble'
 import WordDetailOverlay from '../components/WordDetailOverlay'
 import { useUserStore } from '../store/useUserStore'
-import { Comment } from '../types'
 import InteractiveText from '../components/InteractiveText'
 
 interface TopicHubProps {
@@ -40,9 +39,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
     cultural_notes?: any[]
   } | null>(null)
 
-  // 查词状态
+  // 查词与文化注记状态
   const [viewingWord, setViewingWord] = useState<string | null>(null)
   const [viewingWordContext, setViewingWordContext] = useState<string>('')
+  const [viewingNote, setViewingNote] = useState<CulturalNote[] | null>(null) // [新增] 管理注记展示状态
+
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
   const [scale, setScale] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
@@ -113,7 +114,8 @@ const TopicHub: React.FC<TopicHubProps> = ({
       content_cn: opContent?.cn || post.content_cn || post.title_cn || '',
       upvotes: post.upvotes || 0,
       enrichment: {
-        sentence_segments: opContent?.sentence_segments || post.sentence_segments,
+        sentence_segments:
+          opContent?.sentence_segments || post.sentence_segments,
         cultural_notes: opContent?.cultural_notes || post.cultural_notes || [],
       },
     }
@@ -143,9 +145,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const hasVideo = !!videoUrl && !videoError
   const activeComment = comments[currentIndex] || comments[0]
 
-  // [新增] 递归计算回复数 (所有子孙节点)
-  // 逻辑：ChatRoom 显示的是整个对话树的节点数（包括发起者和所有回复）。
-  // 这里 activeComment 是根，所以我们需要计算 activeComment 的所有后代数量。
   const countDescendants = (parentId: string, all: Comment[]): number => {
     const children = all.filter((c) => c.parent_id === parentId)
     if (children.length === 0) return 0
@@ -157,15 +156,13 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const activeReplyCount = useMemo(() => {
     if (activeComment.isOpCard) return 0
-    // 如果想要完全和 ChatRoom 的 "RESPONSES" 数量一致，通常 ChatRoom 是 "Total messages - 1 (Root)"
-    // 所以这里只计算后代数量即可
     return countDescendants(activeComment.id, allComments)
   }, [allComments, activeComment])
 
   useEffect(() => {
     if (hasVideo && videoRef.current) {
       videoRef.current.muted = true
-      videoRef.current.play().catch(() => { })
+      videoRef.current.play().catch(() => {})
     }
   }, [hasVideo])
 
@@ -183,9 +180,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const handleWordClick = async (word: string, context: string) => {
     if (navigator.vibrate) navigator.vibrate(20)
-    // 触发分析（内置语境缓存逻辑）
     const result = await triggerAnalysis(word, context)
-    // 无论是否命缓存，只要点击了，就显式增加一次计数并更新语境
     if (result) {
       useUserStore.getState().registerWordLookup(result, context)
     }
@@ -195,7 +190,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
 
   const handleCardScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
-    // 允许 10px 误差
     const isBottom = scrollTop + clientHeight >= scrollHeight - 10
     setIsCardAtBottom(isBottom)
   }
@@ -204,7 +198,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const getDistance = (t1: React.Touch, t2: React.Touch) => {
     return Math.sqrt(
       Math.pow(t2.clientX - t1.clientX, 2) +
-      Math.pow(t2.clientY - t1.clientY, 2),
+        Math.pow(t2.clientY - t1.clientY, 2),
     )
   }
 
@@ -220,10 +214,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
       initialDistanceRef.current = getDistance(e.touches[0], e.touches[1])
       lastScaleRef.current = scale
     }
-    // 双击检测
     const now = Date.now()
     if (now - lastTapRef.current < 300) {
-      setIsGesturing(false) // 双击切换使用弹性动画
+      setIsGesturing(false)
       const targetScale = scale > 1 ? 1 : 2
       setScale(targetScale)
       if (targetScale === 1) setOffset({ x: 0, y: 0 })
@@ -251,7 +244,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const handlePreviewTouchEnd = () => {
     initialDistanceRef.current = null
     setIsGesturing(false)
-    // 缩放回 1 时自动复位
     if (scale <= 1.01) {
       setScale(1)
       setOffset({ x: 0, y: 0 })
@@ -264,11 +256,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
     const diffX = e.changedTouches[0].clientX - startPos.current.x
     const diffY = e.changedTouches[0].clientY - startPos.current.y
 
-    // 横向滑动优先 (切换卡片)
     if (Math.abs(diffX) > Math.abs(diffY)) {
       if (Math.abs(diffX) > 50) diffX < 0 ? nextCard() : prevCard()
     } else {
-      // 纵向滑动 (进入聊天室)
       if (diffY < -50 && !activeComment.isOpCard) {
         if (
           isCardAtBottom ||
@@ -323,6 +313,65 @@ const TopicHub: React.FC<TopicHubProps> = ({
         />
       )}
 
+      {/* [新增] 文化注记弹层 UI (从 ChatRoom 中复用) */}
+      {viewingNote && (
+        <div className="fixed inset-0 z-[110] flex items-end justify-center px-4 pb-10">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setViewingNote(null)}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="relative w-full max-w-lg bg-white dark:bg-[#1C1C1E] rounded-[2.5rem] p-8 shadow-2xl border border-white/20 overflow-hidden">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-xl font-black text-orange-500 flex items-center gap-2">
+                  <span className="material-symbols-outlined">lightbulb</span>
+                  Cultural Insights
+                </h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                  Slang & Context Notes
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingNote(null)}
+                className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-white/5 rounded-full text-gray-400">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-6 max-h-[50vh] overflow-y-auto no-scrollbar pb-4">
+              {viewingNote.map((note, idx) => (
+                <div key={idx} className="group">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="px-2 py-0.5 bg-orange-500/10 text-orange-600 rounded-md text-xs font-black uppercase">
+                      {note.trigger_word}
+                    </span>
+                    <div className="h-[1px] flex-1 bg-gray-100 dark:bg-white/5" />
+                  </div>
+                  <p className="text-[14px] leading-relaxed text-gray-700 dark:text-gray-300 font-medium">
+                    {note.explanation}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-gray-100 dark:border-white/5">
+              <button
+                onClick={() => setViewingNote(null)}
+                className="w-full py-4 bg-orange-500 text-white rounded-2xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-transform">
+                Got it
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* 图片全屏预览 Overlay */}
       <AnimatePresence>
         {isImagePreviewOpen && (
@@ -337,23 +386,26 @@ const TopicHub: React.FC<TopicHubProps> = ({
                 setOffset({ x: 0, y: 0 })
               }
             }}
-            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 overflow-hidden"
-          >
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 overflow-hidden">
             <motion.img
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{
                 scale: scale,
                 x: offset.x,
                 y: offset.y,
-                opacity: 1
+                opacity: 1,
               }}
               exit={{ scale: 0.8, opacity: 0 }}
-              transition={isGesturing ? { type: 'tween', duration: 0 } : { type: 'spring', damping: 25, stiffness: 300 }}
+              transition={
+                isGesturing
+                  ? { type: 'tween', duration: 0 }
+                  : { type: 'spring', damping: 25, stiffness: 300 }
+              }
               src={imageUrl}
               className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl"
-              style={{ touchAction: 'none' }} // 禁止浏览器默认行为
+              style={{ touchAction: 'none' }}
               alt="Full Preview"
-              onClick={(e) => e.stopPropagation()} // 防止点击图片关闭预览（留给背景）
+              onClick={(e) => e.stopPropagation()}
               onTouchStart={handlePreviewTouchStart}
               onTouchMove={handlePreviewTouchMove}
               onTouchEnd={handlePreviewTouchEnd}
@@ -365,8 +417,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
                 setScale(1)
                 setOffset({ x: 0, y: 0 })
               }}
-              className="absolute top-10 right-10 text-white/50 hover:text-white transition-colors"
-            >
+              className="absolute top-10 right-10 text-white/50 hover:text-white transition-colors">
               <span className="material-symbols-outlined text-4xl">close</span>
             </button>
             {scale > 1 && (
@@ -445,8 +496,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
             className={`absolute inset-x-4 top-0 bottom-0 flex flex-col overflow-hidden transition-all duration-300 shadow-2xl rounded-[2.5rem] border border-white/40 dark:border-white/10 ${animationClass} 
             bg-white/60 dark:bg-[#121212]/60 backdrop-blur-3xl overscroll-x-none !overscroll-x-none touch-pan-y !touch-pan-y`}>
             {/* 卡片头部 - 包含用户信息和数据统计 */}
-            <div
-              className="h-16 border-b border-gray-200/50 dark:border-white/5 flex items-center justify-between px-6 shrink-0">
+            <div className="h-16 border-b border-gray-200/50 dark:border-white/5 flex items-center justify-between px-6 shrink-0">
               <div className="flex items-center gap-3">
                 <div
                   className={`w-8 h-8 rounded-full p-[2px] ${activeComment?.isOpCard ? 'bg-gray-200 dark:bg-white' : 'bg-gradient-to-tr from-orange-500 to-red-500'}`}>
@@ -486,8 +536,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
               {!activeComment?.isOpCard && (
                 <button
                   onClick={goToChatRoom}
-                  className="w-10 h-10 rounded-full bg-gray-100/80 dark:bg-white/5 flex items-center justify-center active:scale-95 transition-all hover:bg-gray-200/80 dark:hover:bg-white/10"
-                >
+                  className="w-10 h-10 rounded-full bg-gray-100/80 dark:bg-white/5 flex items-center justify-center active:scale-95 transition-all hover:bg-gray-200/80 dark:hover:bg-white/10">
                   <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-[20px]">
                     expand_less
                   </span>
@@ -500,11 +549,13 @@ const TopicHub: React.FC<TopicHubProps> = ({
               ref={contentRef}
               onScroll={handleCardScroll}
               className="flex-1 p-6 overflow-y-auto no-scrollbar scroll-smooth overscroll-x-none">
+              {/* [修改] 传递了 onNoteClick 给 MessageBubble 组件 */}
               <MessageBubble
                 comment={activeComment}
                 isUser={false}
                 onWordClick={handleWordClick}
                 showTranslation={true}
+                onNoteClick={setViewingNote}
               />
               <div className="h-12" />
             </div>
@@ -516,7 +567,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
                   <div className="flex flex-col items-center animate-bounce-subtle">
                     <div className="flex items-center gap-1 text-gray-400 dark:text-white/60">
                       <span className="text-[9px] font-black uppercase tracking-widest">
-                        {/* Swipe Left */}
                         左滑看观点
                       </span>
                       <span className="material-symbols-outlined text-[14px]">
@@ -533,7 +583,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
                           keyboard_double_arrow_up
                         </span>
                         <span className="text-[9px] font-black text-orange-500 uppercase tracking-widest mt-0.5">
-                          {/* Pull Up to Discuss */}
                           上拉进入讨论
                         </span>
                       </>
