@@ -67,16 +67,27 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         setSelections(prev => ({ ...prev, target_level: id }))
         setStep(5) // Show success/loading
 
-        // Sync to Supabase
+        console.log('[Onboarding] Submitting profile updates...')
+
+        // Sync to Supabase with Watchdog Timeout
         try {
-            await updateProfile({
+            const updatePromise = updateProfile({
                 learning_reason: selections.learning_reason,
                 target_level: id
             })
-            setTimeout(onComplete, 1500)
-        } catch (err) {
-            console.error("Failed to sync onboarding data", err)
-            onComplete()
+
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Onboarding sync timeout')), 5000)
+            )
+
+            await Promise.race([updatePromise, timeoutPromise])
+            console.log('[Onboarding] Profile synced successfully')
+        } catch (err: any) {
+            console.warn('[Onboarding] Sync failed or timed out:', err.message)
+            // [关键] 即使失败也要进入应用，不能卡死用户
+        } finally {
+            // 给用户一点点视觉反馈时间，然后完成
+            setTimeout(onComplete, 800)
         }
     }
 

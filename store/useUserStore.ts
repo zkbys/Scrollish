@@ -45,10 +45,12 @@ interface UserState {
   updateProfile: (updates: any) => Promise<void>
   setProfile: (profile: any) => void
   setHasHydrated: (state: boolean) => void
+  setUser: (user: any) => void
 
   // [新增] 用于 API 节流的状态
   hasFetchedProfile: boolean
   hasFetchedStarredWords: boolean
+  isSessionSyncing: boolean // [新增] 会话同步锁，防止登录瞬间产生异地冲突
 }
 
 export const useUserStore = create<UserState>()(
@@ -66,6 +68,9 @@ export const useUserStore = create<UserState>()(
       _hasHydrated: false,
       hasFetchedProfile: false,
       hasFetchedStarredWords: false,
+      isSessionSyncing: false,
+
+      setUser: (user: any) => set({ currentUser: user }),
 
       toggleLike: (post: ProductionPost) => {
         const currentLikes = get().likedPosts
@@ -180,27 +185,43 @@ export const useUserStore = create<UserState>()(
         if (!currentSessionId) {
           currentSessionId = crypto.randomUUID?.() || Math.random().toString(36).substring(2) + Date.now().toString(36)
           console.log('[Auth] Generated first local session ID:', currentSessionId)
+          set({ localSessionId: currentSessionId })
         } else {
           console.log('[Auth] Using existing local session ID:', currentSessionId)
         }
 
-        set({ currentUser: userData, localSessionId: currentSessionId, isLoading: false })
+        // [核心修复] 进入同步锁定状态，防止 App.tsx 提前触发校验导致回弹
+        set({ isSessionSyncing: true, isLoading: true })
 
         // 异步同步新会话 ID 到数据库
         if (userData?.id) {
-          console.log('[Auth] Verifying session ID for User:', userData.id)
+          console.log('[Auth] Verifying/Syncing session ID for User:', userData.id)
 
-          const { error, status } = await supabase
-            .from('profiles')
-            .update({ last_session_id: currentSessionId })
-            .eq('id', userData.id)
+          try {
+            // 增加 5 秒物理超时，防止数据库锁死导致应用挂起
+            const syncPromise = supabase
+              .from('profiles')
+              .update({ last_session_id: currentSessionId })
+              .eq('id', userData.id)
 
-          if (error) {
-            console.error('[Auth] Failed to sync session ID:', error.message, 'Status:', status)
-          } else {
-            console.log('[Auth] Session ID verified/synced, status:', status)
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Session sync timeout')), 5000)
+            )
+
+            const { error }: any = await Promise.race([syncPromise, timeoutPromise])
+
+            if (error) {
+              console.error('[Auth] Failed to sync session ID:', error.message)
+            } else {
+              console.log('[Auth] Session ID verified/synced in DB')
+            }
+          } catch (err: any) {
+            console.warn('[Auth] Session sync warning:', err.message)
           }
         }
+
+        // [关键] 只有到这里，才正式标记为登录成功并解锁加载页
+        set({ currentUser: userData, isLoading: false, isSessionSyncing: false })
 
         // 登录后拉取数据库里的个人资料和单词
         get().fetchProfile(true)
@@ -415,23 +436,29 @@ export const useUserStore = create<UserState>()(
         const currentProfile = get().profile
         if (!user) return
 
+        // [优化] 过滤掉 undefined 的字段，只更新有值的部分
+        // 防止 onboarding 只更新 reason 时抹掉了 username 或 avatar_url
+        const cleanUpdates: any = {}
+        Object.keys(updates).forEach(key => {
+          if (updates[key] !== undefined) {
+            cleanUpdates[key] = updates[key]
+          }
+        })
+
+        if (Object.keys(cleanUpdates).length === 0) return
+
+        console.log('[Store] Updating profile:', cleanUpdates)
+
         const { error } = await supabase
           .from('profiles')
-          .update({
-            username: updates.username,
-            display_name: updates.display_name,
-            avatar_url: updates.avatar_url,
-            native_language: updates.native_language,
-            target_level: updates.target_level,
-            daily_goal_mins: updates.daily_goal_mins,
-            learning_reason: updates.learning_reason,
-            last_session_id: updates.last_session_id
-          })
+          .update(cleanUpdates)
           .eq('id', user.id)
 
         if (!error) {
-          set({ profile: { ...(currentProfile || {}), ...updates } })
+          console.log('[Store] Profile updated successfully')
+          set({ profile: { ...(currentProfile || {}), ...cleanUpdates } })
         } else {
+          console.error('[Store] Profile update failed:', error.message)
           throw error
         }
       },

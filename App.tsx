@@ -136,7 +136,9 @@ const App: React.FC = () => {
             const timer = setTimeout(() => {
               if (useUserStore.getState().currentUser && currentPage === Page.Login) {
                 console.warn('[Routing] Watchdog triggered: Forcing navigation from Login page')
-                setCurrentPage(profile?.learning_reason ? Page.Home : Page.Onboarding)
+                // [优化] 如果 profile 里已经有核心数据了，就去 Home，否则去 Onboarding
+                const isReturningUser = !!(profile?.learning_reason || profile?.target_level || (profile?.total_xp && profile.total_xp > 0))
+                setCurrentPage(isReturningUser ? Page.Home : Page.Onboarding)
               }
             }, 5000)
             return () => clearTimeout(timer)
@@ -144,6 +146,8 @@ const App: React.FC = () => {
         } else if (
           useUserStore.getState().hasFetchedProfile &&
           !profile?.learning_reason &&
+          !profile?.target_level &&
+          !(profile?.total_xp && profile.total_xp > 0) &&
           currentPage !== Page.Onboarding
         ) {
           setCurrentPage(Page.Onboarding)
@@ -156,7 +160,59 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!_hasHydrated || !currentUser) return
 
-    // 1. 订阅当前用户 Profile 的实时变化
+    // 1. 验证函数：对比本地 ID 与远程 ID
+    const validateSession = async () => {
+      // 如果已经在登录页了，或者正在同步会话 ID，就跳过验证
+      const state = useUserStore.getState()
+      if (currentPage === Page.Login || state.isSessionSyncing) {
+        console.log('[Auth] Validation skipped (Login page or Syncing)')
+        return
+      }
+
+      console.log('[Auth] Validating session stability...')
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('last_session_id')
+        .eq('id', currentUser.id)
+        .single()
+
+      if (error) {
+        console.warn('[Auth] Session validation query failed:', error.message)
+        return
+      }
+
+      const localId = useUserStore.getState().localSessionId
+      if (data?.last_session_id && localId && data.last_session_id !== localId) {
+        console.warn('[Auth] Session mismatch detected! Local:', localId, 'Remote:', data.last_session_id)
+
+        // [关键优化] 再次确认同步锁，防止在查询过程中锁被释放
+        if (useUserStore.getState().isSessionSyncing) return
+
+        // [关键优化] 增加一轮重试。防止登录瞬间数据库同步还没完成产生的“假冲突”
+        console.log('[Auth] Retrying session validation in 3s to avoid race condition...')
+        await new Promise(resolve => setTimeout(resolve, 3000))
+
+        const { data: retryData } = await supabase
+          .from('profiles')
+          .select('last_session_id')
+          .eq('id', currentUser.id)
+          .single()
+
+        if (retryData?.last_session_id && retryData.last_session_id !== localId) {
+          console.error('[Auth] Confirmed session mismatch after retry. Kicking out.')
+          // 只有第二次依然不匹配，才踢人
+          logout()
+          setCurrentPage(Page.Login)
+          setTimeout(() => {
+            alert('您的账号已在其他设备登录，当前会话已失效。')
+          }, 100)
+        } else {
+          console.log('[Auth] Mismatch resolved after retry. Welcome back.')
+        }
+      }
+    }
+
+    // 2. 订阅当前用户 Profile 的实时变化
     const channel = supabase
       .channel(`profile_session_${currentUser.id}`)
       .on(
@@ -168,38 +224,46 @@ const App: React.FC = () => {
           filter: `id=eq.${currentUser.id}`,
         },
         (payload) => {
+          console.log('[Auth] Realtime session update received')
           const newSessionId = payload.new?.last_session_id
           const localId = useUserStore.getState().localSessionId
 
           if (newSessionId && localId && newSessionId !== localId) {
-            alert('您的账号已在其他设备登录，当前会话已失效。')
-            logout()
-            setCurrentPage(Page.Login)
+            // [优化] 实时推送同样增加一点宽限时间，等待本地存储完成
+            setTimeout(async () => {
+              const latestLocalId = useUserStore.getState().localSessionId
+              if (newSessionId !== latestLocalId) {
+                logout()
+                setCurrentPage(Page.Login)
+                alert('您的账号已在其他设备登录，当前会话已失效。')
+              }
+            }, 2000)
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('[Auth] Realtime subscription status:', status)
+      })
 
-    // 2. 初始比对（处理刷新后 ID 可能已变化的情况）
-    const validateSession = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('last_session_id')
-        .eq('id', currentUser.id)
-        .single()
-
-      const localId = useUserStore.getState().localSessionId
-      if (data?.last_session_id && localId && data.last_session_id !== localId) {
-        logout()
-        setCurrentPage(Page.Login)
+    // 3. 增加 Visibility Watchdog：当用户切换回标签页时，强制校验一次
+    // 解决浏览器后台运行时 WebSocket 可能挂起或漏掉信号的问题
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[Auth] Tab became visible, triggering watchdog validation')
+        validateSession()
       }
     }
+
+    // 4. 初始校验一次
     validateSession()
+
+    window.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       supabase.removeChannel(channel)
+      window.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [currentUser?.id, _hasHydrated, logout]) // [修改] 使用 id 作为依赖，避免引用变化导致的重连
+  }, [currentUser?.id, _hasHydrated, logout, currentPage]) // [修改] 增加依赖项确保状态准确
 
   // Redundant fetchAllPosts removed to improve performance and prevent timeouts.
 
