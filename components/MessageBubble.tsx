@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import InteractiveText from './InteractiveText'
 import { getMessageSegments, isImageUrl } from '../utils/textProcessing'
@@ -14,6 +14,9 @@ interface MessageBubbleProps {
   ) => void
   showTranslation?: boolean
   onNoteClick?: (notes: any[]) => void
+  highlightedId?: string | null
+  className?: string
+  difficulty?: string
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -29,17 +32,20 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 }) => {
   const isHighlighted = highlightedId === comment.id
 
-  // Refs
+  // Refs & States
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null)
   const touchStartPos = useRef<{ x: number; y: number } | null>(null)
   const isLongPressTriggered = useRef(false) // 长按锁
+
+  // [新增] 跟踪哪个句子当前处于激活状态，以便显示TTS小喇叭
+  const [activeTtsIndex, setActiveTtsIndex] = useState<number | null>(null)
 
   const segments = useMemo(
     () => getMessageSegments(comment, difficulty),
     [comment, difficulty],
   )
 
-  // --- 手势处理逻辑 ---
+  // --- 手势与点击处理逻辑 ---
 
   const clearTimer = () => {
     if (pressTimerRef.current) {
@@ -113,6 +119,24 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     onWordClick(word, context)
   }
 
+  // [新增] 点击气泡的句子层，控制小喇叭显示/隐藏
+  const handleSegmentClick = (i: number) => {
+    if (isLongPressTriggered.current) return
+    setActiveTtsIndex(activeTtsIndex === i ? null : i)
+  }
+
+  // [新增] 调用系统原生TTS朗读功能
+  const handleTTS = (e: React.MouseEvent | React.TouchEvent, text: string) => {
+    e.stopPropagation() // 阻止冒泡，防止点击喇叭又关闭了喇叭
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel() // 停止当前正在播放的语音
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.lang = 'en-US'
+      utterance.rate = 0.9 // 稍微放慢语速，适合学习
+      window.speechSynthesis.speak(utterance)
+    }
+  }
+
   // --- 样式定义 ---
   const getBubbleClass = (isImage: boolean) => {
     if (isImage) return 'my-1'
@@ -155,46 +179,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         </div>
       ) : /* 内容渲染循环 */
-        segments.length > 0 ? (
-          segments.map((seg, i) => {
-            // 图片... (省略图片渲染逻辑)
-            if (isImageUrl(seg.en)) {
-              return (
-                <div
-                  key={i}
-                  className="rounded-xl overflow-hidden border border-white/10 shadow-sm max-w-full"
-                  onTouchStart={handleTouchStart}
-                  onTouchEnd={handleTouchEnd}
-                  onTouchCancel={handleTouchEnd}
-                  onTouchMove={handleTouchMove}
-                  onMouseDown={handleTouchStart}
-                  onMouseUp={handleTouchEnd}
-                  onMouseLeave={handleTouchEnd}
-                  onContextMenu={(e) => e.preventDefault()}>
-                  <img
-                    src={seg.en}
-                    alt="content"
-                    className="w-full h-auto object-cover min-h-[60px] max-h-[300px] bg-gray-100 dark:bg-white/5"
-                    loading="lazy"
-                  />
-                </div>
-              )
-            }
-
-            // 文本
-            const isQuote = seg.en.trim().startsWith('>')
-            const displayText = isQuote ? seg.en.replace(/^>\s?/, '') : seg.en
-
-            // 计算本分句包含的注记
-            const segmentNotes =
-              comment.enrichment?.cultural_notes?.filter((note) =>
-                seg.en.toLowerCase().includes(note.trigger_word.toLowerCase()),
-              ) || []
-
+      segments.length > 0 ? (
+        segments.map((seg, i) => {
+          // 图片渲染逻辑
+          if (isImageUrl(seg.en)) {
             return (
               <div
                 key={i}
-                className={`relative px-4 py-2.5 transition-all duration-300 max-w-full ${getBubbleClass(false)} ${highlightClass}`}
+                className="rounded-xl overflow-hidden border border-white/10 shadow-sm max-w-full"
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
                 onTouchCancel={handleTouchEnd}
@@ -203,48 +195,97 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 onMouseUp={handleTouchEnd}
                 onMouseLeave={handleTouchEnd}
                 onContextMenu={(e) => e.preventDefault()}>
-                {/* 分句对应的注记灯泡 */}
-                {segmentNotes.length > 0 && (
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (onNoteClick) onNoteClick(segmentNotes)
-                    }}
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg border border-white dark:border-[#0B0A09] z-[15] cursor-pointer hover:scale-110 active:scale-90 transition-transform">
-                    <span className="material-symbols-outlined text-[10px] text-black font-black">
-                      lightbulb
-                    </span>
-                  </div>
-                )}
-
-                <div
-                  className={`text-[15px] leading-relaxed font-medium ${isQuote ? 'italic opacity-90 border-l-2 border-current pl-2' : ''}`}>
-                  <InteractiveText
-                    text={displayText}
-                    contextSentence={seg.en}
-                    externalOnClick={(w) => handleInteractiveClick(w, seg.en)}
-                    disabled={isUser}
-                  />
-                </div>
-
-                {/* 句级翻译 */}
-                <AnimatePresence>
-                  {showTranslation && seg.zh && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="text-[13px] opacity-70 italic mt-1.5 pt-1.5 border-t border-white/10 leading-snug">
-                      {seg.zh}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                <img
+                  src={seg.en}
+                  alt="content"
+                  className="w-full h-auto object-cover min-h-[60px] max-h-[300px] bg-gray-100 dark:bg-white/5"
+                  loading="lazy"
+                />
               </div>
             )
-          })
-        ) : (
-          <span className="text-red-500 text-xs">No content</span>
-        )}
+          }
+
+          // 文本渲染逻辑
+          const isQuote = seg.en.trim().startsWith('>')
+          const displayText = isQuote ? seg.en.replace(/^>\s?/, '') : seg.en
+
+          // 计算本分句包含的注记
+          const segmentNotes =
+            comment.enrichment?.cultural_notes?.filter((note) =>
+              seg.en.toLowerCase().includes(note.trigger_word.toLowerCase()),
+            ) || []
+
+          return (
+            <div
+              key={i}
+              className={`relative px-4 py-2.5 transition-all duration-300 max-w-full ${getBubbleClass(false)} ${highlightClass}`}
+              onClick={() => handleSegmentClick(i)} // [新增] 点击句子，切换小喇叭
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
+              onTouchMove={handleTouchMove}
+              onMouseDown={handleTouchStart}
+              onMouseUp={handleTouchEnd}
+              onMouseLeave={handleTouchEnd}
+              onContextMenu={(e) => e.preventDefault()}>
+              {/* 分句对应的注记灯泡 */}
+              {segmentNotes.length > 0 && (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (onNoteClick) onNoteClick(segmentNotes)
+                  }}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg border border-white dark:border-[#0B0A09] z-[15] cursor-pointer hover:scale-110 active:scale-90 transition-transform">
+                  <span className="material-symbols-outlined text-[10px] text-black font-black">
+                    lightbulb
+                  </span>
+                </div>
+              )}
+
+              <div
+                className={`text-[15px] leading-relaxed font-medium ${isQuote ? 'italic opacity-90 border-l-2 border-current pl-2' : ''}`}>
+                <InteractiveText
+                  text={displayText}
+                  contextSentence={seg.en}
+                  externalOnClick={(w) => handleInteractiveClick(w, seg.en)}
+                  disabled={isUser}
+                />
+              </div>
+
+              {/* 句级翻译 */}
+              <AnimatePresence>
+                {showTranslation && seg.zh && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="text-[13px] opacity-70 italic mt-1.5 pt-1.5 border-t border-white/10 leading-snug">
+                    {seg.zh}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* [新增] TTS 朗读悬浮按钮 */}
+              <AnimatePresence>
+                {activeTtsIndex === i && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.5, y: 5 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.5, y: 5 }}
+                    onClick={(e) => handleTTS(e, displayText)}
+                    className="absolute -bottom-3 -right-2 w-8 h-8 bg-white dark:bg-[#2C2C2E] rounded-full flex items-center justify-center shadow-lg border border-gray-200 dark:border-white/10 text-orange-500 z-[20] hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95 transition-all">
+                    <span className="material-symbols-outlined text-[18px]">
+                      volume_up
+                    </span>
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
+          )
+        })
+      ) : (
+        <span className="text-red-500 text-xs">No content</span>
+      )}
 
       {/* 全文翻译兜底 */}
       <AnimatePresence>
