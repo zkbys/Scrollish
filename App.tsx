@@ -84,7 +84,9 @@ const App: React.FC = () => {
     })
 
     // 2. 监听 Auth 状态变化 (登录/登出/刷新)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         // 只有当用户真的变化或 store 为空时才调用 login，避免过度刷新 session id
         if (useUserStore.getState().currentUser?.id !== session.user.id) {
@@ -93,11 +95,13 @@ const App: React.FC = () => {
       } else {
         // [优化] 只有在真的没有有效会话时才调用 logout
         // 增加一个额外的 check，防止 Supabase 在刷新 Token 时触发虚假的 null session
-        supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-          if (!currentSession && useUserStore.getState().currentUser) {
-            logout()
-          }
-        })
+        supabase.auth
+          .getSession()
+          .then(({ data: { session: currentSession } }) => {
+            if (!currentSession && useUserStore.getState().currentUser) {
+              logout()
+            }
+          })
       }
       setAuthLoading(false)
     })
@@ -134,10 +138,19 @@ const App: React.FC = () => {
           } else {
             // [新增] 极端情况兜底：如果已登录，但在登录页停留超过 5 秒还没加载完 Profile，强行跳转
             const timer = setTimeout(() => {
-              if (useUserStore.getState().currentUser && currentPage === Page.Login) {
-                console.warn('[Routing] Watchdog triggered: Forcing navigation from Login page')
+              if (
+                useUserStore.getState().currentUser &&
+                currentPage === Page.Login
+              ) {
+                console.warn(
+                  '[Routing] Watchdog triggered: Forcing navigation from Login page',
+                )
                 // [优化] 如果 profile 里已经有核心数据了，就去 Home，否则去 Onboarding
-                const isReturningUser = !!(profile?.learning_reason || profile?.target_level || (profile?.total_xp && profile.total_xp > 0))
+                const isReturningUser = !!(
+                  profile?.learning_reason ||
+                  profile?.target_level ||
+                  (profile?.total_xp && profile.total_xp > 0)
+                )
                 setCurrentPage(isReturningUser ? Page.Home : Page.Onboarding)
               }
             }, 5000)
@@ -154,7 +167,14 @@ const App: React.FC = () => {
         }
       }
     }
-  }, [currentUser, currentPage, isAuthLoading, profile, hasFetchedProfile, _hasHydrated])
+  }, [
+    currentUser,
+    currentPage,
+    isAuthLoading,
+    profile,
+    hasFetchedProfile,
+    _hasHydrated,
+  ])
 
   // [新增] 单设备登录限制：监听 Session ID 变化
   useEffect(() => {
@@ -182,15 +202,26 @@ const App: React.FC = () => {
       }
 
       const localId = useUserStore.getState().localSessionId
-      if (data?.last_session_id && localId && data.last_session_id !== localId) {
-        console.warn('[Auth] Session mismatch detected! Local:', localId, 'Remote:', data.last_session_id)
+      if (
+        data?.last_session_id &&
+        localId &&
+        data.last_session_id !== localId
+      ) {
+        console.warn(
+          '[Auth] Session mismatch detected! Local:',
+          localId,
+          'Remote:',
+          data.last_session_id,
+        )
 
         // [关键优化] 再次确认同步锁，防止在查询过程中锁被释放
         if (useUserStore.getState().isSessionSyncing) return
 
         // [关键优化] 增加一轮重试。防止登录瞬间数据库同步还没完成产生的“假冲突”
-        console.log('[Auth] Retrying session validation in 3s to avoid race condition...')
-        await new Promise(resolve => setTimeout(resolve, 3000))
+        console.log(
+          '[Auth] Retrying session validation in 3s to avoid race condition...',
+        )
+        await new Promise((resolve) => setTimeout(resolve, 3000))
 
         const { data: retryData } = await supabase
           .from('profiles')
@@ -198,8 +229,13 @@ const App: React.FC = () => {
           .eq('id', currentUser.id)
           .single()
 
-        if (retryData?.last_session_id && retryData.last_session_id !== localId) {
-          console.error('[Auth] Confirmed session mismatch after retry. Kicking out.')
+        if (
+          retryData?.last_session_id &&
+          retryData.last_session_id !== localId
+        ) {
+          console.error(
+            '[Auth] Confirmed session mismatch after retry. Kicking out.',
+          )
           // 只有第二次依然不匹配，才踢人
           logout()
           setCurrentPage(Page.Login)
@@ -239,7 +275,7 @@ const App: React.FC = () => {
               }
             }, 2000)
           }
-        }
+        },
       )
       .subscribe((status) => {
         console.log('[Auth] Realtime subscription status:', status)
@@ -383,7 +419,8 @@ const App: React.FC = () => {
         return (
           <ChatRoom
             postId={activePost.id}
-            postImage={activePost.image}
+            // [修复] 兼容 Home 传过来的 image 和 Explore 传过来的 image_url
+            postImage={activePost.image || activePost.image_url}
             focusCommentId={selectedCommentId}
             onBack={() => navigateTo(Page.TopicHub)}
           />
@@ -471,9 +508,7 @@ const App: React.FC = () => {
 
       {!hideBottomNav && (
         <BottomNav
-          activePage={
-            currentPage === Page.Preview ? Page.Profile : currentPage
-          }
+          activePage={currentPage === Page.Preview ? Page.Profile : currentPage}
           onNavigate={navigateTo}
         />
       )}

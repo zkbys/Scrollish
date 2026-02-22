@@ -37,13 +37,20 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const touchStartPos = useRef<{ x: number; y: number } | null>(null)
   const isLongPressTriggered = useRef(false) // 长按锁
 
-  // [新增] 跟踪哪个句子当前处于激活状态，以便显示TTS小喇叭
+  // 跟踪哪个句子当前处于激活状态，以便显示TTS小喇叭
   const [activeTtsIndex, setActiveTtsIndex] = useState<number | null>(null)
 
   const segments = useMemo(
     () => getMessageSegments(comment, difficulty),
     [comment, difficulty],
   )
+
+  // [新增] 提取该评论中所有 Cultural Note 的触发词，用于高亮
+  const allNoteTriggerWords = useMemo(() => {
+    return (
+      comment.enrichment?.cultural_notes?.map((note) => note.trigger_word) || []
+    )
+  }, [comment.enrichment])
 
   // --- 手势与点击处理逻辑 ---
 
@@ -55,14 +62,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   }
 
   const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
-    // 阻止冒泡，避免触发卡片级别的点击
     e.stopPropagation()
 
     if (!onLongPress) return
 
-    isLongPressTriggered.current = false // 重置锁
+    isLongPressTriggered.current = false
 
-    // 记录起始坐标
     if ('touches' in e) {
       touchStartPos.current = {
         x: e.touches[0].clientX,
@@ -74,14 +79,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
     clearTimer()
 
-    const event = e // Capture event for callback
-    // 设定 600ms 阈值，既不会太难触发，也不容易误触
+    const event = e
     pressTimerRef.current = setTimeout(() => {
-      // 再次检查是否已经移动或结束（双重保险）
       if (!touchStartPos.current) return
-
       if (navigator.vibrate) navigator.vibrate(50)
-      isLongPressTriggered.current = true // 【上锁】标记长按已触发
+      isLongPressTriggered.current = true
       onLongPress(event, comment)
     }, 600)
   }
@@ -92,7 +94,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     const moveX = Math.abs(e.touches[0].clientX - touchStartPos.current.x)
     const moveY = Math.abs(e.touches[0].clientY - touchStartPos.current.y)
 
-    // 移动超过 10px 视为滑动，立即取消长按
     if (moveX > 10 || moveY > 10) {
       clearTimer()
       touchStartPos.current = null
@@ -101,38 +102,29 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const handleTouchEnd = () => {
     clearTimer()
-    // 延迟清空坐标，防止 InteractiveText 的 onClick 读取不到状态
     setTimeout(() => {
       touchStartPos.current = null
     }, 0)
   }
 
-  // 点击查词代理函数
   const handleInteractiveClick = (word: string, context: string) => {
-    // 【核心修复】如果长按锁是开着的，说明触发了菜单，坚决拦截查词
-    if (isLongPressTriggered.current) {
-      return
-    }
-    // 双重保险：如果有计时器还没清除（理论上 TouchEnd 会清，但防万一），也清除
+    if (isLongPressTriggered.current) return
     clearTimer()
-
     onWordClick(word, context)
   }
 
-  // [新增] 点击气泡的句子层，控制小喇叭显示/隐藏
   const handleSegmentClick = (i: number) => {
     if (isLongPressTriggered.current) return
     setActiveTtsIndex(activeTtsIndex === i ? null : i)
   }
 
-  // [新增] 调用系统原生TTS朗读功能
   const handleTTS = (e: React.MouseEvent | React.TouchEvent, text: string) => {
-    e.stopPropagation() // 阻止冒泡，防止点击喇叭又关闭了喇叭
+    e.stopPropagation()
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel() // 停止当前正在播放的语音
+      window.speechSynthesis.cancel()
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.lang = 'en-US'
-      utterance.rate = 0.9 // 稍微放慢语速，适合学习
+      utterance.rate = 0.9
       window.speechSynthesis.speak(utterance)
     }
   }
@@ -157,7 +149,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   return (
     <div className={containerClass}>
-      {/* Loading 状态 */}
       {comment.isLoading ? (
         <div className={`px-4 py-2.5 ${getBubbleClass(false)} w-fit`}>
           <div className="flex items-center gap-2 animate-pulse py-1">
@@ -178,10 +169,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           </div>
         </div>
-      ) : /* 内容渲染循环 */
-      segments.length > 0 ? (
+      ) : segments.length > 0 ? (
         segments.map((seg, i) => {
-          // 图片渲染逻辑
           if (isImageUrl(seg.en)) {
             return (
               <div
@@ -205,7 +194,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             )
           }
 
-          // 文本渲染逻辑
           const isQuote = seg.en.trim().startsWith('>')
           const displayText = isQuote ? seg.en.replace(/^>\s?/, '') : seg.en
 
@@ -219,7 +207,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             <div
               key={i}
               className={`relative px-4 py-2.5 transition-all duration-300 max-w-full ${getBubbleClass(false)} ${highlightClass}`}
-              onClick={() => handleSegmentClick(i)} // [新增] 点击句子，切换小喇叭
+              onClick={() => handleSegmentClick(i)}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
               onTouchCancel={handleTouchEnd}
@@ -228,7 +216,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               onMouseUp={handleTouchEnd}
               onMouseLeave={handleTouchEnd}
               onContextMenu={(e) => e.preventDefault()}>
-              {/* 分句对应的注记灯泡 */}
               {segmentNotes.length > 0 && (
                 <div
                   onClick={(e) => {
@@ -249,10 +236,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   contextSentence={seg.en}
                   externalOnClick={(w) => handleInteractiveClick(w, seg.en)}
                   disabled={isUser}
+                  // [新增] 传入需要高亮的 Cultural Note 关键词
+                  highlightWords={allNoteTriggerWords}
                 />
               </div>
 
-              {/* 句级翻译 */}
               <AnimatePresence>
                 {showTranslation && seg.zh && (
                   <motion.div
@@ -265,7 +253,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 )}
               </AnimatePresence>
 
-              {/* [新增] TTS 朗读悬浮按钮 */}
               <AnimatePresence>
                 {activeTtsIndex === i && (
                   <motion.button
@@ -287,7 +274,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         <span className="text-red-500 text-xs">No content</span>
       )}
 
-      {/* 全文翻译兜底 */}
       <AnimatePresence>
         {showTranslation &&
           comment.content_cn &&
