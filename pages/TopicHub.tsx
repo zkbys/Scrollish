@@ -7,12 +7,13 @@ import React, {
 } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../supabase'
-import { Page, Comment, CulturalNote } from '../types' // [修改] 导入了 CulturalNote
+import { Page } from '../types'
 import { useCommentStore } from '../store/useCommentStore'
 import { useDictionaryStore } from '../store/useDictionaryStore'
 import MessageBubble from '../components/MessageBubble'
 import WordDetailOverlay from '../components/WordDetailOverlay'
 import { useUserStore } from '../store/useUserStore'
+import { Comment, CulturalNote } from '../types'
 import InteractiveText from '../components/InteractiveText'
 
 interface TopicHubProps {
@@ -39,11 +40,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
     cultural_notes?: any[]
   } | null>(null)
 
-  // 查词与文化注记状态
   const [viewingWord, setViewingWord] = useState<string | null>(null)
   const [viewingWordContext, setViewingWordContext] = useState<string>('')
-  const [viewingNote, setViewingNote] = useState<CulturalNote[] | null>(null) // [新增] 管理注记展示状态
-
+  const [viewingNote, setViewingNote] = useState<CulturalNote[] | null>(null)
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
   const [scale, setScale] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
@@ -60,11 +59,13 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const hasRestoredPosition = useRef(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
+  // [新增] 专门记录触摸按下的时间戳，用于防手势误触
+  const touchStartTime = useRef(0)
+
   const { fetchComments, getComments, isLoading } = useCommentStore()
   const { getDefinition, triggerAnalysis } = useDictionaryStore()
   const { registerWordLookup } = useUserStore()
 
-  // 每次切换卡片时重置底部状态
   useEffect(() => {
     setIsCardAtBottom(false)
     if (contentRef.current) {
@@ -194,7 +195,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
     setIsCardAtBottom(isBottom)
   }
 
-  // --- 图片缩放手势逻辑 ---
   const getDistance = (t1: React.Touch, t2: React.Touch) => {
     return Math.sqrt(
       Math.pow(t2.clientX - t1.clientX, 2) +
@@ -250,16 +250,34 @@ const TopicHub: React.FC<TopicHubProps> = ({
     }
   }
 
-  const handleTouchStart = (e: React.TouchEvent) =>
-    (startPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })
+  // [核心修复] 手势防冲突检测
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // 检测按压的目标是否是一个可点击的互动元素（如单词、灯泡或按钮）
+    const target = e.target as HTMLElement
+    if (target.closest('.cursor-pointer, button, [role="button"]')) {
+      startPos.current = { x: -1, y: -1 } // 标记无效滑动
+      return
+    }
+
+    startPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    touchStartTime.current = Date.now()
+  }
+
   const handleTouchEnd = (e: React.TouchEvent) => {
+    if (startPos.current.x === -1) return // 之前已被标记为忽略
+
     const diffX = e.changedTouches[0].clientX - startPos.current.x
     const diffY = e.changedTouches[0].clientY - startPos.current.y
+    const touchDuration = Date.now() - touchStartTime.current
+
+    // 防误触：时间必须短（< 1000ms），位移必须足够长（> 70px）才算滑动
+    if (touchDuration > 1000) return
+    if (Math.abs(diffX) < 70 && Math.abs(diffY) < 70) return
 
     if (Math.abs(diffX) > Math.abs(diffY)) {
-      if (Math.abs(diffX) > 50) diffX < 0 ? nextCard() : prevCard()
+      if (Math.abs(diffX) > 70) diffX < 0 ? nextCard() : prevCard()
     } else {
-      if (diffY < -50 && !activeComment.isOpCard) {
+      if (diffY < -70 && !activeComment.isOpCard) {
         if (
           isCardAtBottom ||
           (contentRef.current &&
@@ -269,6 +287,9 @@ const TopicHub: React.FC<TopicHubProps> = ({
         }
       }
     }
+
+    // 重置
+    startPos.current = { x: -1, y: -1 }
   }
 
   const nextCard = () => {
@@ -313,64 +334,66 @@ const TopicHub: React.FC<TopicHubProps> = ({
         />
       )}
 
-      {/* [新增] 文化注记弹层 UI (从 ChatRoom 中复用) */}
-      {viewingNote && (
-        <div className="fixed inset-0 z-[110] flex items-end justify-center px-4 pb-10">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setViewingNote(null)}
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="relative w-full max-w-lg bg-white dark:bg-[#1C1C1E] rounded-[2.5rem] p-8 shadow-2xl border border-white/20 overflow-hidden">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h3 className="text-xl font-black text-orange-500 flex items-center gap-2">
-                  <span className="material-symbols-outlined">lightbulb</span>
-                  Cultural Insights
-                </h3>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
-                  Slang & Context Notes
-                </p>
-              </div>
-              <button
-                onClick={() => setViewingNote(null)}
-                className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-white/5 rounded-full text-gray-400">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="space-y-6 max-h-[50vh] overflow-y-auto no-scrollbar pb-4">
-              {viewingNote.map((note, idx) => (
-                <div key={idx} className="group">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 bg-orange-500/10 text-orange-600 rounded-md text-xs font-black uppercase">
-                      {note.trigger_word}
-                    </span>
-                    <div className="h-[1px] flex-1 bg-gray-100 dark:bg-white/5" />
-                  </div>
-                  <p className="text-[14px] leading-relaxed text-gray-700 dark:text-gray-300 font-medium">
-                    {note.explanation}
+      {/* 文化注记弹层 UI */}
+      <AnimatePresence>
+        {viewingNote && (
+          <div className="fixed inset-0 z-[150] flex items-end justify-center px-4 pb-10">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setViewingNote(null)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="relative w-full max-w-lg bg-white dark:bg-[#1C1C1E] rounded-[2.5rem] p-8 shadow-2xl border border-white/20 overflow-hidden">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-xl font-black text-orange-500 flex items-center gap-2">
+                    <span className="material-symbols-outlined">lightbulb</span>
+                    Cultural Insights
+                  </h3>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                    Slang & Context Notes
                   </p>
                 </div>
-              ))}
-            </div>
+                <button
+                  onClick={() => setViewingNote(null)}
+                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-white/5 rounded-full text-gray-400">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
 
-            <div className="mt-6 pt-6 border-t border-gray-100 dark:border-white/5">
-              <button
-                onClick={() => setViewingNote(null)}
-                className="w-full py-4 bg-orange-500 text-white rounded-2xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-transform">
-                Got it
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+              <div className="space-y-6 max-h-[50vh] overflow-y-auto no-scrollbar pb-4">
+                {viewingNote.map((note, idx) => (
+                  <div key={idx} className="group">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="px-2 py-0.5 bg-orange-500/10 text-orange-600 rounded-md text-xs font-black uppercase">
+                        {note.trigger_word}
+                      </span>
+                      <div className="h-[1px] flex-1 bg-gray-100 dark:bg-white/5" />
+                    </div>
+                    <p className="text-[14px] leading-relaxed text-gray-700 dark:text-gray-300 font-medium">
+                      {note.explanation}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 pt-6 border-t border-gray-100 dark:border-white/5">
+                <button
+                  onClick={() => setViewingNote(null)}
+                  className="w-full py-4 bg-orange-500 text-white rounded-2xl font-bold shadow-lg shadow-orange-500/20 active:scale-95 transition-transform">
+                  Got it
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* 图片全屏预览 Overlay */}
       <AnimatePresence>
@@ -429,7 +452,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 顶部媒体预览 */}
       <div className="mx-4 mt-12 h-56 relative z-50">
         <motion.div
           initial={{ y: -300, opacity: 0 }}
@@ -470,7 +492,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
         </button>
       </div>
 
-      {/* 评论卡片区域 */}
       <main className="flex-1 flex flex-col items-center justify-start pt-6 z-40">
         <div className="w-full px-8 flex justify-between items-center mb-4">
           <span className="text-gray-500 dark:text-white/60 text-[10px] font-bold uppercase drop-shadow-sm">
@@ -495,7 +516,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
           <div
             className={`absolute inset-x-4 top-0 bottom-0 flex flex-col overflow-hidden transition-all duration-300 shadow-2xl rounded-[2.5rem] border border-white/40 dark:border-white/10 ${animationClass} 
             bg-white/60 dark:bg-[#121212]/60 backdrop-blur-3xl overscroll-x-none !overscroll-x-none touch-pan-y !touch-pan-y`}>
-            {/* 卡片头部 - 包含用户信息和数据统计 */}
             <div className="h-16 border-b border-gray-200/50 dark:border-white/5 flex items-center justify-between px-6 shrink-0">
               <div className="flex items-center gap-3">
                 <div
@@ -506,7 +526,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
                       : activeComment?.author.slice(0, 2).toUpperCase()}
                   </div>
                 </div>
-                {/* 用户信息与数据统计区 */}
                 <div className="flex flex-col justify-center">
                   <span className="text-gray-900 dark:text-white font-bold text-sm leading-tight">
                     {activeComment?.author}
@@ -544,12 +563,10 @@ const TopicHub: React.FC<TopicHubProps> = ({
               )}
             </div>
 
-            {/* 卡片内容 */}
             <div
               ref={contentRef}
               onScroll={handleCardScroll}
               className="flex-1 p-6 overflow-y-auto no-scrollbar scroll-smooth overscroll-x-none">
-              {/* [修改] 传递了 onNoteClick 给 MessageBubble 组件 */}
               <MessageBubble
                 comment={activeComment}
                 isUser={false}
@@ -560,7 +577,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
               <div className="h-12" />
             </div>
 
-            {/* 底部：仅保留交互提示 */}
             <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-white/90 via-white/50 to-transparent dark:from-[#000000] dark:via-[#121212]/50 pointer-events-none flex flex-col justify-end pb-4">
               <div className="flex justify-center opacity-80">
                 {activeComment?.isOpCard ? (
@@ -599,7 +615,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
         </div>
       </main>
 
-      {/* 底部滚动字幕 */}
       <div className="h-14 w-full relative z-40 overflow-hidden flex items-center bg-gray-100/30 dark:bg-white/5 backdrop-blur-md border-t border-white/20 dark:border-white/5 opacity-80">
         <div className="flex whitespace-nowrap animate-ticker items-center gap-10 px-8">
           {[1, 2, 3].map((v) => (
