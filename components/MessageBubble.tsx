@@ -14,7 +14,7 @@ interface MessageBubbleProps {
     comment: Comment,
   ) => void
   showTranslation?: boolean
-  onNoteClick?: (notes: any[]) => void
+  onNoteClick?: (notes: any[]) => void // 兼容保留，但内部不再调用全局弹窗
   highlightedId?: string | null
   className?: string
   difficulty?: string
@@ -29,25 +29,24 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   highlightedId,
   className = '',
   difficulty = 'Original',
-  onNoteClick,
 }) => {
   const isHighlighted = highlightedId === comment.id
 
   // Refs & States
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null)
   const touchStartPos = useRef<{ x: number; y: number } | null>(null)
-  const isLongPressTriggered = useRef(false) // 长按锁
+  const isLongPressTriggered = useRef(false)
 
   // 移除之前的分句激活逻辑，改为气泡级常驻显示
-
   const { speak, isPlaying, isLoading: isSynthesizing, currentId } = useTTS()
+  const [activeTtsIndex, setActiveTtsIndex] = useState<number | null>(null)
+  const [expandedNotes, setExpandedNotes] = useState<Record<number, boolean>>({})
 
   const segments = useMemo(
     () => getMessageSegments(comment, difficulty),
     [comment, difficulty],
   )
 
-  // [新增] 提取该评论中所有 Cultural Note 的触发词，用于高亮
   const allNoteTriggerWords = useMemo(() => {
     return (
       comment.enrichment?.cultural_notes?.map((note) => note.trigger_word) || []
@@ -65,7 +64,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
     e.stopPropagation()
-
     if (!onLongPress) return
 
     isLongPressTriggered.current = false
@@ -80,7 +78,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
 
     clearTimer()
-
     const event = e
     pressTimerRef.current = setTimeout(() => {
       if (!touchStartPos.current) return
@@ -92,7 +89,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!touchStartPos.current) return
-
     const moveX = Math.abs(e.touches[0].clientX - touchStartPos.current.x)
     const moveY = Math.abs(e.touches[0].clientY - touchStartPos.current.y)
 
@@ -195,11 +191,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           const isQuote = seg.en.trim().startsWith('>')
           const displayText = isQuote ? seg.en.replace(/^>\s?/, '') : seg.en
 
-          // 计算本分句包含的注记
           const segmentNotes =
             comment.enrichment?.cultural_notes?.filter((note) =>
               seg.en.toLowerCase().includes(note.trigger_word.toLowerCase()),
             ) || []
+
+          const isNoteExpanded = expandedNotes[i]
 
           return (
             <div
@@ -214,15 +211,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               onMouseUp={handleTouchEnd}
               onMouseLeave={handleTouchEnd}
               onContextMenu={(e) => e.preventDefault()}>
+              {/* [修改] 小灯泡按钮变成 Toggle 开关 */}
               {segmentNotes.length > 0 && (
                 <div
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (onNoteClick) onNoteClick(segmentNotes)
+                    if (navigator.vibrate) navigator.vibrate(20)
+                    setExpandedNotes((prev) => ({ ...prev, [i]: !prev[i] }))
                   }}
-                  className="absolute -top-2 -right-2 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg border border-white dark:border-[#0B0A09] z-[15] cursor-pointer hover:scale-110 active:scale-90 transition-transform">
-                  <span className="material-symbols-outlined text-[10px] text-black font-black">
-                    lightbulb
+                  className={`absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center shadow-lg border z-[15] cursor-pointer hover:scale-110 active:scale-90 transition-colors duration-300 ${isNoteExpanded ? 'bg-orange-500 border-orange-600' : 'bg-yellow-400 border-white dark:border-[#0B0A09]'}`}>
+                  <span
+                    className={`material-symbols-outlined text-[10px] font-black ${isNoteExpanded ? 'text-white' : 'text-black'}`}>
+                    {isNoteExpanded ? 'close' : 'lightbulb'}
                   </span>
                 </div>
               )}
@@ -234,11 +234,45 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   contextSentence={seg.en}
                   externalOnClick={(w) => handleInteractiveClick(w, seg.en)}
                   disabled={isUser}
-                  // [新增] 传入需要高亮的 Cultural Note 关键词
                   highlightWords={allNoteTriggerWords}
                 />
               </div>
 
+              {/* [新增] 原地平滑推开的 Cultural Notes 区域 */}
+              <AnimatePresence>
+                {isNoteExpanded && segmentNotes.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden mt-3">
+                    <div
+                      className="p-3 bg-orange-500/10 dark:bg-orange-500/5 border border-orange-500/20 rounded-xl space-y-3 cursor-default"
+                      onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="material-symbols-outlined text-[14px] text-orange-500">
+                          lightbulb
+                        </span>
+                        <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">
+                          Cultural Insights
+                        </span>
+                      </div>
+                      {segmentNotes.map((note, idx) => (
+                        <div key={idx} className="space-y-1">
+                          <span className="inline-block px-1.5 py-0.5 bg-orange-500/20 text-orange-600 dark:text-orange-400 rounded text-[10px] font-black uppercase">
+                            {note.trigger_word}
+                          </span>
+                          <p className="text-[13px] leading-snug text-gray-700 dark:text-gray-300 font-medium">
+                            {note.explanation}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* 句级翻译 */}
               <AnimatePresence>
                 {showTranslation && seg.zh && (
                   <motion.div
