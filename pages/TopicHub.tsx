@@ -16,6 +16,30 @@ import { useUserStore } from '../store/useUserStore'
 import { Comment, CulturalNote } from '../types'
 import InteractiveText from '../components/InteractiveText'
 
+// [新增] 打字机效果组件
+const TypewriterText = ({ text }: { text: string }) => {
+  const [displayedText, setDisplayedText] = useState('')
+
+  useEffect(() => {
+    if (!text) {
+      setDisplayedText('')
+      return
+    }
+    let i = 0
+    setDisplayedText('')
+    const timer = setInterval(() => {
+      setDisplayedText(text.substring(0, i + 1))
+      i++
+      if (i >= text.length) {
+        clearInterval(timer)
+      }
+    }, 40)
+    return () => clearInterval(timer)
+  }, [text])
+
+  return <>{displayedText}</>
+}
+
 interface TopicHubProps {
   onNavigate: (page: Page) => void
   onSelectComment: (commentId: string) => void
@@ -49,6 +73,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const [isGesturing, setIsGesturing] = useState(false)
   const [isCardAtBottom, setIsCardAtBottom] = useState(false)
 
+  const [subtreeVibes, setSubtreeVibes] = useState<
+    Record<string, { tag: string; summary: string }>
+  >({})
+  const [expandedVibeId, setExpandedVibeId] = useState<string | null>(null)
+
   const startPos = useRef({ x: 0, y: 0 })
   const initialDistanceRef = useRef<number | null>(null)
   const lastScaleRef = useRef(1)
@@ -58,8 +87,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const contentRef = useRef<HTMLDivElement>(null)
   const hasRestoredPosition = useRef(false)
   const videoRef = useRef<HTMLVideoElement>(null)
-
-  // [新增] 专门记录触摸按下的时间戳，用于防手势误触
   const touchStartTime = useRef(0)
 
   const { fetchComments, getComments, isLoading } = useCommentStore()
@@ -76,6 +103,26 @@ const TopicHub: React.FC<TopicHubProps> = ({
   useEffect(() => {
     if (post?.id) {
       fetchComments(post.id)
+
+      const fetchVibes = async () => {
+        const { data } = await supabase
+          .from('subtree_vibes')
+          .select('root_comment_id, vibe_tag, dopa_summary')
+          .eq('post_id', post.id)
+        if (data) {
+          const vibesMap: Record<string, { tag: string; summary: string }> = {}
+          data.forEach(
+            (v) =>
+              (vibesMap[v.root_comment_id] = {
+                tag: v.vibe_tag,
+                summary: v.dopa_summary,
+              }),
+          )
+          setSubtreeVibes(vibesMap)
+        }
+      }
+      fetchVibes()
+
       if (post.content_en && post.content_en.length > 10) {
         setOpContent({
           en: post.content_en,
@@ -250,12 +297,10 @@ const TopicHub: React.FC<TopicHubProps> = ({
     }
   }
 
-  // [核心修复] 手势防冲突检测
   const handleTouchStart = (e: React.TouchEvent) => {
-    // 检测按压的目标是否是一个可点击的互动元素（如单词、灯泡或按钮）
     const target = e.target as HTMLElement
     if (target.closest('.cursor-pointer, button, [role="button"]')) {
-      startPos.current = { x: -1, y: -1 } // 标记无效滑动
+      startPos.current = { x: -1, y: -1 }
       return
     }
 
@@ -264,13 +309,12 @@ const TopicHub: React.FC<TopicHubProps> = ({
   }
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (startPos.current.x === -1) return // 之前已被标记为忽略
+    if (startPos.current.x === -1) return
 
     const diffX = e.changedTouches[0].clientX - startPos.current.x
     const diffY = e.changedTouches[0].clientY - startPos.current.y
     const touchDuration = Date.now() - touchStartTime.current
 
-    // 防误触：时间必须短（< 1000ms），位移必须足够长（> 70px）才算滑动
     if (touchDuration > 1000) return
     if (Math.abs(diffX) < 70 && Math.abs(diffY) < 70) return
 
@@ -288,7 +332,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
       }
     }
 
-    // 重置
     startPos.current = { x: -1, y: -1 }
   }
 
@@ -334,7 +377,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
         />
       )}
 
-      {/* 文化注记弹层 UI */}
       <AnimatePresence>
         {viewingNote && (
           <div className="fixed inset-0 z-[150] flex items-end justify-center px-4 pb-10">
@@ -395,7 +437,6 @@ const TopicHub: React.FC<TopicHubProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 图片全屏预览 Overlay */}
       <AnimatePresence>
         {isImagePreviewOpen && (
           <motion.div
@@ -567,9 +608,55 @@ const TopicHub: React.FC<TopicHubProps> = ({
               ref={contentRef}
               onScroll={handleCardScroll}
               className="flex-1 p-6 overflow-y-auto no-scrollbar scroll-smooth overscroll-x-none">
+              {!activeComment?.isOpCard && subtreeVibes[activeComment.id] && (
+                <div className="flex flex-col items-start w-full mb-3">
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => {
+                      if (navigator.vibrate) navigator.vibrate(20)
+                      setExpandedVibeId(
+                        expandedVibeId === activeComment.id
+                          ? null
+                          : activeComment.id,
+                      )
+                    }}
+                    className={`w-fit flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-orange-400 to-amber-500 rounded-full cursor-pointer hover:shadow-[0_2px_12px_rgba(249,115,22,0.5)] hover:scale-[1.02] active:scale-[0.98] transition-all border z-10 relative ${expandedVibeId === activeComment.id ? 'shadow-[0_2px_8px_rgba(249,115,22,0.5)] border-orange-200/50 mb-1' : 'shadow-[0_2px_8px_rgba(249,115,22,0.3)] border-white/20'}`}>
+                    <span className="material-symbols-outlined text-[12px] text-white animate-pulse">
+                      auto_awesome
+                    </span>
+                    <span className="text-[10px] font-black text-white tracking-widest uppercase">
+                      {subtreeVibes[activeComment.id].tag}
+                    </span>
+                  </motion.div>
+
+                  <AnimatePresence>
+                    {expandedVibeId === activeComment.id && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden w-[95%]">
+                        <div className="mb-2 mt-1 p-3 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-[#1A1612] dark:to-[#1f1a14] border border-orange-200/60 dark:border-orange-500/20 rounded-xl relative before:content-[''] before:absolute before:-top-1.5 before:left-6 before:w-3 before:h-3 before:bg-orange-50 dark:before:bg-[#1A1612] before:border-l before:border-t before:border-orange-200/60 dark:before:border-orange-500/20 before:rotate-45 shadow-sm">
+                          <div className="flex gap-2 items-start">
+                            <span className="material-symbols-outlined text-[14px] text-orange-500 shrink-0 mt-0.5">
+                              info
+                            </span>
+                            <p className="text-[12px] leading-relaxed font-medium text-orange-900 dark:text-orange-200/80">
+                              {subtreeVibes[activeComment.id].summary}
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
               <MessageBubble
                 comment={activeComment}
                 isUser={false}
+                isOpCard={activeComment?.isOpCard}
                 onWordClick={handleWordClick}
                 showTranslation={true}
                 onNoteClick={setViewingNote}
