@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import InteractiveText from './InteractiveText'
 import { getMessageSegments, isImageUrl } from '../utils/textProcessing'
 import { Comment } from '../types'
+import { useTTS } from '../hooks/useTTS'
 
 interface MessageBubbleProps {
   comment: Comment
@@ -37,8 +38,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const touchStartPos = useRef<{ x: number; y: number } | null>(null)
   const isLongPressTriggered = useRef(false) // 长按锁
 
-  // 跟踪哪个句子当前处于激活状态，以便显示TTS小喇叭
-  const [activeTtsIndex, setActiveTtsIndex] = useState<number | null>(null)
+  // 移除之前的分句激活逻辑，改为气泡级常驻显示
+
+  const { speak, isPlaying, isLoading: isSynthesizing, currentId } = useTTS()
 
   const segments = useMemo(
     () => getMessageSegments(comment, difficulty),
@@ -115,18 +117,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const handleSegmentClick = (i: number) => {
     if (isLongPressTriggered.current) return
-    setActiveTtsIndex(activeTtsIndex === i ? null : i)
+    clearTimer()
+    // 移除分句激活，保留交互
   }
 
-  const handleTTS = (e: React.MouseEvent | React.TouchEvent, text: string) => {
+  const handleTTS = (e: React.MouseEvent | React.TouchEvent, text: string, index: number) => {
     e.stopPropagation()
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = 'en-US'
-      utterance.rate = 0.9
-      window.speechSynthesis.speak(utterance)
-    }
+    const segmentId = `${comment.id}-${index}`
+    speak(text, segmentId)
   }
 
   // --- 样式定义 ---
@@ -253,20 +251,24 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 )}
               </AnimatePresence>
 
-              <AnimatePresence>
-                {activeTtsIndex === i && (
-                  <motion.button
-                    initial={{ opacity: 0, scale: 0.5, y: 5 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.5, y: 5 }}
-                    onClick={(e) => handleTTS(e, displayText)}
-                    className="absolute -bottom-3 -right-2 w-8 h-8 bg-white dark:bg-[#2C2C2E] rounded-full flex items-center justify-center shadow-lg border border-gray-200 dark:border-white/10 text-orange-500 z-[20] hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95 transition-all">
-                    <span className="material-symbols-outlined text-[18px]">
-                      volume_up
+              {/* [新增] 气泡级常驻 TTS 按钮 - 读整句话 */}
+              {!isUser && !comment.isLoading && (
+                <button
+                  onClick={(e) => handleTTS(e, comment.content_en || comment.content || '', 999)}
+                  className={`absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg border z-[30] transition-all
+                    ${isPlaying && currentId === `${comment.id}-999`
+                      ? 'bg-orange-500 text-white border-orange-600 scale-110'
+                      : 'bg-white dark:bg-[#2C2C2E] border-gray-100 dark:border-white/10 text-orange-500 hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95'}
+                  `}>
+                  {isSynthesizing && currentId === `${comment.id}-999` ? (
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <span className={`material-symbols-outlined text-[16px] ${isPlaying && currentId === `${comment.id}-999` ? 'animate-pulse' : ''}`}>
+                      {isPlaying && currentId === `${comment.id}-999` ? 'stop' : 'volume_up'}
                     </span>
-                  </motion.button>
-                )}
-              </AnimatePresence>
+                  )}
+                </button>
+              )}
             </div>
           )
         })
@@ -291,6 +293,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             </motion.div>
           )}
       </AnimatePresence>
+
     </div>
   )
 }

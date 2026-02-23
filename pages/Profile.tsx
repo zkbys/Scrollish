@@ -2,6 +2,9 @@ import React, { useRef, useLayoutEffect, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Page, Post } from '../types'
 import { useUserStore } from '../store/useUserStore'
+import { useAuthStore } from '../store/useAuthStore'
+import { useHistoryStore } from '../store/useHistoryStore'
+import { useVocabularyStore } from '../store/useVocabularyStore'
 import { useProfileStore } from '../store/useProfileStore'
 import { useThemeStore } from '../store/useThemeStore'
 import { IMAGES, getAssetPath } from '../constants'
@@ -26,7 +29,10 @@ const RoundedStar = ({ className = "size-6", fill = "currentColor" }) => (
 );
 
 const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
-  const { likedPosts, starredWords, viewHistory, profile, fetchProfile, fetchStarredWords, updateProfile, logout } = useUserStore()
+  const { profile, fetchProfile, updateProfile } = useUserStore()
+  const { logout } = useAuthStore()
+  const { likedPosts, viewHistory } = useHistoryStore()
+  const { starredWords, fetchStarredWords } = useVocabularyStore()
   const { scrollPos, setScrollPos } = useProfileStore()
   const { theme, toggleTheme } = useThemeStore()
   const [activeTab, setActiveTab] = useState<'favorites' | 'history'>('favorites')
@@ -75,7 +81,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
     // 如果没有 context，尝试从云端加载
     let updatedWord = { ...word }
     if (!word.contexts || word.contexts.length === 0) {
-      const contexts = await useUserStore.getState().fetchWordContext(word.word)
+      const contexts = await useVocabularyStore.getState().fetchWordContext(word.word)
       if (contexts && contexts.length > 0) {
         updatedWord.contexts = contexts
         setViewingWordContext(contexts[0].text)

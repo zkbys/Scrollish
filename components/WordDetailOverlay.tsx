@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useUserStore } from '../store/useUserStore'
+import { useVocabularyStore } from '../store/useVocabularyStore'
 import {
   DictionaryResult,
   useDictionaryStore,
 } from '../store/useDictionaryStore'
+import { useTTS } from '../hooks/useTTS'
 
 interface WordDetailOverlayProps {
   word: string | null
@@ -25,43 +26,16 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   onSave,
   hideContextMeaning = false,
 }) => {
-  const { toggleStarWord, isWordStarred } = useUserStore()
+  const { toggleStarWord, isWordStarred } = useVocabularyStore()
   const { triggerAnalysis, isAnalyzing, cachedDefinitions } = useDictionaryStore()
   const isSaved = word ? isWordStarred(word) : false
   const currentDefinition = definition || null
   const { forgetWord } = useDictionaryStore()
 
-  // TTS 状态
-  const [availableVoices, setAvailableVoices] = useState<
-    SpeechSynthesisVoice[]
-  >([])
   const [accent, setAccent] = useState<Accent>('US')
   const [showDopaHint, setShowDopaHint] = useState(false)
+  const { speak, isPlaying, isLoading: isTTSSynthesizing } = useTTS()
 
-  // 1. 修复电脑端 TTS：异步加载声音列表 (带安全检查)
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
-
-    const loadVoices = () => {
-      try {
-        const voices = window.speechSynthesis.getVoices()
-        if (voices.length > 0) {
-          setAvailableVoices(voices)
-        }
-      } catch (e) {
-        console.warn('Failed to get voices:', e)
-      }
-    }
-
-    loadVoices()
-    try {
-      if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = loadVoices
-      }
-    } catch (e) {
-      console.warn('Failed to set onvoiceschanged:', e)
-    }
-  }, [])
 
   if (!word) return null
 
@@ -72,40 +46,10 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
     }
   }
 
-  const getBestVoice = (targetAccent: Accent) => {
-    const targetLang = targetAccent === 'US' ? 'en-US' : 'en-GB'
-    const normalize = (lang: string) => lang.replace('_', '-')
-    const bestVoice = availableVoices.find(
-      (v) =>
-        normalize(v.lang) === targetLang &&
-        (v.name.includes('Natural') ||
-          v.name.includes('Google') ||
-          v.name.includes('Siri') ||
-          v.name.includes('Premium') ||
-          v.name.includes('Enhanced')),
-    )
-    if (bestVoice) return bestVoice
-    const exactLangVoice = availableVoices.find(
-      (v) => normalize(v.lang) === targetLang,
-    )
-    if (exactLangVoice) return exactLangVoice
-    return availableVoices.find((v) => normalize(v.lang).startsWith('en'))
-  }
-
   const handlePlayAudio = (targetAccent?: Accent) => {
-    if (!word || typeof window === 'undefined' || !window.speechSynthesis) return
-    try {
-      window.speechSynthesis.cancel()
-      const utterance = new SpeechSynthesisUtterance(word)
-      const voice = getBestVoice(targetAccent || accent)
-      if (voice) {
-        utterance.voice = voice
-        utterance.rate = 0.9
-      }
-      window.speechSynthesis.speak(utterance)
-    } catch (e) {
-      console.error('Speech Synthesis Error:', e)
-    }
+    if (!word) return
+    // 使用新的 Qwen3-TTS 引擎
+    speak(word, `word-${word}`)
   }
 
   const handleForget = () => {
@@ -174,8 +118,14 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                 </button>
                 <button
                   onClick={() => handlePlayAudio()}
-                  className="w-10 h-10 rounded-xl flex items-center justify-center bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-90 transition-all">
-                  <span className="material-symbols-outlined text-[20px]">volume_up</span>
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all ${isPlaying ? 'bg-orange-600 scale-110' : 'bg-orange-500 active:scale-90'} text-white`}>
+                  {isTTSSynthesizing ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <span className={`material-symbols-outlined text-[20px] ${isPlaying ? 'animate-pulse' : ''}`}>
+                      {isPlaying ? 'stop' : 'volume_up'}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
