@@ -285,20 +285,20 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 )}
               </AnimatePresence>
 
-              {/* [新增] 气泡级常驻 TTS 按钮 - 读整句话 */}
+              {/* [新增] 气泡级常驻 TTS 按钮 - 仅朗读本段话 */}
               {!isUser && !comment.isLoading && (
                 <button
-                  onClick={(e) => handleTTS(e, comment.content_en || comment.content || '', 999)}
+                  onClick={(e) => handleTTS(e, seg.en, i)}
                   className={`absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg border z-[30] transition-all
-                    ${isPlaying && currentId === `${comment.id}-999`
+                    ${isPlaying && currentId === `${comment.id}-${i}`
                       ? 'bg-orange-500 text-white border-orange-600 scale-110'
                       : 'bg-white dark:bg-[#2C2C2E] border-gray-100 dark:border-white/10 text-orange-500 hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95'}
                   `}>
-                  {isSynthesizing && currentId === `${comment.id}-999` ? (
+                  {isSynthesizing && currentId === `${comment.id}-${i}` ? (
                     <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <span className={`material-symbols-outlined text-[16px] ${isPlaying && currentId === `${comment.id}-999` ? 'animate-pulse' : ''}`}>
-                      {isPlaying && currentId === `${comment.id}-999` ? 'stop' : 'volume_up'}
+                    <span className={`material-symbols-outlined text-[16px] ${isPlaying && currentId === `${comment.id}-${i}` ? 'animate-pulse' : ''}`}>
+                      {isPlaying && currentId === `${comment.id}-${i}` ? 'stop' : 'volume_up'}
                     </span>
                   )}
                 </button>

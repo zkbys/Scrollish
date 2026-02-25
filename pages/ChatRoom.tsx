@@ -15,6 +15,7 @@ import CulturalNoteOverlay from '../components/CulturalNoteOverlay'
 import MessageContextMenu from '../components/MessageContextMenu'
 import MiniReactionButton from '../components/MiniReactionButton'
 import { useMessageTree } from '../hooks/useMessageTree'
+import SpeakingAvatarOverlay from '../components/SpeakingAvatarOverlay'
 
 const AI_MODEL = 'deepseek-ai/DeepSeek-V2.5'
 
@@ -655,6 +656,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
         </div>
       </div>
       <style>{`.menu-item { @apply w-full text-left px-4 py-2 text-sm hover:bg-white/10 flex items-center gap-2; }`}</style>
+      <SpeakingAvatarOverlay />
     </div >
   )
 }

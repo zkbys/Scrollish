@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-const AI_MODEL = 'Qwen/Qwen2.5-7B-Instruct'
+const AI_MODEL = 'deepseek-ai/DeepSeek-V2.5'
 
 import { supabase } from '../supabase'
 
@@ -67,19 +67,26 @@ export const useDictionaryStore = create<DictionaryState>()(
 
           if (error) throw error
 
-          const content = data.choices?.[0]?.message?.content || '{}'
+          // 核心修复：检查 API 是否返回了有效的数据，如果是报错（比如 Key 没钱了/配置不对）则显示错误提示
+          if (!data?.choices?.[0]?.message?.content) {
+            const errorMsg = data?.error?.message || data?.message || 'API 配置有误，请检查后台密钥';
+            throw new Error(errorMsg);
+          }
+
+          const content = data.choices[0].message.content
           const jsonStr = content.replace(/```json|```/g, '').trim()
 
           let parsedResult: DictionaryResult
           try {
             parsedResult = JSON.parse(jsonStr)
           } catch (e) {
+            console.error('JSON Parse Error:', e, 'Raw content:', content)
             parsedResult = {
               word,
               ipa: '',
               roots: '',
-              context_meaning_cn: '解析失败，请重试',
-              context_meaning_en: 'Parse failed',
+              context_meaning_cn: '解析结果格式有误，请重试',
+              context_meaning_en: 'Result format error',
               definition_cn: '',
               definition_en: '',
             }
@@ -94,12 +101,25 @@ export const useDictionaryStore = create<DictionaryState>()(
             analyzingWords: state.analyzingWords.filter((w) => w !== cacheKey),
           }))
           return parsedResult
-        } catch (error) {
+        } catch (error: any) {
           console.error('Dict API Error:', error)
+          const errorResult: DictionaryResult = {
+            word,
+            ipa: '/error/',
+            roots: '',
+            context_meaning_cn: `解析出错：${error.message || '未知错误'}`,
+            context_meaning_en: 'Analysis failed, please check API balance or key.',
+            definition_cn: '请检查 SiliconFlow 余额或 API Key 是否正确同步到 Supabase Secrets。',
+            definition_en: error.message || 'API Error',
+          }
           set((state) => ({
+            cachedDefinitions: {
+              ...state.cachedDefinitions,
+              [cacheKey]: errorResult,
+            },
             analyzingWords: state.analyzingWords.filter((w) => w !== cacheKey),
           }))
-          return null
+          return errorResult
         }
       },
 

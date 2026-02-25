@@ -18,6 +18,7 @@ import TopicCard from '../components/TopicCard'
 import ImagePreviewOverlay from '../components/ImagePreviewOverlay'
 import CulturalNoteOverlay from '../components/CulturalNoteOverlay'
 import { useTopicHubGestures } from '../hooks/useTopicHubGestures'
+import SpeakingAvatarOverlay from '../components/SpeakingAvatarOverlay'
 
 interface TopicHubProps {
   onNavigate: (page: Page) => void
@@ -448,6 +449,7 @@ const TopicHub: React.FC<TopicHubProps> = ({
         .blob-pastel { position: absolute; width: 500px; height: 500px; filter: blur(100px); border-radius: 50%; z-index: 0; pointer-events: none; }
         .frost-overlay { position: fixed; inset: 0; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.03; pointer-events: none; z-index: 5; }
       `}</style>
+      <SpeakingAvatarOverlay />
     </div>
   )
 }

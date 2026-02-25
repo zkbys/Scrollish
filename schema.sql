@@ -119,7 +119,14 @@
     is_verified boolean DEFAULT false,
     
     created_at timestamptz DEFAULT now(),
-    updated_at timestamptz DEFAULT now()
+    updated_at timestamptz DEFAULT now(),
+    
+    -- [New] Cloned Voice Customization
+    cloned_voice_avatar_url text,
+    cloned_voice_name text,
+    cloned_voice_desc text,
+    cloned_voice_url text, -- Storage link or voice ID
+    cloned_voice_text text -- Enrollment text
     );
 
     -- Learning Logs (For Streak & Calendar)

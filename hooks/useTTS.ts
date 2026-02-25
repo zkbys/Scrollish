@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef } from 'react';
 import { supabase } from '../supabase';
 import { useUserStore } from '../store/useUserStore';
+import { useTTSStore } from '../store/useTTSStore';
+import { VOICES, getAssetPath } from '../constants';
 
 interface TTSState {
     isPlaying: boolean;
@@ -25,28 +27,91 @@ export function useTTS() {
     const playPromiseRef = useRef<Promise<void> | null>(null);
     const cacheRef = useRef<Record<string, string>>({});
 
+    // 音频分析相关 Refs
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
+    const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
+
+    // 优化：使用 getState 获取稳定的 Action 函数，避免每个 hook 实例都订阅 Store
+    const setGlobalActiveVoice = useTTSStore.getState().setActiveVoice;
+    const setGlobalStopCallback = useTTSStore.getState().setStopCallback;
+    const setGlobalAmplitude = useTTSStore.getState().setAmplitude;
+
+    // 清理音频分析资源
+    const stopAnalysis = useCallback(() => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+        }
+        setGlobalAmplitude(0);
+    }, [setGlobalAmplitude]);
+
+    // 开始音量分析循环
+    const startAnalysis = useCallback(() => {
+        if (!analyserRef.current) return;
+
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+
+        const analyze = () => {
+            if (!analyserRef.current) return;
+            analyserRef.current.getByteTimeDomainData(dataArray);
+
+            // 计算均方根 (RMS) 振幅
+            let sumSquares = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                const normalized = (dataArray[i] - 128) / 128; // 归一化到 -1 到 1
+                sumSquares += normalized * normalized;
+            }
+            const rms = Math.sqrt(sumSquares / dataArray.length);
+
+            // 归一化并加一点灵敏度，方便 UI 表现
+            const sensivity = 1.8;
+            setGlobalAmplitude(Math.min(1, rms * sensivity));
+
+            animationFrameRef.current = requestAnimationFrame(analyze);
+        };
+
+        analyze();
+    }, [setGlobalAmplitude]);
+
     const stop = useCallback(async () => {
+        stopAnalysis();
         if (audioRef.current) {
-            // 如果正在加载/播放，先等待 promise 完成以避免 AbortError
             if (playPromiseRef.current) {
                 try { await playPromiseRef.current; } catch (e) { /* ignore */ }
             }
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
-            audioRef.current.src = ""; // 清空 src 停止加载
+            audioRef.current.src = "";
         }
         setState((prev) => ({ ...prev, isPlaying: false, currentId: null }));
-    }, []);
 
-    const speak = useCallback(async (text: string, id: string, voice?: string) => {
-        // 如果正在播放同一条，则停止
+        // 停止播放时清理全局状态
+        setGlobalActiveVoice(null);
+    }, [setGlobalActiveVoice]);
+
+    const speak = useCallback(async (text: string, id: string, voice?: string, params?: { speech_rate?: number; pitch_rate?: number }) => {
         if (state.isPlaying && state.currentId === id) {
             stop();
             return;
         }
 
         try {
-            // 1. 彻底停止当前的
+            /**
+             * [关键修复] 在开始新的播放前，先获取并执行全局的停止回调。
+             * 这确保了即便不同的组件实例拥有各自独立的 Audio 对象，也能在全局范围内“互斥”播放。
+             */
+            const currentGlobalStop = useTTSStore.getState().stopCallback;
+            if (currentGlobalStop && currentGlobalStop !== stop) {
+                try {
+                    await currentGlobalStop();
+                } catch (e) {
+                    console.warn('Failed to stop previous audio:', e);
+                }
+            }
+
+            // 彻底停止当前实例的残留
             await stop();
 
             setState((prev) => ({
@@ -60,20 +125,48 @@ export function useTTS() {
             const defaultVoice = profile?.tts_voice || 'Cherry';
             const finalVoice = voice || defaultVoice;
 
-            // 特殊逻辑：如果是预览本地文件 (形如 /.../*.wav)
-            let audioUrl = "";
+            /**
+             * [关键修复] 仅在开始 speak 时注册当前实例的 stop 函数到全局 Store。
+             * 这样避免了多个 useTTS 实例在 useEffect 中抢夺注册权导致的性能问题或白屏。
+             */
+            const isCloned = finalVoice === 'cloned' && (profile as any)?.cloned_voice_url;
+
+            // 解析头像 URL 和 显示名称
+            let finalAvatar: string | null = null;
+            let finalName: string | null = null;
+
+            if (isCloned) {
+                finalAvatar = (profile as any)?.cloned_voice_avatar_url || null;
+                finalName = (profile as any)?.cloned_voice_name || '您的专属音色';
+            } else if (finalVoice !== 'System') {
+                const fileName = finalVoice === 'Eldric Sage' ? 'Eldric' : finalVoice;
+                finalAvatar = getAssetPath(`/avatars/${fileName}.png`);
+                finalName = VOICES.find(v => v.id === finalVoice)?.label || finalVoice;
+            }
+
+            setGlobalActiveVoice(finalVoice, finalAvatar, finalName);
+            setGlobalStopCallback(stop);
+
+            let audioUrls: string[] = [];
             if (text.startsWith('/') && text.endsWith('.wav')) {
-                audioUrl = text;
+                audioUrls = [text];
             } else {
                 const isCloned = finalVoice === 'cloned' && (profile as any)?.cloned_voice_url;
-                const cacheKey = `${text}_${finalVoice}_${isCloned ? (profile as any).cloned_voice_url : ''}`;
-                audioUrl = cacheRef.current[cacheKey];
+                const finalRate = params?.speech_rate ?? (profile?.tts_rate || 1.0);
+                const finalPitch = params?.pitch_rate ?? (profile?.tts_pitch || 1.0);
 
-                if (!audioUrl) {
+                const cacheKey = `${text}_${finalVoice}_${isCloned ? (profile as any).cloned_voice_url : ''}_rate${finalRate}_pitch${finalPitch}`;
+                const cached = cacheRef.current[cacheKey];
+
+                if (cached) {
+                    audioUrls = JSON.parse(cached);
+                } else {
                     const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts`;
                     const requestPayload: any = {
                         text,
-                        voice: isCloned ? (profile as any).cloned_voice_url : finalVoice
+                        voice: isCloned ? (profile as any).cloned_voice_url : finalVoice,
+                        speech_rate: finalRate,
+                        pitch_rate: finalPitch
                     };
 
                     const response = await fetch(functionUrl, {
@@ -86,50 +179,74 @@ export function useTTS() {
                     });
 
                     if (!response.ok) {
-                        const errorMsg = await response.text();
-                        throw new Error(`Edge Function Error (${response.status}): ${errorMsg}`);
+                        const errorData = await response.json().catch(() => ({ error: 'Unknown API error' }));
+                        throw new Error(`Edge Function Error (${response.status}): ${errorData.error || response.statusText}`);
                     }
 
                     const { url } = await response.json();
                     if (!url) throw new Error('No audio URL returned from server');
-                    audioUrl = url;
-                    cacheRef.current[cacheKey] = audioUrl;
+
+                    audioUrls = Array.isArray(url) ? url : [url];
+                    cacheRef.current[cacheKey] = JSON.stringify(audioUrls);
                 }
             }
 
-            // 2. 播放音频
             if (!audioRef.current) {
                 audioRef.current = new Audio();
+                audioRef.current.crossOrigin = "anonymous";
             }
 
-            // 增加时间戳防止缓存
-            const finalUrl = audioUrl.includes('?')
-                ? `${audioUrl}&t=${Date.now()}`
-                : `${audioUrl}?t=${Date.now()}`;
+            // 初始化 AudioContext 和 Analyser
+            if (!audioContextRef.current) {
+                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                analyserRef.current = audioContextRef.current.createAnalyser();
+                analyserRef.current.fftSize = 256;
 
-            audioRef.current.src = finalUrl;
+                sourceRef.current = audioContextRef.current.createMediaElementSource(audioRef.current);
+                sourceRef.current.connect(analyserRef.current);
+                analyserRef.current.connect(audioContextRef.current.destination);
+            }
 
-            // 追踪播放 Promise
-            const playPromise = audioRef.current.play();
-            playPromiseRef.current = playPromise;
+            // iOS/Chrome 必须在用户交互后 resume
+            if (audioContextRef.current.state === 'suspended') {
+                await audioContextRef.current.resume();
+            }
 
-            if (playPromise !== undefined) {
-                try {
-                    await playPromise;
-                    setState((prev) => ({ ...prev, isLoading: false, isPlaying: true }));
-                } catch (playErr: any) {
-                    if (playErr.name === 'AbortError') {
-                        console.log('Playback was intentionally aborted.');
-                        return; // 被手动停止了，忽略报错
-                    }
-                    throw playErr;
+            const playQueue = async (index: number) => {
+                if (index >= audioUrls.length) {
+                    setState((prev) => ({ ...prev, isPlaying: false, currentId: null, isLoading: false }));
+                    setGlobalActiveVoice(null); // 彻底播放完后再清空
+                    playPromiseRef.current = null;
+                    stopAnalysis();
+                    return;
                 }
-            }
 
-            audioRef.current.onended = () => {
-                setState((prev) => ({ ...prev, isPlaying: false, currentId: null }));
-                playPromiseRef.current = null;
+                const currentUrl = audioUrls[index];
+                const finalUrl = currentUrl.includes('?')
+                    ? `${currentUrl}&t=${Date.now()}`
+                    : `${currentUrl}?t=${Date.now()}`;
+
+                audioRef.current!.src = finalUrl;
+                const playPromise = audioRef.current!.play();
+                playPromiseRef.current = playPromise;
+
+                if (playPromise !== undefined) {
+                    try {
+                        await playPromise;
+                        setState((prev) => ({ ...prev, isLoading: false, isPlaying: true }));
+                        startAnalysis();
+                    } catch (playErr: any) {
+                        if (playErr.name === 'AbortError') return;
+                        throw playErr;
+                    }
+                }
+
+                audioRef.current!.onended = () => {
+                    playQueue(index + 1);
+                };
             };
+
+            await playQueue(0);
 
         } catch (err: any) {
             console.error('TTS Error:', err);
@@ -140,17 +257,24 @@ export function useTTS() {
                 currentId: null,
                 error: err.message || 'Speech synthesis failed'
             }));
+            setGlobalActiveVoice(null);
 
-            // 降级 (仅限普通文字)
             if (!(text.startsWith('/') && text.endsWith('.wav')) && 'speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'en-US';
-                utterance.onstart = () => setState(p => ({ ...p, isPlaying: true }));
-                utterance.onend = () => setState(p => ({ ...p, isPlaying: false, currentId: null }));
+                utterance.onstart = () => {
+                    setState(p => ({ ...p, isPlaying: true }));
+                    setGlobalActiveVoice('System');
+                    setGlobalStopCallback(() => window.speechSynthesis.cancel()); // 降级方案也要支持全局停止
+                };
+                utterance.onend = () => {
+                    setState(p => ({ ...p, isPlaying: false, currentId: null }));
+                    setGlobalActiveVoice(null);
+                };
                 window.speechSynthesis.speak(utterance);
             }
         }
-    }, [state.isPlaying, state.currentId, stop]);
+    }, [state.isPlaying, state.currentId, stop, setGlobalActiveVoice, setGlobalStopCallback]);
 
     return {
         ...state,

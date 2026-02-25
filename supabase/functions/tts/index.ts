@@ -36,6 +36,30 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
     throw lastError || new Error(`Failed after ${maxRetries} retries`);
 }
 
+/**
+ * 助手函数：将长文本按标点符号切分为多个片段 (防止阿里 API 600字符限制)
+ */
+function splitText(text: string, maxLength = 500): string[] {
+    if (text.length <= maxLength) return [text];
+
+    // 匹配标点符号：。！？. ! ? \n
+    const regex = /([^。！？.!？\n]+[。！？.!？\n]*)/g;
+    const matches = text.match(regex) || [text];
+    const segments: string[] = [];
+    let currentChunk = "";
+
+    for (const part of matches) {
+        if ((currentChunk + part).length > maxLength && currentChunk !== "") {
+            segments.push(currentChunk.trim());
+            currentChunk = part;
+        } else {
+            currentChunk += part;
+        }
+    }
+    if (currentChunk) segments.push(currentChunk.trim());
+    return segments;
+}
+
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -51,7 +75,9 @@ Deno.serve(async (req) => {
             reference_audio,
             reference_text,
             action = 'synthesize',
-            preferred_name = 'user_clone'
+            preferred_name = 'user_clone',
+            speech_rate = 1.0,  // 新增：语速控制
+            pitch_rate = 1.0    // 新增：语调控制
         } = body
 
         const apiKey = Deno.env.get('DASHSCOPE_API_KEY')
@@ -109,49 +135,66 @@ Deno.serve(async (req) => {
         // --- 2. 处理语音合成 (Synthesis) ---
         if (!text) throw new Error('Text is required for TTS');
 
+        // 长文本处理：切分为多个片段
+        const textSegments = splitText(text, 500);
+        console.log(`Synthesis text length: ${text.length}. Segments: ${textSegments.length}`);
+
         let finalModel = requestedModel || 'qwen3-tts-flash';
         if (voice.startsWith('qwen-tts-vc-') || voice === 'cloned') {
             finalModel = 'qwen3-tts-vc-2026-01-22';
         }
 
-        const payload: any = {
-            model: finalModel,
-            input: { text },
-            parameters: {
-                format: format,
-                sample_rate: 24000,
-                volume: 50,
+        const urls: string[] = [];
+
+        // 串行请求各个片段
+        for (const segment of textSegments) {
+            const payload: any = {
+                model: finalModel,
+                input: { text: segment },
+                parameters: {
+                    format: format,
+                    sample_rate: 24000,
+                    volume: 50,
+                    speech_rate: speech_rate, // 语速：范围为 (0.5, 2.0)
+                    pitch_rate: pitch_rate    // 语调：范围为 (0.5, 2.0)
+                }
             }
+
+            if (finalModel.includes('cosyvoice')) {
+                payload.parameters.reference_audio = reference_audio;
+                if (reference_text) payload.parameters.reference_text = reference_text;
+            } else {
+                payload.input.voice = voice;
+                if (!finalModel.includes('-vc')) payload.parameters.voice = voice;
+            }
+
+            const response = await fetchWithRetry('https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    'X-DashScope-DataInspection': 'enable',
+                },
+                body: JSON.stringify(payload),
+            })
+
+            const resultText = await response.text();
+            let data: any = {};
+            try { data = JSON.parse(resultText); } catch (e) { /* ignore */ }
+
+            if (!response.ok) {
+                const msg = data.message || data.error?.message || 'Unknown error';
+                throw new Error(`DashScope API Error (${response.status}): ${msg}`);
+            }
+
+            const audioUrl = data.output?.audio?.url || data.output?.audio_url;
+            if (audioUrl) urls.push(audioUrl);
         }
 
-        if (finalModel.includes('cosyvoice')) {
-            payload.parameters.reference_audio = reference_audio;
-            if (reference_text) payload.parameters.reference_text = reference_text;
-        } else {
-            payload.input.voice = voice;
-            if (!finalModel.includes('-vc')) payload.parameters.voice = voice;
-        }
+        if (urls.length === 0) throw new Error('No audio URL returned from server');
 
-        const response = await fetchWithRetry('https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'X-DashScope-DataInspection': 'enable',
-            },
-            body: JSON.stringify(payload),
-        })
-
-        const resultText = await response.text();
-        let data: any = {};
-        try { data = JSON.parse(resultText); } catch (e) { /* ignore */ }
-
-        if (!response.ok) {
-            throw new Error(`DashScope API Error (${response.status}): ${data.message || 'Unknown error'}`);
-        }
-
-        const audioUrl = data.output?.audio?.url || data.output?.audio_url
-        return new Response(JSON.stringify({ url: audioUrl }), {
+        // 如果只有一段，返回单个 string 保持兼容；如果多段，返回数组
+        return new Response(JSON.stringify({ url: urls.length === 1 ? urls[0] : urls }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         })

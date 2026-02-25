@@ -47,7 +47,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: model || 'Qwen/Qwen2.5-7B-Instruct', // 使用默认模型，或允许前端覆盖
+        model: model || 'deepseek-ai/DeepSeek-V2.5', // 使用更通用的 DeepSeek 模型
         messages: messages,
         stream: false,
         temperature: 0.3,
@@ -55,6 +55,14 @@ serve(async (req) => {
     })
 
     const data = await response.json()
+
+    if (!response.ok) {
+      console.error('SiliconFlow API Error:', data)
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: response.status,
+      })
+    }
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

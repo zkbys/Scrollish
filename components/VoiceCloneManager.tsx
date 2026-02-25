@@ -48,11 +48,19 @@ const encodeWAV = (samples: Float32Array, sampleRate: number) => {
 }
 
 const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSuccess }) => {
-    const [status, setStatus] = useState<'idle' | 'recording' | 'preview' | 'processing' | 'uploading' | 'success'>('idle')
+    const [status, setStatus] = useState<'idle' | 'recording' | 'preview' | 'processing' | 'uploading' | 'identity_setup' | 'success'>('idle')
     const [recordingTime, setRecordingTime] = useState(0)
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
     const [audioUrl, setAudioUrl] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
+
+    // 新增身份设置状态
+    const [setupName, setSetupName] = useState('')
+    const [setupDesc, setSetupDesc] = useState('')
+    const [setupAvatar, setSetupAvatar] = useState<string | null>(null)
+    const [clonedVoiceUrl, setClonedVoiceUrl] = useState<string | null>(null)
+    const [isSavingIdentity, setIsSavingIdentity] = useState(false)
+    const setupAvatarRef = useRef<HTMLInputElement>(null)
 
     // 录音相关引用
     const audioContextRef = useRef<AudioContext | null>(null)
@@ -299,15 +307,94 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
                 tts_voice: 'cloned'
             })
 
-            setStatus('success')
-            setTimeout(() => {
-                onSuccess(voiceId, referenceText)
-            }, 1500)
+            setClonedVoiceUrl(voiceId)
+            setStatus('identity_setup')
 
         } catch (err: any) {
             console.error('Cloning failed:', err)
             setError(err.message || '操作失败，请重试。')
             setStatus('preview')
+        }
+    }
+
+    /**
+     * 处理设置页面的头像上传
+     */
+    const handleSetupAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file || !user) return
+
+        try {
+            setIsSavingIdentity(true)
+            const fileExt = file.name.split('.').pop()
+            const fileName = `${user.id}_cloned_avatar_${Math.random()}.${fileExt}`
+            const filePath = `${user.id}/${fileName}`
+
+            const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(filePath, file)
+
+            if (uploadError) throw uploadError
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(filePath)
+
+            setSetupAvatar(publicUrl)
+        } catch (err: any) {
+            console.error('Avatar upload failed:', err)
+            alert('头像上传失败，请重试。')
+        } finally {
+            setIsSavingIdentity(false)
+        }
+    }
+
+    /**
+     * 最终保存所有身份信息
+     */
+    const finishSetup = async () => {
+        if (!user || !clonedVoiceUrl) return
+
+        try {
+            setIsSavingIdentity(true)
+
+            // 使用默认值
+            const finalName = setupName.trim() || '自定义音色'
+            const finalDesc = setupDesc.trim() || '你的专属 AI 声线'
+
+            const { error: updateError } = await supabase
+                .from('profiles')
+                .update({
+                    cloned_voice_url: clonedVoiceUrl,
+                    cloned_voice_text: referenceText,
+                    cloned_voice_name: finalName,
+                    cloned_voice_desc: finalDesc,
+                    cloned_voice_avatar_url: setupAvatar,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', user.id)
+
+            if (updateError) throw updateError
+
+            // 更新本地 store
+            updateProfile({
+                cloned_voice_url: clonedVoiceUrl,
+                cloned_voice_text: referenceText,
+                cloned_voice_name: finalName,
+                cloned_voice_desc: finalDesc,
+                cloned_voice_avatar_url: setupAvatar
+            })
+
+            setStatus('success')
+            setTimeout(() => {
+                onSuccess(clonedVoiceUrl, referenceText)
+            }, 1000)
+
+        } catch (err: any) {
+            console.error('Save identity failed:', err)
+            setError('保存身份信息失败，请重试。')
+        } finally {
+            setIsSavingIdentity(false)
         }
     }
 
@@ -342,6 +429,16 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
                             <p className="text-xs text-gray-400 mb-2 uppercase font-bold tracking-wider">建议时长</p>
                             <p className="text-sm font-medium dark:text-white italic">"10 到 20 秒的高质量原声"</p>
                         </div>
+                        <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-start gap-3 text-left">
+                            <span className="material-symbols-outlined text-orange-500 mt-0.5">lightbulb</span>
+                            <div>
+                                <p className="text-[13px] font-black text-orange-950 dark:text-orange-200">复刻小贴士</p>
+                                <p className="text-[11px] font-bold text-orange-800/80 dark:text-orange-300/80 mt-0.5 leading-relaxed">
+                                    录制时像真正阅读一样**带有感情地朗读**，生成的音色会更自然、更有表现力哦！
+                                </p>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 gap-3">
                             <button
                                 onClick={startRecording}
@@ -382,8 +479,12 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
                         </div>
                         <p className="text-sm font-medium dark:text-white px-4">
                             正在录制音频...<br />
-                            <span className="text-orange-500 italic mt-2 block">"{referenceText}"</span>
+                            <span className="text-orange-500 italic mt-2 block font-black">"{referenceText}"</span>
                         </p>
+                        <div className="flex items-center justify-center gap-2 text-orange-500/80 animate-pulse">
+                            <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                            <span className="text-[11px] font-black tracking-tight">记得带有感情的朗读哦！</span>
+                        </div>
                         <button
                             onClick={stopRecording}
                             className="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-black rounded-2xl font-black transition-all"
@@ -402,7 +503,7 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
                             样本已处理完成。请确认音质是否清晰。
                             {audioBlob && audioBlob.size > 0 && (
                                 <span className="block text-[10px] text-orange-500 mt-1">
-                                    * 已自动为您截取前 20 秒作为最佳克隆样本
+                                    * 已自动为您截取前 20 秒作为样本
                                 </span>
                             )}
                         </p>
@@ -435,8 +536,69 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
                 {status === 'uploading' && (
                     <div className="text-center py-10 space-y-4">
                         <div className="w-16 h-16 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-gray-500 dark:text-gray-400 font-bold">正在克隆您的声音...</p>
+                        <p className="text-gray-500 dark:text-gray-400 font-bold">正在提取您的声音信息...</p>
                         <p className="text-[10px] text-gray-400">Dopa正在提取声纹特征，请不要关闭页面...</p>
+                    </div>
+                )}
+
+                {status === 'identity_setup' && (
+                    <div className="space-y-6">
+                        <div className="text-center">
+                            <h4 className="text-lg font-black dark:text-white">赋予它一个身份</h4>
+                            <p className="text-xs text-gray-500 mt-1 text-balance">你的专属声线生成成功，现在为它起个名字吧。</p>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-4">
+                            <div
+                                onClick={() => setupAvatarRef.current?.click()}
+                                className="w-24 h-24 rounded-[28px] bg-gray-100 dark:bg-white/5 border-2 border-dashed border-gray-200 dark:border-white/10 flex items-center justify-center overflow-hidden cursor-pointer hover:border-orange-500/50 transition-colors relative group"
+                            >
+                                {setupAvatar ? (
+                                    <img src={setupAvatar} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="text-center">
+                                        <span className="material-symbols-outlined text-gray-400">add_a_photo</span>
+                                        <p className="text-[10px] text-gray-400 font-bold mt-1">上传头像</p>
+                                    </div>
+                                )}
+                                {isSavingIdentity && (
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                        <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    </div>
+                                )}
+                                <input type="file" ref={setupAvatarRef} className="hidden" accept="image/*" onChange={handleSetupAvatarUpload} />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">音色名称</label>
+                                <input
+                                    value={setupName}
+                                    onChange={e => setSetupName(e.target.value)}
+                                    placeholder="例如：超级教师、我的分身..."
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 ring-orange-500/20"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">个性简介</label>
+                                <textarea
+                                    value={setupDesc}
+                                    onChange={e => setSetupDesc(e.target.value)}
+                                    placeholder="简单描述一下这个声音的性格..."
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:ring-2 ring-orange-500/20 h-24 resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={finishSetup}
+                            disabled={isSavingIdentity}
+                            className="w-full py-4 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded-2xl font-black transition-all shadow-lg shadow-orange-500/20"
+                        >
+                            {isSavingIdentity ? '正在保存...' : '完成设置'}
+                        </button>
                     </div>
                 )}
 
@@ -449,7 +611,7 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
                         >
                             <span className="material-symbols-outlined text-4xl text-white">check</span>
                         </motion.div>
-                        <h4 className="text-lg font-black dark:text-white">克隆成功！</h4>
+                        <h4 className="text-lg font-black dark:text-white">成功！</h4>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                             WAV 样本已就绪，享受您的专属音色吧。
                         </p>

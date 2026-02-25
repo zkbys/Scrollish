@@ -10,6 +10,10 @@ import { useThemeStore } from '../store/useThemeStore'
 import { IMAGES, getAssetPath } from '../constants'
 import { STAGGER_CONTAINER, STAGGER_ITEM, SPRING_GENTLE } from '../motion'
 import WordDetailOverlay from '../components/WordDetailOverlay'
+import { toMultiplier, toLevel } from '../utils/ttsUtils'
+import { VOICES } from '../constants'
+import { useTTS } from '../hooks/useTTS'
+import VoiceCloneManager from '../components/VoiceCloneManager'
 
 interface ProfileProps {
   onNavigate?: (page: Page) => void
@@ -29,12 +33,13 @@ const RoundedStar = ({ className = "size-6", fill = "currentColor" }) => (
 );
 
 const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
-  const { profile, fetchProfile, updateProfile } = useUserStore()
+  const { profile, fetchProfile, updateProfile, setTtsVoice, setTtsParams, clearVoiceClone } = useUserStore()
   const { logout } = useAuthStore()
   const { likedPosts, viewHistory } = useHistoryStore()
   const { starredWords, fetchStarredWords } = useVocabularyStore()
   const { scrollPos, setScrollPos } = useProfileStore()
   const { theme, toggleTheme } = useThemeStore()
+  const { speak } = useTTS()
   const [activeTab, setActiveTab] = useState<'favorites' | 'history'>('favorites')
 
   useEffect(() => {
@@ -49,12 +54,41 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
   const progressPercent = Math.min(100, Math.max(0, ((currentXP - prevLevelXP) / (nextLevelXP - prevLevelXP)) * 100))
 
   const [showSettings, setShowSettings] = useState(false)
+  const [showVoices, setShowVoices] = useState(false)
+  const [showCloneModal, setShowCloneModal] = useState(false)
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({})
   const [showVocabularyOverlay, setShowVocabularyOverlay] = useState(false)
+
+  const currentVoice = profile?.tts_voice || 'cherry'
+  const selectedVoiceLabel = [...VOICES, { id: 'cloned', label: profile?.cloned_voice_name || '自定义' }].find(v => v.id === currentVoice)?.label || currentVoice
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null)
   const [viewingWord, setViewingWord] = useState<string | null>(null)
   const [viewingDefinition, setViewingDefinition] = useState<any>(null)
   const [viewingWordContext, setViewingWordContext] = useState<string>('')
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // 影子状态：用于实现 60fps 丝滑滚动的本地状态 (现在存储的是 Level)
+  const [localRateLevel, setLocalRateLevel] = useState(toLevel(profile?.tts_rate || 1.0))
+  const [localPitchLevel, setLocalPitchLevel] = useState(toLevel(profile?.tts_pitch || 1.0))
+
+  // 当外部 profile 改变时同步本地状态（例如初始化加载）
+  useEffect(() => {
+    if (profile?.tts_rate !== undefined) setLocalRateLevel(toLevel(profile.tts_rate))
+    if (profile?.tts_pitch !== undefined) setLocalPitchLevel(toLevel(profile.tts_pitch))
+  }, [profile?.tts_rate, profile?.tts_pitch])
+
+  // 防抖同步到全局 Store，避免滑动时触发昂贵的全局重绘
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const targetRate = toMultiplier(localRateLevel)
+      const targetPitch = toMultiplier(localPitchLevel)
+      if (Math.abs(targetRate - (profile?.tts_rate || 1.0)) > 0.01 ||
+        Math.abs(targetPitch - (profile?.tts_pitch || 1.0)) > 0.01) {
+        setTtsParams({ rate: targetRate, pitch: targetPitch })
+      }
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [localRateLevel, localPitchLevel])
 
   // 恢复滚动位置
   useLayoutEffect(() => {
@@ -195,7 +229,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
 
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">Appearance</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">外观设置</h3>
                   <button
                     onClick={toggleTheme}
                     className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/50 dark:bg-white/5 border border-white/60 dark:border-white/5 active:scale-95 transition-all">
@@ -213,30 +247,213 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
                   </button>
                 </div>
 
-
-
+                {/* TTS 语音偏好设置 */}
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">Wechatroom</h3>
-                  <div className="p-4 rounded-2xl bg-orange-500/5 border border-orange-500/10 flex flex-col items-center gap-4">
-                    <div
-                      onClick={() => setFullscreenImage('/group_qr.jpg')}
-                      className="w-full aspect-square max-w-[220px] bg-white dark:bg-white/10 rounded-2xl border border-orange-500/20 flex items-center justify-center relative group overflow-hidden shadow-lg p-3 cursor-zoom-in active:scale-95 transition-transform">
-                      <img
-                        src={getAssetPath('/group_qr.jpg')}
-                        alt="Wechatroom QR Code"
-                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">语音偏好设置</h3>
+                  <div className="space-y-4 p-4 rounded-2xl bg-white/50 dark:bg-white/5 border border-white/60 dark:border-white/5">
+                    {/* 语速调节 */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] font-black uppercase tracking-tight text-gray-600 dark:text-white/60">语速等级</span>
+                        <div className="flex items-center gap-1.5">
+                          {localRateLevel === 0.5 && <span className="text-[9px] font-bold text-gray-400 dark:text-white/40 uppercase">默认值</span>}
+                          <span className="text-[11px] font-mono font-black text-orange-500">{localRateLevel.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1.0"
+                        step="0.05"
+                        value={localRateLevel}
+                        onChange={(e) => setLocalRateLevel(parseFloat(e.target.value))}
+                        onPointerUp={(e) => updateProfile({ tts_rate: toMultiplier(parseFloat((e.target as HTMLInputElement).value)) })}
+                        className="w-full accent-orange-500 h-1.5 bg-gray-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer"
                       />
-                      <div className="absolute inset-0 bg-white/5 dark:bg-black/5 pointer-events-none" />
                     </div>
-                    <div className="text-center">
-                      <p className="text-[11px] font-bold text-gray-800 dark:text-white leading-relaxed">加入我们</p>
-                      <p className="text-[9px] text-gray-500 dark:text-white/40 mt-1 font-medium italic">欢迎加入scrollish交流群</p>
+
+                    {/* 语调调节 */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] font-black uppercase tracking-tight text-gray-600 dark:text-white/60">语调等级</span>
+                        <div className="flex items-center gap-1.5">
+                          {localPitchLevel === 0.5 && <span className="text-[9px] font-bold text-gray-400 dark:text-white/40 uppercase">默认值</span>}
+                          <span className="text-[11px] font-mono font-black text-orange-500">{localPitchLevel.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1.0"
+                        step="0.05"
+                        value={localPitchLevel}
+                        onChange={(e) => setLocalPitchLevel(parseFloat(e.target.value))}
+                        onPointerUp={(e) => updateProfile({ tts_pitch: toMultiplier(parseFloat((e.target as HTMLInputElement).value)) })}
+                        className="w-full accent-orange-500 h-1.5 bg-gray-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer"
+                      />
                     </div>
                   </div>
                 </div>
 
+                {/* 音色选择 - 可折叠 */}
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">Customer Service</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">音色选择</h3>
+                  <div className="space-y-4 rounded-2xl bg-white/50 dark:bg-white/5 border border-white/60 dark:border-white/5 overflow-hidden">
+                    <button
+                      onClick={() => setShowVoices(!showVoices)}
+                      className="w-full flex items-center justify-between p-4 active:bg-black/5 dark:active:bg-white/5 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-orange-500 overflow-hidden flex items-center justify-center text-white shadow-lg shadow-orange-500/20 border-2 border-white/40 relative">
+                          {currentVoice === 'cloned' ? (
+                            profile?.cloned_voice_avatar_url ? (
+                              <img src={profile.cloned_voice_avatar_url} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+                            )
+                          ) : imageErrors[currentVoice] ? (
+                            <span className="material-symbols-outlined text-[20px]">record_voice_over</span>
+                          ) : (
+                            <img
+                              key={currentVoice}
+                              src={getAssetPath(`/avatars/${currentVoice === 'Eldric Sage' ? 'Eldric' : currentVoice}.png`)}
+                              className="w-full h-full object-cover"
+                              onError={() => setImageErrors(prev => ({ ...prev, [currentVoice]: true }))}
+                            />
+                          )}
+                        </div>
+                        <span className="font-bold text-sm">
+                          {selectedVoiceLabel}
+                        </span>
+                      </div>
+                      <span className={`material-symbols-outlined text-gray-400 transition-transform duration-300 ${showVoices ? 'rotate-180' : ''}`}>expand_more</span>
+                    </button>
+
+                    <AnimatePresence>
+                      {showVoices && (
+                        <motion.div
+                          initial={{ height: 0 }}
+                          animate={{ height: 'auto' }}
+                          exit={{ height: 0 }}
+                          transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
+                          style={{ overflow: 'hidden' }}
+                        >
+                          <div className="px-2 pb-4 space-y-2 max-h-[300px] overflow-y-auto no-scrollbar">
+
+                            {/* 克隆音色选项 */}
+                            {!profile?.cloned_voice_url ? (
+                              <div
+                                onClick={() => setShowCloneModal(true)}
+                                role="button"
+                                tabIndex={0}
+                                className={`w-full p-3 rounded-[24px] transition-all duration-300 border relative flex items-center gap-4 bg-white dark:bg-[#111] border-dashed border-orange-500/30 text-gray-500 dark:text-white/40 hover:border-orange-500/50 cursor-pointer`}>
+                                <div className="w-14 h-14 shrink-0 rounded-[14px] bg-orange-100 dark:bg-orange-500/20 flex items-center justify-center text-orange-500 shadow-sm border border-orange-500/10">
+                                  <span className="material-symbols-outlined">add_circle</span>
+                                </div>
+                                <div className="flex-1 text-left">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-base font-black text-orange-500">生成专属音色</span>
+                                    <span className="material-symbols-outlined text-[16px] animate-pulse">mic_external_on</span>
+                                  </div>
+                                  <p className="text-[11px] font-bold opacity-60">点击立即生成你的专属音色</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                onClick={() => setTtsVoice('cloned')}
+                                role="button"
+                                tabIndex={0}
+                                className={`w-full p-3 rounded-[24px] flex items-center gap-4 transition-all duration-300 text-left border relative group cursor-pointer ${profile.tts_voice === 'cloned'
+                                  ? 'bg-orange-500 border-orange-600 text-white shadow-lg'
+                                  : 'bg-white dark:bg-[#111] border-transparent text-gray-500 dark:text-white/40 hover:border-gray-200 dark:hover:border-white/10'}`}>
+                                <div className="w-14 h-14 shrink-0 rounded-[14px] overflow-hidden bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm relative">
+                                  {profile.cloned_voice_avatar_url ? (
+                                    <img src={profile.cloned_voice_avatar_url} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-orange-100 text-orange-500 font-black text-xl">
+                                      <span className="material-symbols-outlined">auto_awesome</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-black truncate">{profile.cloned_voice_name || '自定义音色'}</span>
+                                    {profile.tts_voice === 'cloned' && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
+                                  </div>
+                                  <p className={`text-[10px] mt-1 line-clamp-2 font-bold ${profile.tts_voice === 'cloned' ? 'opacity-90' : 'opacity-50'}`}>
+                                    {profile.cloned_voice_desc || '你的专属 AI 声线'}
+                                  </p>
+                                </div>
+
+                                {/* 删除按钮 */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (confirm('确定要删除这个专属音色吗？重新修改也需要重新录制。')) clearVoiceClone()
+                                  }}
+                                  className="absolute -right-1 -top-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-20"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">close</span>
+                                </button>
+                              </div>
+                            )}
+
+                            {VOICES.map((v) => {
+                              const isSelected = (profile?.tts_voice || 'cherry') === v.id
+                              const fileName = v.id === 'Eldric Sage' ? 'Eldric' : v.id
+                              const avatarUrl = getAssetPath(`/avatars/${fileName}.png`)
+
+                              return (
+                                <div
+                                  key={`profile-voice-${v.id}`}
+                                  onClick={() => {
+                                    setTtsVoice(v.id)
+                                    const safeId = v.id.toLowerCase().replace(/\s+/g, '_')
+                                    speak(`/scrollish/audio/samples/${safeId}_v2.wav`, `sample-${v.id}`, v.id)
+                                  }}
+                                  role="button"
+                                  tabIndex={0}
+                                  className={`w-full p-3 rounded-[24px] flex items-center gap-4 transition-all duration-300 text-left border relative group cursor-pointer ${isSelected
+                                    ? 'bg-orange-500 border-orange-600 text-white shadow-lg'
+                                    : 'bg-white dark:bg-[#111] border-transparent text-gray-500 dark:text-white/40 hover:border-gray-200 dark:hover:border-white/10'}`}>
+
+                                  {/* 头像 */}
+                                  <div className="w-14 h-14 shrink-0 rounded-[14px] overflow-hidden bg-gray-100 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm relative">
+                                    {!imageErrors[v.id] ? (
+                                      <img
+                                        src={avatarUrl}
+                                        alt={v.label}
+                                        className="w-full h-full object-cover"
+                                        onError={() => setImageErrors(prev => ({ ...prev, [v.id]: true }))}
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-orange-100 text-orange-500 font-black text-xl">
+                                        {v.label[0]}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-black truncate">{v.label}</span>
+                                      {isSelected && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
+                                    </div>
+                                    <p className={`text-[10px] mt-1 line-clamp-2 font-bold ${isSelected ? 'opacity-90' : 'opacity-50'}`}>{v.desc}</p>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+
+
+
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-white/40 mb-3">联系我们</h3>
                   <div className="p-4 rounded-2xl bg-orange-500/5 border border-orange-500/10 flex flex-col items-center gap-4">
                     <div
                       onClick={() => setFullscreenImage('/support_qr.png')}
@@ -297,7 +514,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
               </div>
             </div>
             <div className="absolute -bottom-1 -right-1 bg-orange-500 text-white text-[clamp(8px,1.2vh,10px)] font-black px-[clamp(0.4rem,1vh,0.6rem)] py-[clamp(0.2rem,0.4vh,0.3rem)] rounded-full border-2 border-white dark:border-[#1C1C1E] shadow-lg">
-              LVL {userLevel}
+              LV {userLevel}
             </div>
           </div>
           <div className="flex flex-col items-center mt-[clamp(0.75rem,2vh,1.25rem)] gap-1.5">
@@ -631,6 +848,26 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
             z-index: 5;
         }
       `}</style>
+      <AnimatePresence>
+        {showCloneModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCloneModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <VoiceCloneManager
+              onClose={() => setShowCloneModal(false)}
+              onSuccess={(url) => {
+                setShowCloneModal(false)
+                setTtsVoice('cloned')
+              }}
+            />
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

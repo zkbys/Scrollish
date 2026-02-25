@@ -16,7 +16,7 @@ interface WordDetailOverlayProps {
   hideContextMeaning?: boolean
 }
 
-type Accent = 'US' | 'UK'
+// 移除本地口音定义，统一由服务端的 Persona 决定
 
 const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   word,
@@ -32,7 +32,6 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   const currentDefinition = definition || null
   const { forgetWord } = useDictionaryStore()
 
-  const [accent, setAccent] = useState<Accent>('US')
   const [showDopaHint, setShowDopaHint] = useState(false)
   const { speak, isPlaying, isLoading: isTTSSynthesizing } = useTTS()
 
@@ -46,10 +45,10 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
     }
   }
 
-  const handlePlayAudio = (targetAccent?: Accent) => {
+  const handlePlayAudio = () => {
     if (!word) return
-    // 使用新的 Qwen3-TTS 引擎
-    speak(word, `word-${word}`)
+    // 词典模式：语速稍微放慢 (0.85)，并加上句号以触发更正式、完整的发音断句
+    speak(`${word}.`, `word-${word}`, undefined, { speech_rate: 0.85 })
   }
 
   const handleForget = () => {
@@ -92,19 +91,6 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                     </span>
                   </div>
 
-                  {/* 口音药丸 */}
-                  <div className="flex items-center gap-1 p-1.5 bg-black/5 dark:bg-white/10 rounded-full border border-black/5 dark:border-white/5 backdrop-blur-xl">
-                    <button
-                      onClick={() => { setAccent('US'); handlePlayAudio('US'); }}
-                      className={`px-4 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 ${accent === 'US' ? 'bg-orange-500 text-white shadow-[0_4px_12px_rgba(249,115,22,0.4)]' : 'text-gray-400 dark:text-white/20'}`}>
-                      US
-                    </button>
-                    <button
-                      onClick={() => { setAccent('UK'); handlePlayAudio('UK'); }}
-                      className={`px-4 py-1 rounded-full text-[10px] font-black tracking-widest transition-all duration-300 ${accent === 'UK' ? 'bg-orange-500 text-white shadow-[0_4px_12px_rgba(249,115,22,0.4)]' : 'text-gray-400 dark:text-white/20'}`}>
-                      UK
-                    </button>
-                  </div>
                 </div>
               </div>
 
@@ -240,7 +226,7 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <span className="material-symbols-outlined text-[16px] text-blue-500">history_edu</span>
-                              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">遇见历史 (博物馆)</span>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">记忆碎片</span>
                             </div>
                             <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 text-[8px] font-black">{currentDefinition.contexts.length} SITES</span>
                           </div>
