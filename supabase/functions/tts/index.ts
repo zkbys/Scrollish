@@ -188,7 +188,13 @@ Deno.serve(async (req) => {
             }
 
             const audioUrl = data.output?.audio?.url || data.output?.audio_url;
-            if (audioUrl) urls.push(audioUrl);
+            if (audioUrl) {
+                // [关键修复] 强制将 http 替换为 https 以解决 Mixed Content 警告
+                const finalUrl = audioUrl.startsWith('http://')
+                    ? audioUrl.replace('http://', 'https://')
+                    : audioUrl;
+                urls.push(finalUrl);
+            }
         }
 
         if (urls.length === 0) throw new Error('No audio URL returned from server');

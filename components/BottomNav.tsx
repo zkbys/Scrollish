@@ -8,7 +8,10 @@ interface BottomNavProps {
   onNavigate: (page: Page) => void
 }
 
+import { useUserStore } from '../store/useUserStore'
+
 const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
+  const { voiceDotDismissed } = useUserStore()
   const navItems = [
     { id: Page.Home, label: 'Feed', icon: 'home' },
     { id: Page.Explore, label: 'Discover', icon: 'explore' },
@@ -129,6 +132,11 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, onNavigate }) => {
                   <div
                     className="absolute -bottom-[clamp(0.4rem,1vh,0.5rem)] w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(255,45,85,0.4)]"
                   />
+                )}
+
+                {/* [NEW] 新功能红点 - 仅在 Me 标签且未被忽略时显示 */}
+                {!voiceDotDismissed && item.id === Page.Profile && (
+                  <div className="absolute top-0 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-500 ring-1 ring-white dark:ring-[#111] animate-pulse" />
                 )}
               </div>
             </button>

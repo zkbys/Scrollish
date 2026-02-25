@@ -38,7 +38,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const isLongPressTriggered = useRef(false)
 
   // 移除之前的分句激活逻辑，改为气泡级常驻显示
-  const { speak, isPlaying, isLoading: isSynthesizing, currentId } = useTTS()
+  const { speak, isPlaying, isLoading: isSynthesizing, currentId, error: ttsError } = useTTS()
   const [activeTtsIndex, setActiveTtsIndex] = useState<number | null>(null)
   const [expandedNotes, setExpandedNotes] = useState<Record<number, boolean>>({})
 
@@ -287,21 +287,37 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
               {/* [新增] 气泡级常驻 TTS 按钮 - 仅朗读本段话 */}
               {!isUser && !comment.isLoading && (
-                <button
-                  onClick={(e) => handleTTS(e, seg.en, i)}
-                  className={`absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg border z-[30] transition-all
-                    ${isPlaying && currentId === `${comment.id}-${i}`
-                      ? 'bg-orange-500 text-white border-orange-600 scale-110'
-                      : 'bg-white dark:bg-[#2C2C2E] border-gray-100 dark:border-white/10 text-orange-500 hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95'}
-                  `}>
-                  {isSynthesizing && currentId === `${comment.id}-${i}` ? (
-                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <span className={`material-symbols-outlined text-[16px] ${isPlaying && currentId === `${comment.id}-${i}` ? 'animate-pulse' : ''}`}>
-                      {isPlaying && currentId === `${comment.id}-${i}` ? 'stop' : 'volume_up'}
-                    </span>
-                  )}
-                </button>
+                <div className="absolute -bottom-2 -right-2 z-[30] flex flex-col items-center">
+                  <AnimatePresence>
+                    {ttsError && currentId === `${comment.id}-${i}` && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.8 }}
+                        animate={{ opacity: 1, y: -4, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        className="absolute bottom-full mb-1 px-3 py-1.5 bg-red-600 text-white text-[10px] font-black rounded-lg shadow-lg whitespace-nowrap z-[40]">
+                        {ttsError}
+                        <div className="absolute top-full left-1/2 -ml-1 border-4 border-transparent border-t-red-600" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <button
+                    onClick={(e) => handleTTS(e, seg.en, i)}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center shadow-lg border transition-all
+                      ${isPlaying && currentId === `${comment.id}-${i}`
+                        ? 'bg-orange-500 text-white border-orange-600 scale-110'
+                        : (ttsError && currentId === `${comment.id}-${i}`)
+                          ? 'bg-red-50 dark:bg-red-950/30 text-red-500 border-red-200 dark:border-red-900/50'
+                          : 'bg-white dark:bg-[#2C2C2E] border-gray-100 dark:border-white/10 text-orange-500 hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95'}
+                    `}>
+                    {isSynthesizing && currentId === `${comment.id}-${i}` ? (
+                      <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <span className={`material-symbols-outlined text-[16px] ${isPlaying && currentId === `${comment.id}-${i}` ? 'animate-pulse' : ''}`}>
+                        {isPlaying && currentId === `${comment.id}-${i}` ? 'stop' : 'volume_up'}
+                      </span>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
           )

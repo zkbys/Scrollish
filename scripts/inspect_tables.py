@@ -64,8 +64,17 @@ def main():
     # 检查主表
     inspect_table("comments")
     
-    # 检查 AI 扩展表
-    inspect_table("comments_enrichment")
+    # 检查所有被警告的表
+    tables_to_check = [
+        "achievements",
+        "comments_enrichment",
+        "level_config",
+        "posts_enrichment",
+        "subtree_vibes"
+    ]
+    
+    for table in tables_to_check:
+        inspect_table(table)
 
 if __name__ == "__main__":
     main()

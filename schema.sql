@@ -114,7 +114,7 @@
     current_streak int DEFAULT 0,
     longest_streak int DEFAULT 0,
     last_streak_at timestamptz,
-    coins int DEFAULT 0,
+    coins int DEFAULT 888,
     is_premium boolean DEFAULT false,
     is_verified boolean DEFAULT false,
     

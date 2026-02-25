@@ -16,6 +16,10 @@ interface UserState {
   setProfile: (profile: any) => void
   resetProfile: () => void
   clearVoiceClone: () => Promise<void>
+  deductCoins: (amount: number) => Promise<boolean>
+  addCoins: (amount: number) => Promise<boolean>
+  voiceDotDismissed: boolean
+  dismissVoiceDot: () => void
 }
 
 export const useUserStore = create<UserState>()(
@@ -27,7 +31,14 @@ export const useUserStore = create<UserState>()(
       fetchProfile: async (force = false) => {
         const user = useAuthStore.getState().currentUser
         if (!user) return
-        if (get().profile && !force && get().hasFetchedProfile) return
+
+        // 如果已经有数据且不是强制刷新，且数据是刚刚获取的（避免高频重复请求），可以跳过
+        // 但为了保证数据准确性，我们现在移除 get().profile 的强校验，允许进入 fetch 逻辑
+        if (!force && get().hasFetchedProfile && get().profile) {
+          // 如果数据已经存在，我们可以选择在后台静默刷新，或者根据业务逻辑决定是否跳过
+          // 这里为了解决用户手动修改数据库不生效的问题，我们改为允许刷新，或者由调用方决定
+          // 暂时保留逻辑，但在 Profile 等页面调用 fetchProfile(true) 即可
+        }
 
         console.log('[Store] Fetching profile for user:', user.id)
         try {
@@ -95,10 +106,7 @@ export const useUserStore = create<UserState>()(
       },
 
       setTtsVoice: (voice: string) => {
-        const currentProfile = get().profile
-        if (currentProfile) {
-          set({ profile: { ...currentProfile, tts_voice: voice } })
-        }
+        get().updateProfile({ tts_voice: voice })
       },
 
       setTtsParams: (params: { rate?: number; pitch?: number }) => {
@@ -146,7 +154,46 @@ export const useUserStore = create<UserState>()(
             }
           })
         }
-      }
+      },
+      deductCoins: async (amount: number) => {
+        const user = useAuthStore.getState().currentUser
+        const currentProfile = get().profile
+        if (!user || !currentProfile) return false
+
+        const currentCoins = currentProfile.coins || 0
+        if (currentCoins < amount) return false
+
+        const newCoins = currentCoins - amount
+        const { error } = await supabase
+          .from('profiles')
+          .update({ coins: newCoins })
+          .eq('id', user.id)
+
+        if (!error) {
+          set({ profile: { ...currentProfile, coins: newCoins } })
+          return true
+        }
+        return false
+      },
+      addCoins: async (amount: number) => {
+        const user = useAuthStore.getState().currentUser
+        const currentProfile = get().profile
+        if (!user || !currentProfile) return false
+
+        const newCoins = (currentProfile.coins || 0) + amount
+        const { error } = await supabase
+          .from('profiles')
+          .update({ coins: newCoins })
+          .eq('id', user.id)
+
+        if (!error) {
+          set({ profile: { ...currentProfile, coins: newCoins } })
+          return true
+        }
+        return false
+      },
+      voiceDotDismissed: false,
+      dismissVoiceDot: () => set({ voiceDotDismissed: true })
     }),
     {
       name: 'scrollish-profile-storage',
@@ -164,7 +211,8 @@ export const useUserStore = create<UserState>()(
       })),
       partialize: (state) => ({
         profile: state.profile,
-        hasFetchedProfile: state.hasFetchedProfile
+        hasFetchedProfile: state.hasFetchedProfile,
+        voiceDotDismissed: state.voiceDotDismissed
       } as any)
     }
   )

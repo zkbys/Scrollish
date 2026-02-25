@@ -48,7 +48,8 @@ const WordDetailOverlay: React.FC<WordDetailOverlayProps> = ({
   const handlePlayAudio = () => {
     if (!word) return
     // 词典模式：语速稍微放慢 (0.85)，并加上句号以触发更正式、完整的发音断句
-    speak(`${word}.`, `word-${word}`, undefined, { speech_rate: 0.85 })
+    // 词典模式免费 (isFree: true)
+    speak(`${word}.`, `word-${word}`, undefined, { speech_rate: 0.85, isFree: true })
   }
 
   const handleForget = () => {

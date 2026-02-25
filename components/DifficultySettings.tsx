@@ -180,7 +180,7 @@ const DifficultySettings: React.FC<DifficultySettingsProps> = ({
                                                 </div>
                                             ) : (
                                                 <div
-                                                    onClick={() => setTtsVoice('cloned')}
+                                                    onClick={() => updateProfile({ tts_voice: 'cloned' })}
                                                     className={`w-full p-3 rounded-[24px] transition-all duration-300 border relative flex items-center gap-4 cursor-pointer group ${currentVoice === 'cloned'
                                                         ? 'bg-orange-500 border-orange-600 text-white shadow-lg'
                                                         : 'bg-white dark:bg-[#111] border-transparent text-gray-500 dark:text-white/40 hover:border-gray-200'
@@ -239,10 +239,10 @@ const DifficultySettings: React.FC<DifficultySettingsProps> = ({
                                                     <div
                                                         key={`voice-${v.id}`}
                                                         onClick={() => {
-                                                            setTtsVoice(v.id)
+                                                            updateProfile({ tts_voice: v.id })
                                                             if (navigator.vibrate) navigator.vibrate(15)
                                                             const safeId = v.id.toLowerCase().replace(/\s+/g, '_')
-                                                            speak(`/scrollish/audio/samples/${safeId}_v2.wav`, `sample-${v.id}`, v.id)
+                                                            speak(`/scrollish/audio/samples/${safeId}_v2.wav`, `sample-${v.id}`, v.id, { isFree: true })
                                                         }}
                                                         role="button"
                                                         tabIndex={0}

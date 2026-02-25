@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../supabase'
 import { useUserStore } from '../store/useUserStore'
 import { useAuthStore } from '../store/useAuthStore'
+import { getAssetPath } from '../constants'
 
 interface VoiceCloneManagerProps {
     onClose: () => void
@@ -70,11 +71,11 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
 
     const timerRef = useRef<number | null>(null)
 
-    const profile = useUserStore(state => state.profile)
-    const updateProfile = useUserStore(state => state.updateProfile)
-    const user = useAuthStore(state => state.currentUser)
+    const { profile, updateProfile, deductCoins } = useUserStore()
+    const { currentUser: user } = useAuthStore()
 
     const referenceText = "你好！很高兴能通过声音和你交流。让我们一起开启这段奇妙的语言旅程，探索更广阔的世界吧。"
+    const CLONE_COST = 100 // 复刻消耗的金币
 
     useEffect(() => {
         return () => {
@@ -307,6 +308,15 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
                 tts_voice: 'cloned'
             })
 
+            // 5. Deduct Coins
+            const success = await deductCoins(CLONE_COST)
+            if (!success) {
+                // If coin deduction fails, revert status and show error
+                setError('哆吧币余额不足，无法完成复刻。')
+                setStatus('preview') // Or 'idle' depending on desired flow
+                return
+            }
+
             setClonedVoiceUrl(voiceId)
             setStatus('identity_setup')
 
@@ -403,7 +413,7 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-[#1C1C1E] p-8 rounded-[32px] shadow-2xl border border-gray-100 dark:border-white/5 w-full max-w-md mx-auto"
+            className="bg-white dark:bg-[#1C1C1E] p-6 sm:p-8 rounded-[32px] shadow-2xl border border-gray-100 dark:border-white/5 w-full max-w-[min(90vw,420px)] mx-auto max-h-[90vh] overflow-y-auto no-scrollbar"
             onClick={e => e.stopPropagation()}
         >
             <div className="flex justify-between items-center mb-6">
@@ -439,13 +449,34 @@ const VoiceCloneManager: React.FC<VoiceCloneManagerProps> = ({ onClose, onSucces
                             </div>
                         </div>
 
+                        <div className="p-3 bg-orange-500/5 dark:bg-orange-500/10 rounded-2xl border border-orange-500/10 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <img src={getAssetPath('/dopa_coin.png')} className="w-5 h-5 object-contain" alt="Dopa Coin" />
+                                <span className="text-xs font-bold text-gray-600 dark:text-white/60">本次复刻消耗</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className={`text-sm font-black ${profile?.coins < CLONE_COST ? 'text-red-500' : 'text-orange-500'}`}>{CLONE_COST}</span>
+                                <span className="text-[10px] font-bold text-gray-400">哆吧币</span>
+                            </div>
+                        </div>
+
+                        {profile?.coins < CLONE_COST && (
+                            <div className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2">
+                                <span className="material-symbols-outlined text-red-500 text-sm">error</span>
+                                <p className="text-[11px] font-bold text-red-600 dark:text-red-400">哆吧币不足，快去学习赚取吧！</p>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 gap-3">
                             <button
                                 onClick={startRecording}
-                                className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black transition-all shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2"
+                                disabled={profile?.coins < CLONE_COST}
+                                className={`w-full py-4 rounded-2xl font-black transition-all flex items-center justify-center gap-2 ${profile?.coins < CLONE_COST
+                                    ? 'bg-gray-200 dark:bg-white/5 text-gray-400 cursor-not-allowed opacity-50'
+                                    : 'bg-orange-500 text-white shadow-lg active:scale-95'}`}
                             >
                                 <span className="material-symbols-outlined">mic</span>
-                                开始录音
+                                立即录制
                             </button>
                             <label className="w-full py-4 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-2xl font-bold transition-all cursor-pointer flex items-center justify-center gap-2">
                                 <span className="material-symbols-outlined">upload_file</span>

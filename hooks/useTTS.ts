@@ -91,7 +91,7 @@ export function useTTS() {
         setGlobalActiveVoice(null);
     }, [setGlobalActiveVoice]);
 
-    const speak = useCallback(async (text: string, id: string, voice?: string, params?: { speech_rate?: number; pitch_rate?: number }) => {
+    const speak = useCallback(async (text: string, id: string, voice?: string, params?: { speech_rate?: number; pitch_rate?: number; isFree?: boolean }) => {
         if (state.isPlaying && state.currentId === id) {
             stop();
             return;
@@ -125,17 +125,11 @@ export function useTTS() {
             const defaultVoice = profile?.tts_voice || 'Cherry';
             const finalVoice = voice || defaultVoice;
 
-            /**
-             * [关键修复] 仅在开始 speak 时注册当前实例的 stop 函数到全局 Store。
-             * 这样避免了多个 useTTS 实例在 useEffect 中抢夺注册权导致的性能问题或白屏。
-             */
-            const isCloned = finalVoice === 'cloned' && (profile as any)?.cloned_voice_url;
-
             // 解析头像 URL 和 显示名称
             let finalAvatar: string | null = null;
             let finalName: string | null = null;
 
-            if (isCloned) {
+            if (finalVoice === 'cloned' && (profile as any)?.cloned_voice_url) {
                 finalAvatar = (profile as any)?.cloned_voice_avatar_url || null;
                 finalName = (profile as any)?.cloned_voice_name || '您的专属音色';
             } else if (finalVoice !== 'System') {
@@ -148,19 +142,51 @@ export function useTTS() {
             setGlobalStopCallback(stop);
 
             let audioUrls: string[] = [];
+            const isCloned = finalVoice === 'cloned' && (profile as any)?.cloned_voice_url;
+            const finalRate = params?.speech_rate ?? (profile?.tts_rate || 1.0);
+            const finalPitch = params?.pitch_rate ?? (profile?.tts_pitch || 1.0);
+
             if (text.startsWith('/') && text.endsWith('.wav')) {
                 audioUrls = [text];
             } else {
-                const isCloned = finalVoice === 'cloned' && (profile as any)?.cloned_voice_url;
-                const finalRate = params?.speech_rate ?? (profile?.tts_rate || 1.0);
-                const finalPitch = params?.pitch_rate ?? (profile?.tts_pitch || 1.0);
+                const cacheKey = `tts_cache_${text}_${finalVoice}_${isCloned ? (profile as any).cloned_voice_url : ''}_rate${finalRate}_pitch${finalPitch}`;
 
-                const cacheKey = `${text}_${finalVoice}_${isCloned ? (profile as any).cloned_voice_url : ''}_rate${finalRate}_pitch${finalPitch}`;
-                const cached = cacheRef.current[cacheKey];
+                // 1. 尝试从内存或 localStorage 获取缓存
+                const cachedData = cacheRef.current[cacheKey] || localStorage.getItem(cacheKey);
 
-                if (cached) {
-                    audioUrls = JSON.parse(cached);
-                } else {
+                if (cachedData) {
+                    try {
+                        const parsed = JSON.parse(cachedData);
+                        // 检查缓存是否过期 (24小时 = 86400000 毫秒)
+                        if (Date.now() - parsed.timestamp < 86400000) {
+                            audioUrls = parsed.urls;
+                        } else {
+                            localStorage.removeItem(cacheKey);
+                        }
+                    } catch (e) {
+                        localStorage.removeItem(cacheKey);
+                    }
+                }
+
+                if (audioUrls.length === 0) {
+                    // [关键修复] 只有在没有命中缓存时才进行扣费
+                    const isLocalSample = text.startsWith('/') && text.endsWith('.wav');
+                    const cost = (params?.isFree || isLocalSample) ? 0 : 1;
+
+                    if (cost > 0) {
+                        const hasCoins = await useUserStore.getState().deductCoins(cost);
+                        if (!hasCoins) {
+                            setState((prev) => ({
+                                ...prev,
+                                isLoading: false,
+                                currentId: null,
+                                error: '哆吧币余额不足 (需 1 哆吧币)'
+                            }));
+                            setGlobalActiveVoice(null);
+                            return;
+                        }
+                    }
+
                     const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts`;
                     const requestPayload: any = {
                         text,
@@ -187,7 +213,11 @@ export function useTTS() {
                     if (!url) throw new Error('No audio URL returned from server');
 
                     audioUrls = Array.isArray(url) ? url : [url];
-                    cacheRef.current[cacheKey] = JSON.stringify(audioUrls);
+
+                    // 2. 保存到内存和 localStorage
+                    const cacheValue = JSON.stringify({ urls: audioUrls, timestamp: Date.now() });
+                    cacheRef.current[cacheKey] = cacheValue;
+                    localStorage.setItem(cacheKey, cacheValue);
                 }
             }
 
