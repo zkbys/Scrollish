@@ -53,7 +53,7 @@ const Profile: React.FC<ProfileProps> = ({ onNavigate, onPostSelect }) => {
   const subscribeRealtime = useNotificationStore(state => state.subscribeRealtime)
 
   useEffect(() => {
-    fetchProfile(true)
+    fetchProfile() // [优化] 不再强制刷新，利用 Store 的静默刷新机制防止闪烁
     fetchStarredWords()
     fetchNotifications()
     const unsubscribe = subscribeRealtime()

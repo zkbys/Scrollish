@@ -32,15 +32,38 @@ export const useUserStore = create<UserState>()(
         const user = useAuthStore.getState().currentUser
         if (!user) return
 
-        // 如果已经有数据且不是强制刷新，且数据是刚刚获取的（避免高频重复请求），可以跳过
-        // 但为了保证数据准确性，我们现在移除 get().profile 的强校验，允许进入 fetch 逻辑
-        if (!force && get().hasFetchedProfile && get().profile) {
-          // 如果数据已经存在，我们可以选择在后台静默刷新，或者根据业务逻辑决定是否跳过
-          // 这里为了解决用户手动修改数据库不生效的问题，我们改为允许刷新，或者由调用方决定
-          // 暂时保留逻辑，但在 Profile 等页面调用 fetchProfile(true) 即可
+        const currentProfile = get().profile
+        const hasFetched = get().hasFetchedProfile
+
+        // [优化] Silent Revalidate 模式
+        // 如果已经有缓存数据且不是强制刷新，则先直接返回，保证 UI 不闪烁
+        if (!force && hasFetched && currentProfile) {
+          // 在后台开启静默更新
+          const silentUpdate = async () => {
+            try {
+              const { data } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single()
+
+              if (data) {
+                // 仅当数据确实发生变化（如金币变动）时才更新 store
+                const hasChanged = JSON.stringify(data) !== JSON.stringify(currentProfile)
+                if (hasChanged) {
+                  console.log('[Store] Profile updated silently (Coin/XP change detected)');
+                  set({ profile: data })
+                }
+              }
+            } catch (e) {
+              console.warn('[Store] Silent profile update failed', e)
+            }
+          }
+          silentUpdate()
+          return
         }
 
-        console.log('[Store] Fetching profile for user:', user.id)
+        console.log('[Store] Initial or Force Fetching profile for user:', user.id)
         try {
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)

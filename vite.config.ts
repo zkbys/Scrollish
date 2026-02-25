@@ -63,7 +63,36 @@ export default defineConfig(({ mode }) => {
           skipWaiting: true,
           clientsClaim: true,
           runtimeCaching: [
-            // ...保留你原有的 runtimeCaching 配置不变
+            {
+              // [优化] 缓存 DashScope TTS 返回的音频文件（阿里云 OSS 链接）
+              urlPattern: /^https:\/\/dashscope-result.*\.oss.*\.aliyuncs\.com\//,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'tts-audio-cache',
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 7 * 24 * 60 * 60, // 7 天
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              // [优化] 缓存 Supabase Edge Function 的 TTS 合成响应
+              urlPattern: /\/functions\/v1\/tts$/,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'tts-api-cache',
+                expiration: {
+                  maxEntries: 30,
+                  maxAgeSeconds: 24 * 60 * 60, // 1 天
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
           ],
         },
         devOptions: {

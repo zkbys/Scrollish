@@ -27,6 +27,10 @@ export function useTTS() {
     const playPromiseRef = useRef<Promise<void> | null>(null);
     const cacheRef = useRef<Record<string, string>>({});
 
+    // [修复] 使用 ref 追踪播放状态，避免 useCallback 中闭包过期导致切换判断出错
+    const isPlayingRef = useRef(false);
+    const currentIdRef = useRef<string | null>(null);
+
     // 音频分析相关 Refs
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -85,6 +89,8 @@ export function useTTS() {
             audioRef.current.currentTime = 0;
             audioRef.current.src = "";
         }
+        isPlayingRef.current = false;
+        currentIdRef.current = null;
         setState((prev) => ({ ...prev, isPlaying: false, currentId: null }));
 
         // 停止播放时清理全局状态
@@ -92,7 +98,8 @@ export function useTTS() {
     }, [setGlobalActiveVoice]);
 
     const speak = useCallback(async (text: string, id: string, voice?: string, params?: { speech_rate?: number; pitch_rate?: number; isFree?: boolean }) => {
-        if (state.isPlaying && state.currentId === id) {
+        // [修复] 使用 ref 进行切换判断，避免闭包过期问题
+        if (isPlayingRef.current && currentIdRef.current === id) {
             stop();
             return;
         }
@@ -114,6 +121,7 @@ export function useTTS() {
             // 彻底停止当前实例的残留
             await stop();
 
+            currentIdRef.current = id;
             setState((prev) => ({
                 ...prev,
                 isLoading: true,
@@ -143,8 +151,8 @@ export function useTTS() {
 
             let audioUrls: string[] = [];
             const isCloned = finalVoice === 'cloned' && (profile as any)?.cloned_voice_url;
-            const finalRate = params?.speech_rate ?? (profile?.tts_rate || 1.0);
-            const finalPitch = params?.pitch_rate ?? (profile?.tts_pitch || 1.0);
+            const finalRate = params?.speech_rate ?? (profile?.tts_rate || 0.5);
+            const finalPitch = params?.pitch_rate ?? (profile?.tts_pitch || 0.5);
 
             if (text.startsWith('/') && text.endsWith('.wav')) {
                 audioUrls = [text];
@@ -214,6 +222,10 @@ export function useTTS() {
 
                     audioUrls = Array.isArray(url) ? url : [url];
 
+                    // [修复] 将 DashScope 返回的 http:// 音频地址升级为 https://
+                    // 避免 Mixed Content 安全警告（HTTPS 页面不允许加载 HTTP 资源）
+                    audioUrls = audioUrls.map((u: string) => u.replace(/^http:\/\//, 'https://'));
+
                     // 2. 保存到内存和 localStorage
                     const cacheValue = JSON.stringify({ urls: audioUrls, timestamp: Date.now() });
                     cacheRef.current[cacheKey] = cacheValue;
@@ -244,6 +256,8 @@ export function useTTS() {
 
             const playQueue = async (index: number) => {
                 if (index >= audioUrls.length) {
+                    isPlayingRef.current = false;
+                    currentIdRef.current = null;
                     setState((prev) => ({ ...prev, isPlaying: false, currentId: null, isLoading: false }));
                     setGlobalActiveVoice(null); // 彻底播放完后再清空
                     playPromiseRef.current = null;
@@ -252,17 +266,17 @@ export function useTTS() {
                 }
 
                 const currentUrl = audioUrls[index];
-                const finalUrl = currentUrl.includes('?')
-                    ? `${currentUrl}&t=${Date.now()}`
-                    : `${currentUrl}?t=${Date.now()}`;
+                // [优化] 移除了 ?t=${Date.now()} 的缓存破坏参数
+                // localStorage 已缓存 URL，时间戳会导致浏览器/CDN 每次重新下载音频
 
-                audioRef.current!.src = finalUrl;
+                audioRef.current!.src = currentUrl;
                 const playPromise = audioRef.current!.play();
                 playPromiseRef.current = playPromise;
 
                 if (playPromise !== undefined) {
                     try {
                         await playPromise;
+                        isPlayingRef.current = true;
                         setState((prev) => ({ ...prev, isLoading: false, isPlaying: true }));
                         startAnalysis();
                     } catch (playErr: any) {
@@ -280,6 +294,8 @@ export function useTTS() {
 
         } catch (err: any) {
             console.error('TTS Error:', err);
+            isPlayingRef.current = false;
+            currentIdRef.current = null;
             setState((prev) => ({
                 ...prev,
                 isLoading: false,
@@ -293,18 +309,21 @@ export function useTTS() {
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'en-US';
                 utterance.onstart = () => {
+                    isPlayingRef.current = true;
                     setState(p => ({ ...p, isPlaying: true }));
                     setGlobalActiveVoice('System');
-                    setGlobalStopCallback(() => window.speechSynthesis.cancel()); // 降级方案也要支持全局停止
+                    setGlobalStopCallback(() => window.speechSynthesis.cancel());
                 };
                 utterance.onend = () => {
+                    isPlayingRef.current = false;
+                    currentIdRef.current = null;
                     setState(p => ({ ...p, isPlaying: false, currentId: null }));
                     setGlobalActiveVoice(null);
                 };
                 window.speechSynthesis.speak(utterance);
             }
         }
-    }, [state.isPlaying, state.currentId, stop, setGlobalActiveVoice, setGlobalStopCallback]);
+    }, [stop, setGlobalActiveVoice, setGlobalStopCallback]);
 
     return {
         ...state,
