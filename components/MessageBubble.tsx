@@ -54,7 +54,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   // [新增] 计算可视片段
   const visibleSegments = useMemo(() => {
     if (isOpCard && isOpFolded && segments.length > 3) {
-      return segments.slice(0, 3)
+      return segments.slice(0, 1) // 只显示第一段，剩余的折叠
     }
     return segments
   }, [segments, isOpCard, isOpFolded])
@@ -333,7 +333,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 <span className="material-symbols-outlined text-[16px]">
                   {isOpFolded ? 'expand_more' : 'expand_less'}
                 </span>
-                {isOpFolded ? `Show ${segments.length - 3} More` : 'Show Less'}
+                {isOpFolded ? `Show ${segments.length - 1} More` : 'Show Less'}
               </button>
             </div>
           )}
@@ -341,24 +341,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       ) : (
         <span className="text-red-500 text-xs">No content</span>
       )}
-
-      <AnimatePresence>
-        {showTranslation &&
-          comment.content_cn &&
-          !comment.enrichment?.sentence_segments &&
-          segments.every((s) => !s.zh) && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="max-w-full bg-black/5 dark:bg-white/5 px-3 py-2 rounded-xl text-[12px] text-gray-500 dark:text-white/50 italic leading-snug self-start">
-              <span className="text-[9px] font-bold uppercase mr-1 opacity-50">
-                Full Trans:
-              </span>
-              {comment.content_cn}
-            </motion.div>
-          )}
-      </AnimatePresence>
     </div>
   )
 }

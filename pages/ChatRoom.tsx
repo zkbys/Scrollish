@@ -219,41 +219,47 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
     const fetchDopaMetadata = async () => {
       try {
+        // 1. 从 subtree_vibes 表里同时查出 vibe_tag 和 punchline_comment_ids
         const { data: vibeData } = await supabase
           .from('subtree_vibes')
-          .select('root_comment_id, vibe_tag, dopa_summary')
+          .select(
+            'root_comment_id, vibe_tag, dopa_summary, punchline_comment_ids',
+          )
           .eq('post_id', postId)
 
         if (vibeData) {
           const vibesMap: Record<string, { tag: string; summary: string }> = {}
-          vibeData.forEach(
-            (v) =>
-              (vibesMap[v.root_comment_id] = {
-                tag: v.vibe_tag,
-                summary: v.dopa_summary,
-              }),
-          )
-          setSubtreeVibes(vibesMap)
-        }
+          let allPunchlines: string[] = [] // 用来收集这个帖子里所有的梗节点 ID
 
-        const { data: postData } = await supabase
-          .from('production_posts')
-          .select('punchline_comment_ids')
-          .eq('id', postId)
-          .maybeSingle()
-
-        if (postData?.punchline_comment_ids) {
-          let parsedIds: any[] = []
-          if (typeof postData.punchline_comment_ids === 'string') {
-            try {
-              parsedIds = JSON.parse(postData.punchline_comment_ids)
-            } catch {
-              parsedIds = []
+          vibeData.forEach((v) => {
+            // 组装 Vibe 标签字典
+            vibesMap[v.root_comment_id] = {
+              tag: v.vibe_tag,
+              summary: v.dopa_summary,
             }
-          } else if (Array.isArray(postData.punchline_comment_ids)) {
-            parsedIds = postData.punchline_comment_ids
-          }
-          setPunchlines(parsedIds.map((id) => String(id).trim()))
+
+            // 顺便解析并收集当前子树的 Punchline IDs
+            if (v.punchline_comment_ids) {
+              let parsedIds: any[] = []
+              if (typeof v.punchline_comment_ids === 'string') {
+                try {
+                  parsedIds = JSON.parse(v.punchline_comment_ids)
+                } catch {
+                  parsedIds = []
+                }
+              } else if (Array.isArray(v.punchline_comment_ids)) {
+                parsedIds = v.punchline_comment_ids
+              }
+              // 追加到总列表里
+              allPunchlines = [
+                ...allPunchlines,
+                ...parsedIds.map((id) => String(id).trim()),
+              ]
+            }
+          })
+
+          setSubtreeVibes(vibesMap)
+          setPunchlines(allPunchlines) // ✅ 正确设置红点触发列表
         }
       } catch (e) {
         console.warn('Dopa metadata not yet available on backend', e)
@@ -410,6 +416,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 
   const handleToggleDopa = async (commentId: string) => {
     if (navigator.vibrate) navigator.vibrate(20)
+    // [新增核心修复]：阅后即焚逻辑
+    // 如果这个评论带红点，只要用户点了一次，就把它从红点名单里永远踢出去
+    if (punchlines.includes(commentId)) {
+      setPunchlines((prev) => prev.filter((id) => id !== commentId))
+    }
     if (expandedDopaId === commentId) {
       setExpandedDopaId(null)
       return
