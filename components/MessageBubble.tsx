@@ -14,10 +14,11 @@ interface MessageBubbleProps {
     comment: Comment,
   ) => void
   showTranslation?: boolean
-  onNoteClick?: (notes: any[]) => void // 兼容保留，但内部不再调用全局弹窗
+  onNoteClick?: (notes: any[]) => void
   highlightedId?: string | null
   className?: string
   difficulty?: string
+  isOpCard?: boolean // [新增] 是否为楼主原帖，用于控制长文折叠
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -29,6 +30,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   highlightedId,
   className = '',
   difficulty = 'Original',
+  isOpCard = false,
 }) => {
   const isHighlighted = highlightedId === comment.id
 
@@ -42,10 +44,24 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [activeTtsIndex, setActiveTtsIndex] = useState<number | null>(null)
   const [expandedNotes, setExpandedNotes] = useState<Record<number, boolean>>({})
 
+  // [新增] 针对 OP 长文的折叠状态（默认超过3段就折叠）
+  const [isOpFolded, setIsOpFolded] = useState(true)
+
   const segments = useMemo(
     () => getMessageSegments(comment, difficulty),
     [comment, difficulty],
   )
+
+  // [新增] 计算可视片段
+  const visibleSegments = useMemo(() => {
+    if (isOpCard && isOpFolded && segments.length > 3) {
+      return segments.slice(0, 1) // 只显示第一段，剩余的折叠
+    }
+    return segments
+  }, [segments, isOpCard, isOpFolded])
+
+  // [新增] 判断是否有隐藏内容
+  const hasHiddenSegments = isOpCard && segments.length > 3
 
   const allNoteTriggerWords = useMemo(() => {
     return (
@@ -163,13 +179,47 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           </div>
         </div>
-      ) : segments.length > 0 ? (
-        segments.map((seg, i) => {
-          if (isImageUrl(seg.en)) {
+      ) : visibleSegments.length > 0 ? (
+        <>
+          {visibleSegments.map((seg, i) => {
+            if (isImageUrl(seg.en)) {
+              return (
+                <div
+                  key={i}
+                  className="rounded-xl overflow-hidden border border-white/10 shadow-sm max-w-full"
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
+                  onTouchMove={handleTouchMove}
+                  onMouseDown={handleTouchStart}
+                  onMouseUp={handleTouchEnd}
+                  onMouseLeave={handleTouchEnd}
+                  onContextMenu={(e) => e.preventDefault()}>
+                  <img
+                    src={seg.en}
+                    alt="content"
+                    className="w-full h-auto object-cover min-h-[60px] max-h-[300px] bg-gray-100 dark:bg-white/5"
+                    loading="lazy"
+                  />
+                </div>
+              )
+            }
+
+            const isQuote = seg.en.trim().startsWith('>')
+            const displayText = isQuote ? seg.en.replace(/^>\s?/, '') : seg.en
+
+            const segmentNotes =
+              comment.enrichment?.cultural_notes?.filter((note) =>
+                seg.en.toLowerCase().includes(note.trigger_word.toLowerCase()),
+              ) || []
+
+            const isNoteExpanded = expandedNotes[i]
+
             return (
               <div
                 key={i}
-                className="rounded-xl overflow-hidden border border-white/10 shadow-sm max-w-full"
+                className={`relative px-4 py-2.5 transition-all duration-300 max-w-full ${getBubbleClass(false)} ${highlightClass}`}
+                onClick={() => handleSegmentClick(i)}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
                 onTouchCancel={handleTouchEnd}
@@ -178,153 +228,116 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 onMouseUp={handleTouchEnd}
                 onMouseLeave={handleTouchEnd}
                 onContextMenu={(e) => e.preventDefault()}>
-                <img
-                  src={seg.en}
-                  alt="content"
-                  className="w-full h-auto object-cover min-h-[60px] max-h-[300px] bg-gray-100 dark:bg-white/5"
-                  loading="lazy"
-                />
+                {segmentNotes.length > 0 && (
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (navigator.vibrate) navigator.vibrate(20)
+                      setExpandedNotes((prev) => ({ ...prev, [i]: !prev[i] }))
+                    }}
+                    className={`absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center shadow-lg border z-[15] cursor-pointer hover:scale-110 active:scale-90 transition-colors duration-300 ${isNoteExpanded ? 'bg-orange-500 border-orange-600' : 'bg-yellow-400 border-white dark:border-[#0B0A09]'}`}>
+                    <span
+                      className={`material-symbols-outlined text-[10px] font-black ${isNoteExpanded ? 'text-white' : 'text-black'}`}>
+                      {isNoteExpanded ? 'close' : 'lightbulb'}
+                    </span>
+                  </div>
+                )}
+
+                <div
+                  className={`text-[15px] leading-relaxed font-medium ${isQuote ? 'italic opacity-90 border-l-2 border-current pl-2' : ''}`}>
+                  <InteractiveText
+                    text={displayText}
+                    contextSentence={seg.en}
+                    externalOnClick={(w) => handleInteractiveClick(w, seg.en)}
+                    disabled={isUser}
+                    highlightWords={allNoteTriggerWords}
+                  />
+                </div>
+
+                <AnimatePresence>
+                  {isNoteExpanded && segmentNotes.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden mt-3">
+                      <div
+                        className="p-3 bg-orange-500/10 dark:bg-orange-500/5 border border-orange-500/20 rounded-xl space-y-3 cursor-default"
+                        onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="material-symbols-outlined text-[14px] text-orange-500">
+                            lightbulb
+                          </span>
+                          <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">
+                            Cultural Insights
+                          </span>
+                        </div>
+                        {segmentNotes.map((note, idx) => (
+                          <div key={idx} className="space-y-1">
+                            <span className="inline-block px-1.5 py-0.5 bg-orange-500/20 text-orange-600 dark:text-orange-400 rounded text-[10px] font-black uppercase">
+                              {note.trigger_word}
+                            </span>
+                            <p className="text-[13px] leading-snug text-gray-700 dark:text-gray-300 font-medium">
+                              {note.explanation}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {showTranslation && seg.zh && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="text-[13px] opacity-70 italic mt-1.5 pt-1.5 border-t border-white/10 leading-snug">
+                      {seg.zh}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {activeTtsIndex === i && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.5, y: 5 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.5, y: 5 }}
+                      onClick={(e) => handleTTS(e, displayText)}
+                      className="absolute -bottom-3 -right-2 w-8 h-8 bg-white dark:bg-[#2C2C2E] rounded-full flex items-center justify-center shadow-lg border border-gray-200 dark:border-white/10 text-orange-500 z-[20] hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95 transition-all">
+                      <span className="material-symbols-outlined text-[18px]">
+                        volume_up
+                      </span>
+                    </motion.button>
+                  )}
+                </AnimatePresence>
               </div>
             )
-          }
+          })}
 
-          const isQuote = seg.en.trim().startsWith('>')
-          const displayText = isQuote ? seg.en.replace(/^>\s?/, '') : seg.en
-
-          const segmentNotes =
-            comment.enrichment?.cultural_notes?.filter((note) =>
-              seg.en.toLowerCase().includes(note.trigger_word.toLowerCase()),
-            ) || []
-
-          const isNoteExpanded = expandedNotes[i]
-
-          return (
-            <div
-              key={i}
-              className={`relative px-4 py-2.5 transition-all duration-300 max-w-full ${getBubbleClass(false)} ${highlightClass}`}
-              onClick={() => handleSegmentClick(i)}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
-              onTouchCancel={handleTouchEnd}
-              onTouchMove={handleTouchMove}
-              onMouseDown={handleTouchStart}
-              onMouseUp={handleTouchEnd}
-              onMouseLeave={handleTouchEnd}
-              onContextMenu={(e) => e.preventDefault()}>
-              {/* [修改] 小灯泡按钮变成 Toggle 开关 */}
-              {segmentNotes.length > 0 && (
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (navigator.vibrate) navigator.vibrate(20)
-                    setExpandedNotes((prev) => ({ ...prev, [i]: !prev[i] }))
-                  }}
-                  className={`absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center shadow-lg border z-[15] cursor-pointer hover:scale-110 active:scale-90 transition-colors duration-300 ${isNoteExpanded ? 'bg-orange-500 border-orange-600' : 'bg-yellow-400 border-white dark:border-[#0B0A09]'}`}>
-                  <span
-                    className={`material-symbols-outlined text-[10px] font-black ${isNoteExpanded ? 'text-white' : 'text-black'}`}>
-                    {isNoteExpanded ? 'close' : 'lightbulb'}
-                  </span>
-                </div>
-              )}
-
-              <div
-                className={`text-[15px] leading-relaxed font-medium ${isQuote ? 'italic opacity-90 border-l-2 border-current pl-2' : ''}`}>
-                <InteractiveText
-                  text={displayText}
-                  contextSentence={seg.en}
-                  externalOnClick={(w) => handleInteractiveClick(w, seg.en)}
-                  disabled={isUser}
-                  highlightWords={allNoteTriggerWords}
-                />
-              </div>
-
-              {/* [新增] 原地平滑推开的 Cultural Notes 区域 */}
-              <AnimatePresence>
-                {isNoteExpanded && segmentNotes.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden mt-3">
-                    <div
-                      className="p-3 bg-orange-500/10 dark:bg-orange-500/5 border border-orange-500/20 rounded-xl space-y-3 cursor-default"
-                      onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="material-symbols-outlined text-[14px] text-orange-500">
-                          lightbulb
-                        </span>
-                        <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">
-                          Cultural Insights
-                        </span>
-                      </div>
-                      {segmentNotes.map((note, idx) => (
-                        <div key={idx} className="space-y-1">
-                          <span className="inline-block px-1.5 py-0.5 bg-orange-500/20 text-orange-600 dark:text-orange-400 rounded text-[10px] font-black uppercase">
-                            {note.trigger_word}
-                          </span>
-                          <p className="text-[13px] leading-snug text-gray-700 dark:text-gray-300 font-medium">
-                            {note.explanation}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* 句级翻译 */}
-              <AnimatePresence>
-                {showTranslation && seg.zh && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="text-[13px] opacity-70 italic mt-1.5 pt-1.5 border-t border-white/10 leading-snug">
-                    {seg.zh}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* [新增] 气泡级常驻 TTS 按钮 - 仅朗读本段话 */}
-              {!isUser && !comment.isLoading && (
-                <div className="absolute -bottom-2 -right-2 z-[30] flex flex-col items-center">
-                  <AnimatePresence>
-                    {ttsError && currentId === `${comment.id}-${i}` && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                        animate={{ opacity: 1, y: -4, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        className="absolute bottom-full mb-1 px-3 py-1.5 bg-red-600 text-white text-[10px] font-black rounded-lg shadow-lg whitespace-nowrap z-[40]">
-                        {ttsError}
-                        <div className="absolute top-full left-1/2 -ml-1 border-4 border-transparent border-t-red-600" />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  <button
-                    onClick={(e) => handleTTS(e, seg.en, i)}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center shadow-lg border transition-all
-                      ${isPlaying && currentId === `${comment.id}-${i}`
-                        ? 'bg-orange-500 text-white border-orange-600 scale-110'
-                        : (ttsError && currentId === `${comment.id}-${i}`)
-                          ? 'bg-red-50 dark:bg-red-950/30 text-red-500 border-red-200 dark:border-red-900/50'
-                          : 'bg-white dark:bg-[#2C2C2E] border-gray-100 dark:border-white/10 text-orange-500 hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95'}
-                    `}>
-                    {isSynthesizing && currentId === `${comment.id}-${i}` ? (
-                      <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <span className={`material-symbols-outlined text-[16px] ${isPlaying && currentId === `${comment.id}-${i}` ? 'animate-pulse' : ''}`}>
-                        {isPlaying && currentId === `${comment.id}-${i}` ? 'stop' : 'volume_up'}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              )}
+          {hasHiddenSegments && (
+            <div className="flex justify-center mt-2 mb-1 w-full relative z-10">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (navigator.vibrate) navigator.vibrate(20)
+                  setIsOpFolded(!isOpFolded)
+                }}
+                className="flex items-center gap-1.5 text-[10px] font-black text-orange-500 uppercase tracking-[0.15em] hover:text-white hover:bg-orange-500 transition-all bg-orange-500/10 px-4 py-1.5 rounded-full border border-orange-500/20 shadow-sm">
+                <span className="material-symbols-outlined text-[16px]">
+                  {isOpFolded ? 'expand_more' : 'expand_less'}
+                </span>
+                {isOpFolded ? `Show ${segments.length - 1} More` : 'Show Less'}
+              </button>
             </div>
-          )
-        })
+          )}
+        </>
       ) : (
         <span className="text-red-500 text-xs">No content</span>
-      )}
+      )
+      }
 
       <AnimatePresence>
         {showTranslation &&
@@ -343,7 +356,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             </motion.div>
           )}
       </AnimatePresence>
-
     </div>
   )
 }

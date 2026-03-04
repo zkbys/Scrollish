@@ -20,6 +20,30 @@ import CulturalNoteOverlay from '../components/CulturalNoteOverlay'
 import { useTopicHubGestures } from '../hooks/useTopicHubGestures'
 import SpeakingAvatarOverlay from '../components/SpeakingAvatarOverlay'
 
+// [新增] 打字机效果组件
+const TypewriterText = ({ text }: { text: string }) => {
+  const [displayedText, setDisplayedText] = useState('')
+
+  useEffect(() => {
+    if (!text) {
+      setDisplayedText('')
+      return
+    }
+    let i = 0
+    setDisplayedText('')
+    const timer = setInterval(() => {
+      setDisplayedText(text.substring(0, i + 1))
+      i++
+      if (i >= text.length) {
+        clearInterval(timer)
+      }
+    }, 40)
+    return () => clearInterval(timer)
+  }, [text])
+
+  return <>{displayedText}</>
+}
+
 interface TopicHubProps {
   onNavigate: (page: Page) => void
   onSelectComment: (commentId: string) => void
@@ -53,6 +77,11 @@ const TopicHub: React.FC<TopicHubProps> = ({
   const [isGesturing, setIsGesturing] = useState(false)
   const [isCardAtBottom, setIsCardAtBottom] = useState(false)
 
+  const [subtreeVibes, setSubtreeVibes] = useState<
+    Record<string, { tag: string; summary: string }>
+  >({})
+  const [expandedVibeId, setExpandedVibeId] = useState<string | null>(null)
+
   const initialDistanceRef = useRef<number | null>(null)
   const lastScaleRef = useRef(1)
   const lastTapRef = useRef(0)
@@ -83,6 +112,26 @@ const TopicHub: React.FC<TopicHubProps> = ({
   useEffect(() => {
     if (post?.id) {
       fetchComments(post.id)
+
+      const fetchVibes = async () => {
+        const { data } = await supabase
+          .from('subtree_vibes')
+          .select('root_comment_id, vibe_tag, dopa_summary')
+          .eq('post_id', post.id)
+        if (data) {
+          const vibesMap: Record<string, { tag: string; summary: string }> = {}
+          data.forEach(
+            (v) =>
+            (vibesMap[v.root_comment_id] = {
+              tag: v.vibe_tag,
+              summary: v.dopa_summary,
+            }),
+          )
+          setSubtreeVibes(vibesMap)
+        }
+      }
+      fetchVibes()
+
       if (post.content_en && post.content_en.length > 10) {
         setOpContent({
           en: post.content_en,
@@ -405,51 +454,12 @@ const TopicHub: React.FC<TopicHubProps> = ({
           onWordClick={handleWordClick}
           onNoteClick={setViewingNote}
           onGoToChatRoom={goToChatRoom}
+          subtreeVibes={subtreeVibes}
+          expandedVibeId={expandedVibeId}
+          setExpandedVibeId={setExpandedVibeId}
         />
       </main>
 
-      <div className="h-14 w-full relative z-40 overflow-hidden flex items-center bg-gray-100/30 dark:bg-white/5 backdrop-blur-md border-t border-white/20 dark:border-white/5 opacity-80">
-        <div className="flex whitespace-nowrap animate-ticker items-center gap-10 px-8">
-          {[1, 2, 3].map((v) => (
-            <div key={v} className="flex items-center gap-12">
-              <span className="text-[10px] font-black text-orange-500 dark:text-orange-300 tracking-[0.15em]">
-                欢 迎 来 到 SCROLLISH · 如 果 遇 到 题 请 及 时 向 我 们 反 馈
-                谢 谢！❤
-              </span>
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
-                <span
-                  className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"
-                  style={{ animationDelay: '0.2s' }}
-                />
-                <span
-                  className="w-2 h-2 bg-orange-300 rounded-full animate-pulse"
-                  style={{ animationDelay: '0.4s' }}
-                />
-              </div>
-              <span className="text-[11px] font-black text-orange-500 dark:text-orange-400 tracking-wider font-mono">
-                Welcome to Scrollish!
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <style>{`
-        .animate-ticker { animation: ticker 40s linear infinite; }
-        @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-33.33%); } }
-        .slide-out-left { animation: slideOutLeft 0.3s forwards ease-in; } 
-        .slide-in-right { animation: slideInRight 0.3s forwards ease-out; } 
-        .slide-out-right { animation: slideOutRight 0.3s forwards ease-in; } 
-        .slide-in-left { animation: slideInLeft 0.3s forwards ease-out; } 
-        @keyframes slideOutLeft { to { transform: translateX(-120%) rotate(-5deg); opacity: 0; } } 
-        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } 
-        @keyframes slideOutRight { to { transform: translateX(120%) rotate(5deg); opacity: 0; } } 
-        @keyframes slideInLeft { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .blob-pastel { position: absolute; width: 500px; height: 500px; filter: blur(100px); border-radius: 50%; z-index: 0; pointer-events: none; }
-        .frost-overlay { position: fixed; inset: 0; background: url('https://grainy-gradients.vercel.app/noise.svg'); opacity: 0.03; pointer-events: none; z-index: 5; }
-      `}</style>
-      <SpeakingAvatarOverlay />
     </div>
   )
 }

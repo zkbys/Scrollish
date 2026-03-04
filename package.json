@@ -21,6 +21,7 @@
     "@vitejs/plugin-basic-ssl": "^2.1.4",
     "@vitejs/plugin-react": "^5.0.0",
     "sharp": "^0.34.5",
+    "supabase": "^2.76.13",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "vite-plugin-pwa": "^1.2.0"
