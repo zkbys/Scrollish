@@ -6,7 +6,7 @@ import { supabase } from '../supabase';
 import { IMAGES, getAssetPath } from '../constants';
 import { SPRING_GENTLE, BUTTON_SPRING } from '../motion';
 import { preloadImages } from '../utils/media';
-import { useUserStore } from '../store/useUserStore';
+import { useAuthStore } from '../store/useAuthStore';
 
 interface LoginProps {
     onNavigate: (page: Page) => void;
@@ -24,7 +24,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate, onLoginSuccess }) => {
     const [error, setError] = useState<string | null>(null);
     const [showSupportQR, setShowSupportQR] = useState(false);
     const [isPreloading, setIsPreloading] = useState(false);
-    const { currentUser } = useUserStore();
+    const { currentUser } = useAuthStore();
 
     // [新增] 路由守卫保底：如果 App.tsx 已经检测到登录但 Login 页还卡在 preloading，强行触发成功回调
     React.useEffect(() => {

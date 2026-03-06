@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import InteractiveText from './InteractiveText'
 import { getMessageSegments, isImageUrl } from '../utils/textProcessing'
 import { Comment } from '../types'
+import { useTTS } from '../hooks/useTTS'
 
 interface MessageBubbleProps {
   comment: Comment
@@ -38,13 +39,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const touchStartPos = useRef<{ x: number; y: number } | null>(null)
   const isLongPressTriggered = useRef(false)
 
+  // 移除之前的分句激活逻辑，改为气泡级常驻显示
+  const { speak, isPlaying, isLoading: isSynthesizing, currentId } = useTTS()
   const [activeTtsIndex, setActiveTtsIndex] = useState<number | null>(null)
-  const [expandedNotes, setExpandedNotes] = useState<Record<number, boolean>>(
-    {},
-  )
-
-  // [新增] 针对 OP 长文的折叠状态（默认超过3段就折叠）
-  const [isOpFolded, setIsOpFolded] = useState(true)
+  const [expandedNotes, setExpandedNotes] = useState<Record<number, boolean>>({})
 
   const segments = useMemo(
     () => getMessageSegments(comment, difficulty),
@@ -128,18 +126,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const handleSegmentClick = (i: number) => {
     if (isLongPressTriggered.current) return
-    setActiveTtsIndex(activeTtsIndex === i ? null : i)
+    clearTimer()
+    // 移除分句激活，保留交互
   }
 
-  const handleTTS = (e: React.MouseEvent | React.TouchEvent, text: string) => {
+  const handleTTS = (e: React.MouseEvent | React.TouchEvent, text: string, index: number) => {
     e.stopPropagation()
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = 'en-US'
-      utterance.rate = 0.9
-      window.speechSynthesis.speak(utterance)
-    }
+    const segmentId = `${comment.id}-${index}`
+    speak(text, segmentId)
   }
 
   // --- 样式定义 ---
@@ -302,45 +296,49 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   )}
                 </AnimatePresence>
 
-                <AnimatePresence>
-                  {activeTtsIndex === i && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.5, y: 5 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.5, y: 5 }}
-                      onClick={(e) => handleTTS(e, displayText)}
-                      className="absolute -bottom-3 -right-2 w-8 h-8 bg-white dark:bg-[#2C2C2E] rounded-full flex items-center justify-center shadow-lg border border-gray-200 dark:border-white/10 text-orange-500 z-[20] hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95 transition-all">
-                      <span className="material-symbols-outlined text-[18px]">
-                        volume_up
-                      </span>
-                    </motion.button>
+              {/* [新增] 气泡级常驻 TTS 按钮 - 读整句话 */}
+              {!isUser && !comment.isLoading && (
+                <button
+                  onClick={(e) => handleTTS(e, comment.content_en || comment.content || '', 999)}
+                  className={`absolute -bottom-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-lg border z-[30] transition-all
+                    ${isPlaying && currentId === `${comment.id}-999`
+                      ? 'bg-orange-500 text-white border-orange-600 scale-110'
+                      : 'bg-white dark:bg-[#2C2C2E] border-gray-100 dark:border-white/10 text-orange-500 hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95'}
+                  `}>
+                  {isSynthesizing && currentId === `${comment.id}-999` ? (
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <span className={`material-symbols-outlined text-[16px] ${isPlaying && currentId === `${comment.id}-999` ? 'animate-pulse' : ''}`}>
+                      {isPlaying && currentId === `${comment.id}-999` ? 'stop' : 'volume_up'}
+                    </span>
                   )}
-                </AnimatePresence>
-              </div>
-            )
-          })}
-
-          {/* [新增] 展开/折叠长文按钮 */}
-          {hasHiddenSegments && (
-            <div className="flex justify-center mt-2 mb-1 w-full relative z-10">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (navigator.vibrate) navigator.vibrate(20)
-                  setIsOpFolded(!isOpFolded)
-                }}
-                className="flex items-center gap-1.5 text-[10px] font-black text-orange-500 uppercase tracking-[0.15em] hover:text-white hover:bg-orange-500 transition-all bg-orange-500/10 px-4 py-1.5 rounded-full border border-orange-500/20 shadow-sm">
-                <span className="material-symbols-outlined text-[16px]">
-                  {isOpFolded ? 'expand_more' : 'expand_less'}
-                </span>
-                {isOpFolded ? `Show ${segments.length - 1} More` : 'Show Less'}
-              </button>
+                </button>
+              )}
             </div>
-          )}
-        </>
+          )
+        })
       ) : (
         <span className="text-red-500 text-xs">No content</span>
       )}
+
+      <AnimatePresence>
+        {showTranslation &&
+          comment.content_cn &&
+          !comment.enrichment?.sentence_segments &&
+          segments.every((s) => !s.zh) && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="max-w-full bg-black/5 dark:bg-white/5 px-3 py-2 rounded-xl text-[12px] text-gray-500 dark:text-white/50 italic leading-snug self-start">
+              <span className="text-[9px] font-bold uppercase mr-1 opacity-50">
+                Full Trans:
+              </span>
+              {comment.content_cn}
+            </motion.div>
+          )}
+      </AnimatePresence>
+
     </div>
   )
 }

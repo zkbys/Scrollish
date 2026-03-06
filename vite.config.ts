@@ -11,10 +11,13 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: '0.0.0.0',
+      hmr: {
+        protocol: 'ws',
+      },
     },
     plugins: [
       react(),
-      basicSsl(),
+      basicSsl(), // [新增] 启用临时的 HTTPS 证书
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: 'auto',

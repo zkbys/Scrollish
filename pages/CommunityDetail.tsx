@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Page, Post } from '../types'
 import { supabase } from '../supabase'
-import { useUserStore } from '../store/useUserStore'
+import { useHistoryStore } from '../store/useHistoryStore'
 import { IMAGES } from '../constants'
 
 interface CommunityDetailProps {
@@ -19,7 +19,7 @@ const CommunityDetail: React.FC<CommunityDetailProps> = ({
   onBack,
 }) => {
   const { toggleFollowCommunity, isFollowing, toggleLike, isLiked } =
-    useUserStore()
+    useHistoryStore()
   const [posts, setPosts] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [scrollPos, setScrollPos] = useState(0)

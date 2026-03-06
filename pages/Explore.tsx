@@ -8,7 +8,7 @@ import React, {
 import { Page, Post } from '../types'
 import { supabase } from '../supabase'
 import { IMAGES } from '../constants'
-import { useUserStore } from '../store/useUserStore'
+import { useHistoryStore } from '../store/useHistoryStore'
 import { useExploreStore } from '../store/useExploreStore'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -79,7 +79,7 @@ const Explore: React.FC<ExploreProps> = ({
   onCommunitySelect,
 }) => {
   const { toggleFollowCommunity, isFollowing, toggleLike, isLiked } =
-    useUserStore()
+    useHistoryStore()
   const {
     categories,
     setCategories,

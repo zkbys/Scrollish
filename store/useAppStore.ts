@@ -88,8 +88,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (data) {
         let finalPosts = data
         if (!isFiltered) {
-          const { useUserStore } = await import('./useUserStore')
-          const viewedPostIds = useUserStore.getState().viewedPostIds
+          const { useHistoryStore } = await import('./useHistoryStore')
+          const viewedPostIds = useHistoryStore.getState().viewedPostIds
 
           const shuffleArray = (array: any[]) => {
             const shuffled = [...array]
@@ -155,8 +155,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         let finalPosts = data
         const isFiltered = !!(filters?.communityId || filters?.followedIds?.length)
         if (!isFiltered) {
-          const { useUserStore } = await import('./useUserStore')
-          const viewedPostIds = useUserStore.getState().viewedPostIds
+          const { useHistoryStore } = await import('./useHistoryStore')
+          const viewedPostIds = useHistoryStore.getState().viewedPostIds
 
           const shuffleArray = (array: any[]) => {
             const shuffled = [...array]
@@ -223,8 +223,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (data && data.length > 0) {
         // [修复] 处理浏览器环境中的动态导入
-        const { useUserStore } = await import('./useUserStore')
-        const viewedPostIds = useUserStore.getState().viewedPostIds
+        const { useHistoryStore } = await import('./useHistoryStore')
+        const viewedPostIds = useHistoryStore.getState().viewedPostIds
 
         set((state) => {
           // 1. 严格过滤：既不在当前列表，也没看过
