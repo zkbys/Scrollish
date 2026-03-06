@@ -877,13 +877,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                                 src={getAssetPath(IMAGES.aiDopa)}
                                 className="w-[18px] h-[18px] rounded-full object-cover shadow-sm border border-orange-200 dark:border-white/10"
                               />
-                              {punchlines.includes(String(msg.id)) &&
-                                expandedDopaId !== msg.id && (
-                                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 z-20">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white dark:border-[#1C1C1E]"></span>
-                                  </span>
-                                )}
                             </div>
                             Dopa
                           </button>

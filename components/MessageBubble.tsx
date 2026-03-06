@@ -136,8 +136,31 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const handleTTS = (e: React.MouseEvent | React.TouchEvent, text: string, index: number) => {
     e.stopPropagation()
     const segmentId = `${comment.id}-${index}`
-    speak(text, segmentId)
+    if (isPlaying && currentId === segmentId) {
+      speak('', '') // Stop if clicking the same one
+    } else {
+      speak(text, segmentId)
+    }
   }
+
+  // [新增] 动态声波动画组件
+  const PlayingWaveform = () => (
+    <div className="flex items-center gap-[1px] h-3 px-0.5">
+      {[1, 2, 3].map((i) => (
+        <motion.span
+          key={i}
+          animate={{ height: ['20%', '100%', '20%'] }}
+          transition={{
+            duration: 0.6,
+            repeat: Infinity,
+            delay: i * 0.15,
+            ease: 'easeInOut',
+          }}
+          className="w-[2px] bg-orange-500 rounded-full"
+        />
+      ))}
+    </div>
+  )
 
   // --- 样式定义 ---
   const getBubbleClass = (isImage: boolean) => {
@@ -300,16 +323,38 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </AnimatePresence>
 
                 <AnimatePresence>
-                  {activeTtsIndex === i && (
+                  {!isUser && (
                     <motion.button
-                      initial={{ opacity: 0, scale: 0.5, y: 5 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.5, y: 5 }}
-                      onClick={(e) => handleTTS(e, displayText)}
-                      className="absolute -bottom-3 -right-2 w-8 h-8 bg-white dark:bg-[#2C2C2E] rounded-full flex items-center justify-center shadow-lg border border-gray-200 dark:border-white/10 text-orange-500 z-[20] hover:bg-orange-50 dark:hover:bg-white/5 active:scale-95 transition-all">
-                      <span className="material-symbols-outlined text-[18px]">
-                        volume_up
-                      </span>
+                      initial={{ opacity: 0.6 }}
+                      animate={{
+                        opacity: isPlaying && currentId === `${comment.id}-${i}` ? 1 : 0.7,
+                        scale: isPlaying && currentId === `${comment.id}-${i}` ? 1.2 : 1,
+                      }}
+                      whileHover={{ opacity: 1, scale: 1.2 }}
+                      whileActive={{ scale: 0.9 }}
+                      onClick={(e) => handleTTS(e, displayText, i)}
+                      className="absolute -bottom-1 right-0 p-1 flex items-center justify-center transition-all z-[20] bg-transparent border-none shadow-none">
+                      {isPlaying && currentId === `${comment.id}-${i}` ? (
+                        <div className="flex items-center gap-[1.5px] h-3.5 px-0.5">
+                          {[1, 2, 3].map((bar) => (
+                            <motion.span
+                              key={bar}
+                              animate={{ height: ['20%', '100%', '20%'] }}
+                              transition={{
+                                duration: 0.6,
+                                repeat: Infinity,
+                                delay: bar * 0.15,
+                                ease: 'easeInOut',
+                              }}
+                              className="w-[2px] bg-orange-500 rounded-full"
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="material-symbols-outlined text-[15px] text-orange-500 drop-shadow-sm">
+                          volume_up
+                        </span>
+                      )}
                     </motion.button>
                   )}
                 </AnimatePresence>
